@@ -7,6 +7,8 @@ pluginManagement {
         return flutterSdk
     }()
 
+    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+
     repositories {
         google()
         mavenCentral()
@@ -15,10 +17,9 @@ pluginManagement {
 }
 
 plugins {
-    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
     id "com.android.application" version "8.4.1" apply false
-    // You can check your android/build.gradle file for the correct
-    // com.android.application version for your project.
+    id "com.android.library" version "8.4.1" apply false
+    id "org.jetbrains.kotlin.android" version "1.9.22" apply false
 }
 
 include ":app"
