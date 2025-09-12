@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:interface_app2/screens/perfil_screen.dart'; // Para navegar para o perfil
 
 class MapaMotoristaScreen extends StatefulWidget {
   const MapaMotoristaScreen({super.key});
@@ -9,17 +10,13 @@ class MapaMotoristaScreen extends StatefulWidget {
 }
 
 class _MapaMotoristaScreenState extends State<MapaMotoristaScreen> {
-  // Controller to interact with the map.
   late GoogleMapController mapController;
-
-  // Default initial camera position (centered on Belo Horizonte, MG).
-  final LatLng _initialPosition = const LatLng(-19.9245, -43.9352);
+  final LatLng _initialPosition = const LatLng(-19.9245, -43.9352); // Posição inicial
 
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
   }
 
-  // This function is called when the '+' button is pressed.
   void _mostrarOpcoesDeRota() {
     showDialog(
       context: context,
@@ -28,22 +25,17 @@ class _MapaMotoristaScreenState extends State<MapaMotoristaScreen> {
           title: const Text('Opções de Rota'),
           content: ListTile(
             leading: const Icon(Icons.add_location_alt_outlined),
-            title: const Text('Registrar Nova Rota'),
+            title: const Text('Registar Nova Rota'),
             onTap: () {
-              // First, close the dialog.
               Navigator.of(context).pop();
-              // Then, navigate to the route registration screen.
-              // For now, it just prints a message.
-              print('Navegar para a tela de registro de rota!');
-              // TODO: Criar e navegar para a tela de cadastro de rota.
+              // TODO: Navegar para a tela de registo de rota.
+              debugPrint('Navegar para a tela de registo de rota!');
             },
           ),
           actions: [
             TextButton(
               child: const Text('Cancelar'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+              onPressed: () => Navigator.of(context).pop(),
             ),
           ],
         );
@@ -56,8 +48,19 @@ class _MapaMotoristaScreenState extends State<MapaMotoristaScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Minhas Rotas'),
-        backgroundColor: const Color(0xFF333333), // Using the driver theme color
+        backgroundColor: const Color(0xFF333333),
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const PerfilScreen()),
+              );
+            },
+          ),
+        ],
       ),
       body: GoogleMap(
         onMapCreated: _onMapCreated,
@@ -65,16 +68,17 @@ class _MapaMotoristaScreenState extends State<MapaMotoristaScreen> {
           target: _initialPosition,
           zoom: 12.0,
         ),
-        myLocationEnabled: true, // Shows the blue dot for the user's location
-        myLocationButtonEnabled: true, // Adds a button to center the map on the user
+        myLocationEnabled: true,
+        myLocationButtonEnabled: true,
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _mostrarOpcoesDeRota,
         tooltip: 'Adicionar Rota',
-        backgroundColor: const Color(0xFF333333), // Matching the driver theme
+        backgroundColor: const Color(0xFF333333),
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),
     );
   }
 }
+

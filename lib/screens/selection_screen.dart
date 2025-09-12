@@ -10,7 +10,6 @@ class SelectionScreen extends StatelessWidget {
   static const Color corBotaoMotorista = Color(0xFF333333);
   static const Color corBotaoAluno = Color(0xFFFFC107);
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -42,7 +41,8 @@ class SelectionScreen extends StatelessWidget {
                     // Navega para a tela do mapa
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const MapaMotoristaScreen()),
+                      MaterialPageRoute(
+                          builder: (context) => const MapaMotoristaScreen()),
                     );
                   },
                   style: ElevatedButton.styleFrom(
@@ -57,7 +57,7 @@ class SelectionScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // ... (código do botão ALUNO continua o mesmo)
+// BOTÃO ALUNO
                 ElevatedButton.icon(
                   icon: const Icon(Icons.school, size: 28),
                   label: const Text(
@@ -65,18 +65,21 @@ class SelectionScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () {
-                    print('Botão ALUNO pressionado!');
-                    // TODO: Navegar para a tela de login do aluno
+                    // AÇÃO FUTURA: Troque este debugPrint pela navegação real
+                    // quando a tela de login do aluno estiver pronta.
+                    debugPrint('Botão ALUNO pressionado!');
+
+                    // Exemplo de como ficará:
+                    /*
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginAlunoScreen()),
+    );
+    */
                   },
-                   style: ElevatedButton.styleFrom(
-                    backgroundColor: corBotaoAluno,
-                    foregroundColor: corBotaoMotorista,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 5,
-                  ),
+                  style: ElevatedButton.styleFrom(
+                      // ... (o resto do estilo continua o mesmo)
+                      ),
                 ),
               ],
             ),

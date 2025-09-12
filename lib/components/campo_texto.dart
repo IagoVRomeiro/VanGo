@@ -1,45 +1,41 @@
 import 'package:flutter/material.dart';
-class CampoTexto extends StatefulWidget {
-  const CampoTexto({super.key});
 
-  @override
-  _CampoTextoState createState() => _CampoTextoState();
-}
+// Este é um WIDGET REUTILIZÁVEL.
+// Note que ele não tem Scaffold ou AppBar. É apenas a "peça" do campo de texto.
+class CampoTexto extends StatelessWidget {
+  // Parâmetros que o widget pode receber para ser customizado
+  final TextEditingController controller;
+  final String labelText;
+  final IconData? icon; // Ícone é opcional
+  final TextInputType keyboardType;
+  final bool enabled;
 
-class _CampoTextoState extends State<CampoTexto> {
-  final TextEditingController _textEditingController = TextEditingController(); //instanciar o objeto para controlar o campo de texto
+  // Construtor para inicializar os parâmetros
+  const CampoTexto({
+    super.key,
+    required this.controller,
+    required this.labelText,
+    this.icon,
+    this.keyboardType = TextInputType.text,
+    this.enabled = true,
+  });
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Entrada de dados"),
-      ),
-      body: Column(
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.all(32),
-            child: TextField(
-              keyboardType: TextInputType.datetime,
-              decoration: const InputDecoration(
-                  labelText: "Digite um valor: "
-              ),
-              style: const TextStyle(
-                fontSize: 30,
-                color: Colors.red,
-              ),
-              controller: _textEditingController, //controlador do nosso campo de texto
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-            ),
-            onPressed: (){
-              print("Texto digitado: ${_textEditingController.text}");
-            },
-            child: Text("Salvar"),
-          ),
-        ],
+    // O widget retorna apenas o TextField, pronto para ser usado em qualquer tela
+    return TextField(
+      controller: controller,
+      enabled: enabled,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: labelText,
+        // O ícone só aparece se for fornecido
+        prefixIcon: icon != null ? Icon(icon) : null,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        filled: true,
+        fillColor: enabled ? Colors.white : Colors.grey[200],
       ),
     );
   }

@@ -1,65 +1,29 @@
 import 'package:flutter/material.dart';
 
-class EntradaCheckBox extends StatefulWidget {
-  const EntradaCheckBox({super.key});
+// Este é um COMPONENTE REUTILIZÁVEL.
+// Note que ele não tem Scaffold, AppBar ou botão Salvar.
+// Ele foi projetado para ser uma "peça" em outras telas.
+class EntradaCheckBox extends StatelessWidget {
+  final String title;
+  final bool value;
+  final ValueChanged<bool?> onChanged; // Função para notificar a mudança
 
-  @override
-  _EntradaCheckBoxState createState() => _EntradaCheckBoxState();
-}
+  const EntradaCheckBox({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.onChanged,
+  });
 
-class _EntradaCheckBoxState extends State<EntradaCheckBox> {
-  bool _leite = false;
-  bool _pao = false;
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Lista de Compras"),
-      ),
-      body: Container(
-        child: Column(
-          children: <Widget>[
-            CheckboxListTile(
-                title: const Text("Leite"),
-                secondary: const Icon(Icons.add_box),
-                value: _leite,
-                onChanged: (bool? valor){
-                  setState(() {
-                    _leite = valor!;
-                  });
-                }
-            ),
-            CheckboxListTile(
-                title: const Text("Pão"),
-                secondary: const Icon(Icons.add_box),
-                value: _pao,
-                onChanged: (bool? valor){
-                  setState(() {
-                    _pao = valor!;
-                  });
-                }
-            ),
-            ElevatedButton(
-                child: const Text("Salvar"),
-                onPressed: (){
-                  print(
-                      " Leite: $_leite Pão: $_pao"
-                  );
-                }
-            ),
-            /* Text("Leite"),
-            Checkbox(
-              value: _selecionado,
-              onChanged: (bool valor){
-                print("Valor do checkbox: "+valor.toString());
-                setState(() {
-                  _selecionado = valor;
-                });
-              },
-            ), */
-          ],
-        ),
-      ),
+    // Retorna apenas o CheckboxListTile, pronto para ser usado.
+    return CheckboxListTile(
+      title: Text(title),
+      secondary: const Icon(Icons.check_box_outline_blank),
+      value: value,
+      onChanged: onChanged, // Chama a função que foi passada pelo widget pai
+      controlAffinity: ListTileControlAffinity.leading, // Coloca a checkbox na frente
     );
   }
 }

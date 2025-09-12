@@ -1,80 +1,51 @@
 import 'package:flutter/material.dart';
 
-class EntradaRadioButton extends StatefulWidget {
-  const EntradaRadioButton({super.key});
+/// Um widget reutilizável que exibe um grupo de opções de rádio.
+///
+/// Este componente não tem estado próprio; o seu valor (selecionado)
+/// é controlado pela tela que o utiliza.
+class GrupoRadio<T> extends StatelessWidget {
+  /// O título ou a pergunta a ser exibida acima das opções.
+  final String title;
 
-  @override
-  _EntradaRadioButtonState createState() => _EntradaRadioButtonState();
-}
+  /// O valor atualmente selecionado no grupo.
+  final T groupValue;
 
-class _EntradaRadioButtonState extends State<EntradaRadioButton> {
-  String _selecionado = "" ;
+  /// A função a ser chamada quando uma nova opção é selecionada.
+  final ValueChanged<T?> onChanged;
+
+  /// Um mapa de opções, onde a chave é o valor e o valor é o texto a ser exibido.
+  final Map<T, String> options;
+
+  const GrupoRadio({
+    super.key,
+    required this.title,
+    required this.groupValue,
+    required this.onChanged,
+    required this.options,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Pesquisa de Satisfação"),
-      ),
-      body: Container(
-        child: Column(
-          children: <Widget>[
-            const Padding(
-              padding: EdgeInsets.all(16),
-            ),
-            const Text("Satisfeito com o produto? "),
-            RadioListTile(
-              title: const Text("Sim"),
-              value: "sim",
-              groupValue: _selecionado,
-              onChanged: (String? escolha){
-                setState(() {
-                  _selecionado = escolha!;
-                });
-              },
-            ),
-            RadioListTile(
-              title: const Text("Não"),
-              value: "nao",
-              groupValue: _selecionado,
-              onChanged: (String? escolha){
-                setState(() {
-                  _selecionado = escolha!;
-                });
-              },
-            ),
-            ElevatedButton(
-                child: const Text("Salvar"),
-                onPressed: (){
-                  print("Item selecionado: $_selecionado");
-                }
-                ),
-            /*
-            Text("Masculino"),
-            Radio(
-                value: "m",
-                groupValue: _selecionado,
-                onChanged: (String escolha){
-                  print("Resultado: " + escolha);
-                  setState(() {
-                    _selecionado = escolha;
-                  });
-                }
-            ),
-            Text("Feminino"),
-            Radio(
-                value: "f",
-                groupValue: _selecionado,
-                onChanged: (String escolha){
-                  print("Resultado: " + escolha);
-                  setState(() {
-                    _selecionado = escolha;
-                  });
-                }
-            ),*/
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
-      ),
+        // Geramos uma lista de RadioListTile a partir do mapa de opções
+        ...options.entries.map((entry) {
+          return RadioListTile<T>(
+            title: Text(entry.value),
+            value: entry.key,
+            groupValue: groupValue,
+            onChanged: onChanged,
+            contentPadding: EdgeInsets.zero, // Remove o espaçamento extra
+          );
+        }).toList(),
+      ],
     );
   }
 }
+
