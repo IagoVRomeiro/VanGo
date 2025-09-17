@@ -1,37 +1,26 @@
-
-
-import 'package:interface_app2/screens/selection_screen.dart';
-
-import 'package:firebase_core/firebase_core.dart'; 
-
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:vango/screens/tela_selecao.dart'; 
 
-
-// Função main com a inicialização do Firebase.
 void main() async {
-  // Garante que os widgets do Flutter estejam inicializados.
   WidgetsFlutterBinding.ensureInitialized();
-  // Inicializa o Firebase.
   await Firebase.initializeApp();
-  // Inicia o aplicativo.
-  runApp(const MyApp());
+  runApp(const MeuAplicativo());
 }
 
-// Widget principal que configura o MaterialApp.
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MeuAplicativo extends StatelessWidget {
+  const MeuAplicativo({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'VanGo App',
+      title: 'VanGo',
       theme: ThemeData(
-        primaryColor: const Color(0xFFD32F2F), 
-        fontFamily: 'Roboto',
+        brightness: Brightness.dark,
+        primaryColor: const Color(0xFFE53935),
       ),
-      // A tela inicial agora é importada de seu próprio arquivo.
-      home: const SelectionScreen(), 
       debugShowCheckedModeBanner: false,
+      home: const TelaSelecao(), 
     );
   }
 }
