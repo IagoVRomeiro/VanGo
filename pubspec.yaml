@@ -1,50 +1,41 @@
-name: interface_app2
-description: "Um aplicativo para gerenciar rotas de vans universitárias."
-publish_to: 'none'
+name: vango
+description: "VanGo: Aplicativo para gerenciamento de transporte escolar e universitário."
+
+publish_to: 'none' 
 version: 1.0.0+1
 
-# Atualizado para a versão mais recente e estável do Dart.
-
 environment:
-  sdk: ">=2.17.0 <4.0.0"
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
-  # Firebase Core
+  # Firebase
   firebase_core: ^3.1.1
-
-  # Autenticação (login de aluno e motorista)
   firebase_auth: ^5.1.1
-
-  # Banco de dados (Firestore)
   cloud_firestore: ^5.0.2
-
-  # Push notifications (alertas de chegada da van)
   firebase_messaging: ^15.0.2
 
-  # Mapas e geolocalização
+  # Mapas e Geolocalização
   google_maps_flutter: ^2.7.0
   geolocator: ^12.0.0
 
-  # Gerenciamento de estado
-  provider: ^6.1.2 # (provider já estava na versão mais recente)
+  # Gerenciamento de Estado
+  provider: ^6.1.2
 
-  # Ícones de exemplo
+  # Ícones
   cupertino_icons: ^1.0.8
+  font_awesome_flutter: ^10.7.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   
-  # Lints atualizados para as regras mais recentes do Flutter
   flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
 
   assets:
-    - assets/logo.png
-    # Para usar uma pasta inteira, a barra no final é recomendada:
-    # - assets/
+    - assets/images/
