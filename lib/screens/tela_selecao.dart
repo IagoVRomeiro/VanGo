@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:vango/widgets/botao_selecao_perfil.dart';
+import '../screens/tela_motorista.dart';
+import '../screens/tela_aluno.dart';
 
 class TelaSelecao extends StatelessWidget {
   const TelaSelecao({super.key});
@@ -36,8 +38,12 @@ class TelaSelecao extends StatelessWidget {
                   corDeFundo: fundoBotaoEscuro,
                   corDoTexto: corBranca,
                   aoPressionar: () {
-                    // TODO: Navegar para a tela de login do MOTORISTA
-                    debugPrint('Botão MOTORISTA pressionado!');
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const MotoristaHomeScreen(),
+                      ),
+                    );
                   },
                 ),
                 const SizedBox(height: 24),
@@ -47,8 +53,12 @@ class TelaSelecao extends StatelessWidget {
                   corDeFundo: fundoBotaoAmarelo,
                   corDoTexto: corTextoEscuro,
                   aoPressionar: () {
-                    // TODO: Navegar para a tela de login do ALUNO
-                    debugPrint('Botão ALUNO pressionado!');
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AlunoHomeScreen(),
+                      ),
+                    );
                   },
                 ),
               ],
