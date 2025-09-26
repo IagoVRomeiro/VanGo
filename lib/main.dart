@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
+// import 'package:firebase_core/firebase_core.dart';
 import 'package:vango/screens/tela_selecao.dart'; 
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+void main() {
+  // WidgetsFlutterBinding.ensureInitialized(); 
+  // await Firebase.initializeApp(); 
+
   runApp(const MeuAplicativo());
 }
 
@@ -20,7 +21,7 @@ class MeuAplicativo extends StatelessWidget {
         primaryColor: const Color(0xFFE53935),
       ),
       debugShowCheckedModeBanner: false,
-      home: const TelaSelecao(), 
+      home: const TelaSelecao(),
     );
   }
 }

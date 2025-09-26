@@ -10,7 +10,8 @@ class PerfilScreen extends StatefulWidget {
 }
 
 class _PerfilScreenState extends State<PerfilScreen> {
-  // Dados de exemplo (você pode puxar do Firestore depois)
+  
+  // Dados do usuário
   String nome = "Usuário Exemplo";
   String email = "usuario@email.com";
   String universidade = "PUC Minas";
@@ -55,9 +56,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
     }
   }
 
-  // Escolher foto (TODO real)
   Future<void> escolherFoto() async {
-    // TODO: implementar integração com image_picker
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Função de escolher foto ainda não implementada.")),
     );

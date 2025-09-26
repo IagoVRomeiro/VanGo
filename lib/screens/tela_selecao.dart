@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:vango/widgets/botao_selecao_perfil.dart';
 import '../screens/tela_motorista.dart';
 import '../screens/tela_aluno.dart';
+import '../screens/tela_sobre.dart';
 
 class TelaSelecao extends StatelessWidget {
   const TelaSelecao({super.key});
@@ -16,6 +17,23 @@ class TelaSelecao extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: corVermelhaPrincipal,
+      appBar: AppBar(
+        backgroundColor: corVermelhaPrincipal,
+        elevation: 0,
+        actions: [
+          // A PALAVRA-CHAVE 'const' FOI REMOVIDA DAQUI
+          IconButton(
+            icon: const Icon(Icons.info_outline, color: corBranca),
+            tooltip: 'Sobre o App',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const TelaSobre()),
+              );
+            },
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Center(
           child: Padding(

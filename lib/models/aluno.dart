@@ -14,12 +14,11 @@ class Aluno {
   String contatoResponsavel; // Telefone do responsável
   String statusPresenca; // "confirmado", "ausente", "embarcado", "desembarcado"
   
-  // Atributos adicionais sugeridos que são muito úteis
+  // Atributos adicionais
   String idResponsavel; // ID do documento do responsável no Firebase
-  String? fotoUrl; // URL da foto do aluno (opcional, por isso o '?')
-  String? necessidadesEspeciais; // Descrição de necessidades especiais (opcional)
+  String? fotoUrl; // URL da foto do aluno
+  String? necessidadesEspeciais; 
 
-  // Construtor principal da classe
   Aluno({
     required this.id,
     required this.nome,
@@ -34,7 +33,7 @@ class Aluno {
     required this.contatoResponsavel,
     required this.statusPresenca,
     required this.idResponsavel,
-    this.fotoUrl, // Atributos opcionais não precisam de 'required'
+    this.fotoUrl, 
     this.necessidadesEspeciais,
   });
 
