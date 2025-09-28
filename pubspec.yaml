@@ -27,6 +27,7 @@ dependencies:
   # Ícones
   cupertino_icons: ^1.0.8
   font_awesome_flutter: ^10.7.0
+  flutter_dotenv: ^6.0.0
 
 dev_dependencies:
   flutter_test:
