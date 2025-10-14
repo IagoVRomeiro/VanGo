@@ -12,9 +12,9 @@ dependencies:
     sdk: flutter
 
   # Firebase
-  firebase_core: ^3.1.1
-  firebase_auth: ^5.1.1
-  cloud_firestore: ^5.0.2
+  firebase_core: ^3.15.2
+  firebase_auth: ^5.7.0
+  cloud_firestore: ^5.6.12
   firebase_messaging: ^15.0.2
 
   # Mapas e Geolocalização
@@ -28,12 +28,14 @@ dependencies:
   cupertino_icons: ^1.0.8
   font_awesome_flutter: ^10.7.0
   flutter_dotenv: ^6.0.0
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   
   flutter_lints: ^4.0.0
+  change_app_package_name: ^1.5.0
 
 flutter:
   uses-material-design: true

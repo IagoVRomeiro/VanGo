@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:vango/widgets/botao_selecao_perfil.dart';
-import '../screens/tela_motorista.dart';
-import '../screens/tela_aluno.dart';
-import '../screens/tela_sobre.dart';
+import 'tela_motorista.dart';
+import 'tela_aluno.dart';
+import 'tela_sobre.dart';
 
 class TelaSelecao extends StatelessWidget {
   const TelaSelecao({super.key});
@@ -21,7 +21,6 @@ class TelaSelecao extends StatelessWidget {
         backgroundColor: corVermelhaPrincipal,
         elevation: 0,
         actions: [
-          // A PALAVRA-CHAVE 'const' FOI REMOVIDA DAQUI
           IconButton(
             icon: const Icon(Icons.info_outline, color: corBranca),
             tooltip: 'Sobre o App',
@@ -56,12 +55,7 @@ class TelaSelecao extends StatelessWidget {
                   corDeFundo: fundoBotaoEscuro,
                   corDoTexto: corBranca,
                   aoPressionar: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const MotoristaHomeScreen(),
-                      ),
-                    );
+                    Navigator.pushNamed(context, '/motorista');
                   },
                 ),
                 const SizedBox(height: 24),
@@ -71,12 +65,7 @@ class TelaSelecao extends StatelessWidget {
                   corDeFundo: fundoBotaoAmarelo,
                   corDoTexto: corTextoEscuro,
                   aoPressionar: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const AlunoHomeScreen(),
-                      ),
-                    );
+                    Navigator.pushNamed(context, '/aluno');
                   },
                 ),
               ],

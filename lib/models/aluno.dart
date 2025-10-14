@@ -4,20 +4,19 @@ class Aluno {
   String id;
   String nome;
   int idade;
-  String serie; // Ex: "5º Ano B"
+  String serie;
   String endereco;
   double latitude;
   double longitude;
   String escola;
-  String horarioEntrada; // Ex: "07:30"
-  String horarioSaida;   // Ex: "12:30"
-  String contatoResponsavel; // Telefone do responsável
-  String statusPresenca; // "confirmado", "ausente", "embarcado", "desembarcado"
-  
-  // Atributos adicionais
-  String idResponsavel; // ID do documento do responsável no Firebase
-  String? fotoUrl; // URL da foto do aluno
-  String? necessidadesEspeciais; 
+  String horarioEntrada;
+  String horarioSaida;
+  String contatoResponsavel;
+  String statusPresenca;
+  String idResponsavel;
+  String? fotoUrl;
+  String? necessidadesEspeciais;
+  String motoristaId; // ✅ CAMPO ADICIONADO AQUI
 
   Aluno({
     required this.id,
@@ -33,12 +32,11 @@ class Aluno {
     required this.contatoResponsavel,
     required this.statusPresenca,
     required this.idResponsavel,
-    this.fotoUrl, 
+    this.fotoUrl,
     this.necessidadesEspeciais,
+    required this.motoristaId, // ✅ ADICIONADO AO CONSTRUTOR
   });
 
-  /// Converte o objeto [Aluno] em um [Map<String, dynamic>].
-  /// Útil para enviar dados para o Firebase (Firestore).
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -56,11 +54,10 @@ class Aluno {
       'idResponsavel': idResponsavel,
       'fotoUrl': fotoUrl,
       'necessidadesEspeciais': necessidadesEspeciais,
+      'motoristaId': motoristaId, // ✅ ADICIONADO AO MAPA
     };
   }
 
-  /// Cria um objeto [Aluno] a partir de um [Map<String, dynamic>].
-  /// Útil para receber dados do Firebase (Firestore).
   factory Aluno.fromMap(Map<String, dynamic> map) {
     return Aluno(
       id: map['id'] ?? '',
@@ -76,8 +73,9 @@ class Aluno {
       contatoResponsavel: map['contatoResponsavel'] ?? '',
       statusPresenca: map['statusPresenca'] ?? 'desconhecido',
       idResponsavel: map['idResponsavel'] ?? '',
-      fotoUrl: map['fotoUrl'], // Se for nulo no Firebase, continuará nulo aqui
+      fotoUrl: map['fotoUrl'],
       necessidadesEspeciais: map['necessidadesEspeciais'],
+      motoristaId: map['motoristaId'] ?? '', // ✅ ADICIONADO AO FACTORY
     );
   }
 }

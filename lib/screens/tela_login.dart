@@ -1,6 +1,11 @@
+// lib/screens/tela_login.dart
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:vango/screens/tela_cadastro.dart';
+import 'package:vango/screens/tela_motorista.dart';
 
 class TelaLogin extends StatefulWidget {
   const TelaLogin({super.key});
@@ -12,6 +17,7 @@ class _TelaLoginState extends State<TelaLogin> {
   late final TextEditingController _controladorEmail;
   late final TextEditingController _controladorSenha;
   bool _senhaVisivel = false;
+  final _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
@@ -27,6 +33,50 @@ class _TelaLoginState extends State<TelaLogin> {
     super.dispose();
   }
 
+  Future<void> _fazerLogin() async {
+    if (_controladorEmail.text.isEmpty || _controladorSenha.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor, preencha e-mail e senha.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _controladorEmail.text.trim(),
+        password: _controladorSenha.text.trim(),
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const TelaMotorista()),
+        );
+      }
+
+    } on FirebaseAuthException catch (e) {
+      Navigator.pop(context);
+      
+      String mensagemErro = 'Ocorreu um erro ao fazer login.';
+      if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        mensagemErro = 'E-mail ou senha incorretos. Tente novamente.';
+      } else if (e.code == 'invalid-email') {
+        mensagemErro = 'O formato do e-mail é inválido.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(mensagemErro), backgroundColor: Colors.redAccent),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const Color corVermelhaPrincipal = Color(0xFFE53935);
@@ -40,67 +90,76 @@ class _TelaLoginState extends State<TelaLogin> {
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 32.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 40),
-                SizedBox(height: 100, child: Image.asset('assets/images/vgo_logo.png')),
-                const SizedBox(height: 60),
-                _construirCampoDeTexto(
-                  controlador: _controladorEmail,
-                  dica: 'Email',
-                  icone: Icons.email_outlined,
-                ),
-                const SizedBox(height: 16),
-                _construirCampoDeTexto(
-                  controlador: _controladorSenha,
-                  dica: 'Senha',
-                  icone: Icons.lock_outline,
-                  isPassword: true,
-                ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    'Esqueceu a senha?',
-                    style: TextStyle(color: corBranca.withOpacity(0.9), fontSize: 14),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 40),
+                  // AQUI ESTÁ A CORREÇÃO ✅
+                  SizedBox(height: 100, child: Image.asset('assets/images/vgo_logo.png')),
+                  const SizedBox(height: 60),
+                  _construirCampoDeTexto(
+                    controlador: _controladorEmail,
+                    dica: 'Email',
+                    icone: Icons.email_outlined,
                   ),
-                ),
-                const SizedBox(height: 40),
-                _construirBotaoPrincipal(
-                  texto: 'ENTRAR',
-                  corDeFundo: fundoBotaoAmarelo,
-                  corDoTexto: fundoBotaoEscuro,
-                  aoPressionar: () {},
-                ),
-                const SizedBox(height: 24),
-                const Center(child: Text('ou', style: TextStyle(color: corBranca, fontSize: 16))),
-                const SizedBox(height: 24),
-                _construirBotaoPrincipal(
-                  texto: 'ENTRAR COM GOOGLE',
-                  corDeFundo: fundoBotaoEscuro,
-                  corDoTexto: corBranca,
-                  icone: FontAwesomeIcons.google,
-                  aoPressionar: () {},
-                ),
-                const SizedBox(height: 60),
-                RichText(
-                  textAlign: TextAlign.center,
-                  text: TextSpan(
-                    style: const TextStyle(color: corBranca, fontSize: 15),
-                    children: [
-                      const TextSpan(text: 'Não tem uma conta? '),
-                      TextSpan(
-                        text: 'Cadastre-se',
-                        style: const TextStyle(color: fundoBotaoAmarelo, fontWeight: FontWeight.bold),
-                        recognizer: TapGestureRecognizer()..onTap = () {},
-                      ),
-                    ],
+                  const SizedBox(height: 16),
+                  _construirCampoDeTexto(
+                    controlador: _controladorSenha,
+                    dica: 'Senha',
+                    icone: Icons.lock_outline,
+                    isPassword: true,
                   ),
-                ),
-                const SizedBox(height: 20),
-              ],
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'Esqueceu a senha?',
+                      style: TextStyle(color: corBranca.withOpacity(0.9), fontSize: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  _construirBotaoPrincipal(
+                    texto: 'ENTRAR',
+                    corDeFundo: fundoBotaoAmarelo,
+                    corDoTexto: fundoBotaoEscuro,
+                    aoPressionar: _fazerLogin,
+                  ),
+                  const SizedBox(height: 24),
+                  const Center(child: Text('ou', style: TextStyle(color: corBranca, fontSize: 16))),
+                  const SizedBox(height: 24),
+                  _construirBotaoPrincipal(
+                    texto: 'ENTRAR COM GOOGLE',
+                    corDeFundo: fundoBotaoEscuro,
+                    corDoTexto: corBranca,
+                    icone: FontAwesomeIcons.google,
+                    aoPressionar: () {},
+                  ),
+                  const SizedBox(height: 60),
+                  RichText(
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      style: const TextStyle(color: corBranca, fontSize: 15),
+                      children: [
+                        const TextSpan(text: 'Não tem uma conta? '),
+                        TextSpan(
+                          text: 'Cadastre-se',
+                          style: const TextStyle(color: fundoBotaoAmarelo, fontWeight: FontWeight.bold),
+                          recognizer: TapGestureRecognizer()..onTap = () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const TelaCadastro()),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
           ),
         ),
@@ -108,6 +167,7 @@ class _TelaLoginState extends State<TelaLogin> {
     );
   }
 
+  // Seus métodos _construirCampoDeTexto e _construirBotaoPrincipal permanecem os mesmos...
   Widget _construirCampoDeTexto({
     required TextEditingController controlador,
     required String dica,

@@ -1,250 +1,123 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// Necessário para o debugPrint
+import 'package:flutter/material.dart';
 
-class CadastroScreen extends StatefulWidget {
-  const CadastroScreen({super.key});
+class TelaCadastro extends StatefulWidget {
+  const TelaCadastro({super.key});
 
   @override
-  State<CadastroScreen> createState() => _CadastroScreenState();
+  State<TelaCadastro> createState() => _TelaCadastroState();
 }
 
-class _CadastroScreenState extends State<CadastroScreen> {
-  // Chave para validar o nosso formulário
+class _TelaCadastroState extends State<TelaCadastro> {
+  
+  final _emailController = TextEditingController();
+  final _senhaController = TextEditingController();
+
+
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers para gerir o texto dos campos
-  final TextEditingController _nomeController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _senhaController = TextEditingController();
-  final TextEditingController _confirmarSenhaController = TextEditingController();
+  // Função para lidar com a criação da conta
+  Future<void> _criarConta() async {
+    // 1. Validar o formulário
+    if (!_formKey.currentState!.validate()) {
+      return; // Se o formulário não for válido, não faz nada.
+    }
 
-  // Variáveis de estado da UI
-  bool _obscureText = true;
-  bool _estaCarregando = false;
+    // Mostrar um diálogo de "carregando" para o usuário
+    showDialog(
+      context: context,
+      barrierDismissible: false, // O usuário não pode fechar o diálogo
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    // 2. Tentar criar o usuário no Firebase Authentication
+    try {
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(), // Pega o e-mail do campo de texto
+        password: _senhaController.text.trim(), // Pega a senha
+      );
+
+      // Se o código chegar aqui, o usuário foi criado com sucesso!
+      // Podemos fechar o diálogo de "carregando"
+      if (mounted) Navigator.of(context).pop();
+      // Opcional: Navegar para a tela de login ou para a home
+      // Navigator.of(context).pushReplacement(...);
+
+    } on FirebaseAuthException catch (e) {
+      // Se ocorrer um erro do Firebase, trate-o aqui
+      if (mounted) Navigator.of(context).pop(); // Fecha o diálogo de "carregando"
+
+      // Mostra uma mensagem de erro para o usuário
+      String mensagemErro = 'Ocorreu um erro. Tente novamente.';
+      if (e.code == 'weak-password') {
+        mensagemErro = 'A senha fornecida é muito fraca.';
+      } else if (e.code == 'email-already-in-use') {
+        mensagemErro = 'Já existe uma conta com este e-mail.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(mensagemErro),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } catch (e) {
+      // Para qualquer outro tipo de erro
+      if (mounted) Navigator.of(context).pop();
+      print(e); // Imprime o erro no console para debug
+    }
+  }
 
   @override
   void dispose() {
-    // Limpar os controllers para evitar vazamento de memória
-    _nomeController.dispose();
+    // Limpar os controladores quando o widget for removido da tela
     _emailController.dispose();
     _senhaController.dispose();
-    _confirmarSenhaController.dispose();
     super.dispose();
-  }
-
-  /// Função para lidar com o processo de cadastro do utilizador no Firebase
-  Future<void> _cadastrarUtilizador() async {
-    // Valida os campos do formulário
-    if (_formKey.currentState?.validate() ?? false) {
-      // Ativa o indicador de carregamento
-      setState(() {
-        _estaCarregando = true;
-      });
-
-      try {
-        // Tenta criar o usuário no Firebase Authentication
-        final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _senhaController.text.trim(),
-        );
-
-        // Se o cadastro for bem-sucedido, exibe uma mensagem
-        debugPrint('Usuário criado com sucesso: ${userCredential.user?.uid}');
-        
-        // Opcional: Salvar informações adicionais (como o nome) no Firestore aqui.
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cadastro realizado com sucesso!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          // TODO: Navegar para a tela principal ou de login após o sucesso
-          // Navigator.of(context).pop();
-        }
-      } on FirebaseAuthException catch (e) {
-        // Trata erros específicos do Firebase
-        debugPrint('Erro de autenticação do Firebase: ${e.code}');
-        String mensagemErro = 'Ocorreu um erro desconhecido.';
-        if (e.code == 'email-already-in-use') {
-          mensagemErro = 'Este endereço de email já está em uso.';
-        } else if (e.code == 'weak-password') {
-          mensagemErro = 'A senha fornecida é muito fraca.';
-        } else if (e.code == 'invalid-email') {
-          mensagemErro = 'O email fornecido não é válido.';
-        }
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(mensagemErro),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } catch (e) {
-        // Trata quaisquer outros erros
-        debugPrint('Erro inesperado: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Ocorreu um erro inesperado. Tente novamente.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } finally {
-        // Garante que o indicador de carregamento seja desativado
-        if (mounted) {
-          setState(() {
-            _estaCarregando = false;
-          });
-        }
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Criar Nova Conta'),
-        backgroundColor: const Color(0xFF333333),
-        foregroundColor: Colors.white,
+        title: const Text('Criar Conta'),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 20),
-                // --- Campo Nome ---
-                TextFormField(
-                  controller: _nomeController,
-                  decoration: InputDecoration(
-                    labelText: 'Nome Completo',
-                    prefixIcon: const Icon(Icons.person),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Por favor, insira o seu nome.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // --- Campo Email ---
-                TextFormField(
-                  controller: _emailController,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: const Icon(Icons.email),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Por favor, insira um email.';
-                    }
-                    // Validação de email com Expressão Regular (RegEx)
-                    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-                    if (!emailRegex.hasMatch(value)) {
-                      return 'Por favor, insira um email válido.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // --- Campo Senha ---
-                TextFormField(
-                  controller: _senhaController,
-                  obscureText: _obscureText,
-                  decoration: InputDecoration(
-                    labelText: 'Senha',
-                    prefixIcon: const Icon(Icons.lock),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureText ? Icons.visibility_off : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscureText = !_obscureText;
-                        });
-                      },
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.length < 6) {
-                      return 'A senha deve ter pelo menos 6 caracteres.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // --- Campo Confirmar Senha ---
-                TextFormField(
-                  controller: _confirmarSenhaController,
-                  obscureText: true, // Geralmente não precisa de botão de visibilidade
-                  decoration: InputDecoration(
-                    labelText: 'Confirmar Senha',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value != _senhaController.text) {
-                      return 'As senhas não correspondem.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 40),
-
-                // --- Botão de Cadastrar ---
-                ElevatedButton(
-                  // Desabilita o botão enquanto está carregando
-                  onPressed: _estaCarregando ? null : _cadastrarUtilizador,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: const Color(0xFF333333),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _estaCarregando
-                      ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 3,
-                          ),
-                        )
-                      : const Text(
-                          'CADASTRAR',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                ),
-              ],
-            ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextFormField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: 'E-mail'),
+                keyboardType: TextInputType.emailAddress,
+                validator: (value) {
+                  if (value == null || value.isEmpty || !value.contains('@')) {
+                    return 'Por favor, insira um e-mail válido.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _senhaController,
+                decoration: const InputDecoration(labelText: 'Senha'),
+                obscureText: true, // Esconde a senha
+                validator: (value) {
+                  if (value == null || value.isEmpty || value.length < 6) {
+                    return 'A senha deve ter pelo menos 6 caracteres.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _criarConta, // Chama nossa função de criar conta
+                child: const Text('Cadastrar'),
+              ),
+            ],
           ),
         ),
       ),

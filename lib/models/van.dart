@@ -1,24 +1,23 @@
 // lib/models/van.dart
 
 class Van {
+  // --- Atributos de Identificação (essencial para o aluno) ---
   String placa; // Usado como ID único do veículo
   String modelo;
   String marca;
-  int ano;
-  int capacidade; // Número máximo de alunos
   String cor;
-  double quilometragem;
-  bool documentacaoValida;
+  String? fotoUrl;                // Opcional, mas muito útil para o aluno identificar a van
+
+  // --- Atributos Operacionais (essencial para a rota) ---
+  int ano;
+  int capacidade; // Número máximo de alunos (regra de negócio crucial)
+  bool documentacaoValida; // Importante para segurança e legalidade
   String status; // "disponível", "em manutenção", "em rota"
   
-  // Relação com o motorista - o ideal é salvar o ID
+  // --- Relação com o motorista ---
   String motoristaId; 
 
-  // Atributos adicionais úteis
-  DateTime? dataUltimaManutencao; // Opcional
-  String? fotoUrl;                // Opcional
-
-  // Construtor principal da classe
+  // Construtor principal da classe (agora mais simples)
   Van({
     required this.placa,
     required this.modelo,
@@ -26,11 +25,9 @@ class Van {
     required this.ano,
     required this.capacidade,
     required this.cor,
-    required this.quilometragem,
     required this.documentacaoValida,
     required this.status,
     required this.motoristaId,
-    this.dataUltimaManutencao,
     this.fotoUrl,
   });
 
@@ -43,11 +40,9 @@ class Van {
       'ano': ano,
       'capacidade': capacidade,
       'cor': cor,
-      'quilometragem': quilometragem,
       'documentacaoValida': documentacaoValida,
       'status': status,
       'motoristaId': motoristaId,
-      'dataUltimaManutencao': dataUltimaManutencao?.toIso8601String(),
       'fotoUrl': fotoUrl,
     };
   }
@@ -61,13 +56,9 @@ class Van {
       ano: map['ano'] ?? DateTime.now().year,
       capacidade: map['capacidade'] ?? 0,
       cor: map['cor'] ?? '',
-      quilometragem: (map['quilometragem'] as num?)?.toDouble() ?? 0.0,
       documentacaoValida: map['documentacaoValida'] ?? false,
       status: map['status'] ?? 'indisponível',
       motoristaId: map['motoristaId'] ?? '',
-      dataUltimaManutencao: map['dataUltimaManutencao'] != null 
-          ? DateTime.parse(map['dataUltimaManutencao']) 
-          : null,
       fotoUrl: map['fotoUrl'],
     );
   }
