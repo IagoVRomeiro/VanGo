@@ -1,3 +1,12 @@
+// android/build.gradle
+
+plugins {
+
+    id 'com.android.application' apply false
+    id 'org.jetbrains.kotlin.android' apply false
+    id "dev.flutter.flutter-gradle-plugin" apply false
+}
+
 buildscript {
     repositories {
         google()
@@ -24,6 +33,6 @@ subprojects {
     project.evaluationDependsOn(':app')
 }
 
-task clean(type: Delete) {
-    delete rootProject.buildDir
+tasks.register("clean", Delete) {
+    delete rootProject.layout.buildDirectory
 }
