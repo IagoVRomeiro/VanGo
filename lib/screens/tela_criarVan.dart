@@ -5,6 +5,21 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:vango/models/van.dart';
 
+extension StatusVanExtension on StatusVan {
+  String get displayName {
+    switch (this) {
+      case StatusVan.disponivel:
+        return 'Disponível';
+      case StatusVan.emManutencao:
+        return 'Em Manutenção';
+      case StatusVan.emRota:
+        return 'Em Rota';
+      case StatusVan.indisponivel:
+        return 'Indisponível';
+    }
+  }
+}
+
 class CadastrarVanScreen extends StatefulWidget {
   const CadastrarVanScreen({super.key});
 
@@ -15,7 +30,6 @@ class CadastrarVanScreen extends StatefulWidget {
 class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controladores para os campos de texto
   final _placaController = TextEditingController();
   final _modeloController = TextEditingController();
   final _marcaController = TextEditingController();
@@ -24,16 +38,13 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
   final _corController = TextEditingController();
   final _fotoUrlController = TextEditingController();
 
-  // Variáveis de estado para outros tipos de input
   bool _docValida = true;
-  String? _statusSelecionado = 'disponível';
+  // ✅ ALTERADO: O estado agora usa o enum StatusVan, com um valor inicial seguro.
+  StatusVan _statusSelecionado = StatusVan.disponivel;
   bool _isLoading = false;
-
-  final List<String> _statusOptions = ['disponível', 'em manutenção', 'em rota'];
 
   @override
   void dispose() {
-    // É muito importante limpar os controladores para evitar vazamentos de memória
     _placaController.dispose();
     _modeloController.dispose();
     _marcaController.dispose();
@@ -45,12 +56,10 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
   }
 
   Future<void> _salvarVan() async {
-    // 1. Valida todos os campos do formulário
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    // 2. Pega o ID do motorista logado
     final motoristaId = FirebaseAuth.instance.currentUser?.uid;
     if (motoristaId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -61,11 +70,9 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
-    // 3. Cria um objeto Van com os dados do formulário
+    // ✅ ALTERADO: Cria o objeto Van passando o enum diretamente.
     final van = Van(
       placa: _placaController.text.trim().toUpperCase(),
       modelo: _modeloController.text.trim(),
@@ -74,16 +81,15 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
       capacidade: int.parse(_capacidadeController.text),
       cor: _corController.text.trim(),
       documentacaoValida: _docValida,
-      status: _statusSelecionado!,
+      status: _statusSelecionado, // Passa o enum, não a string
       motoristaId: motoristaId,
       fotoUrl: _fotoUrlController.text.trim().isEmpty
           ? null
           : _fotoUrlController.text.trim(),
     );
 
-    // 4. Salva o objeto no Firestore
     try {
-      // Usamos a placa como ID único do documento para evitar duplicatas
+      // Usa a placa como ID único do documento para evitar duplicatas
       await FirebaseFirestore.instance
           .collection('vans')
           .doc(van.placa)
@@ -95,7 +101,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
               content: Text('Van cadastrada com sucesso!'),
               backgroundColor: Colors.green),
         );
-        Navigator.of(context).pop(); // Volta para a tela anterior
+        Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
@@ -107,9 +113,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -147,16 +151,21 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
+                    // ✅ ALTERADO: Dropdown agora trabalha com o enum StatusVan.
+                    DropdownButtonFormField<StatusVan>(
                       value: _statusSelecionado,
-                      items: _statusOptions
-                          .map((label) => DropdownMenuItem(
-                                value: label,
-                                child: Text(label),
+                      items: StatusVan.values
+                          .map((status) => DropdownMenuItem(
+                                value: status,
+                                // Usa o helper para mostrar um nome amigável
+                                child: Text(status.displayName),
                               ))
                           .toList(),
-                      onChanged: (value) =>
-                          setState(() => _statusSelecionado = value),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _statusSelecionado = value);
+                        }
+                      },
                       decoration: const InputDecoration(
                           labelText: 'Status', border: OutlineInputBorder()),
                     ),
@@ -187,7 +196,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     );
   }
 
-  // Widget auxiliar para evitar repetição de código nos campos de texto
+  // Widget auxiliar (sem alteração)
   Widget _buildTextField(TextEditingController controller, String label,
       {TextInputType keyboardType = TextInputType.text,
       bool isRequired = true}) {

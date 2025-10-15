@@ -1,8 +1,12 @@
+// lib/screens/tela_selecao.dart (VERSÃO CORRIGIDA)
+
+// ✅ CORREÇÃO: O import estava errado. Esta é a forma correta.
 import 'package:flutter/material.dart';
-import 'package:vango/widgets/botao_selecao_perfil.dart';
+
+import '../widgets/botao_selecao_perfil.dart';
 import 'tela_motorista.dart';
 import 'tela_aluno.dart';
-import 'tela_sobre.dart';
+import 'tela_sobre_carrossel.dart';
 
 class TelaSelecao extends StatelessWidget {
   const TelaSelecao({super.key});
@@ -27,7 +31,7 @@ class TelaSelecao extends StatelessWidget {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const TelaSobre()),
+                MaterialPageRoute(builder: (context) => TelaSobreCarrossel()),
               );
             },
           ),

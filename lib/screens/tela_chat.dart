@@ -3,10 +3,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:vango/models/mensagem.dart'; // ✅ NOVO: Importar o modelo Mensagem
 
 class TelaChat extends StatefulWidget {
-  final String chatId; // ID da conversa (ex: motoristaId_alunoId)
-  final String nomeReceptor; // Nome da pessoa com quem se está conversando
+  final String chatId;
+  final String nomeReceptor;
 
   const TelaChat({
     super.key,
@@ -20,36 +21,66 @@ class TelaChat extends StatefulWidget {
 
 class _TelaChatState extends State<TelaChat> {
   final _controller = TextEditingController();
-  final _meuId = FirebaseAuth.instance.currentUser!.uid;
+  // ✅ ALTERADO: Tratamento de null safety para o ID do usuário.
+  final String? _meuId = FirebaseAuth.instance.currentUser?.uid;
 
-  void _enviarMensagem() async {
+  // ✅ NOVO: Stream agora retorna uma lista de objetos Mensagem.
+  late final Stream<List<Mensagem>> _messagesStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _messagesStream = FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.chatId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Mensagem.fromSnapshot(doc))
+            .toList());
+  }
+
+  Future<void> _enviarMensagem() async {
     final texto = _controller.text.trim();
-    if (texto.isEmpty) {
+    if (texto.isEmpty || _meuId == null) {
+      // Impede o envio se não houver texto ou se o usuário não estiver logado
       return;
     }
 
     _controller.clear();
     final firestore = FirebaseFirestore.instance;
 
-    // Adiciona a nova mensagem na subcoleção 'messages' dentro do documento do chat
-    await firestore
-        .collection('chats')
-        .doc(widget.chatId)
-        .collection('messages')
-        .add({
-      'texto': texto,
-      'senderId': _meuId,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+    final chatDocRef = firestore.collection('chats').doc(widget.chatId);
+    final messagesColRef = chatDocRef.collection('messages');
 
-    // Atualiza o documento principal do chat com a última mensagem (para a lista de conversas)
-    await firestore.collection('chats').doc(widget.chatId).set({
-      'lastMessage': {
+    // ✅ NOVO: Tratamento de erro para operações de escrita.
+    try {
+      // Adiciona a nova mensagem
+      await messagesColRef.add({
         'texto': texto,
+        'senderId': _meuId,
         'timestamp': FieldValue.serverTimestamp(),
-      },
-      'participants': widget.chatId.split('_'), // Garante que os participantes estejam lá
-    }, SetOptions(merge: true));
+      });
+
+      // Atualiza o documento principal do chat
+      await chatDocRef.set({
+        'lastMessage': {
+          'texto': texto,
+          'timestamp': FieldValue.serverTimestamp(),
+        },
+        'participants': widget.chatId.split('_'),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao enviar mensagem: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -57,36 +88,34 @@ class _TelaChatState extends State<TelaChat> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.nomeReceptor),
-        // A cor será definida pela tela que chama o chat (motorista=vermelho, aluno=amarelo)
-        backgroundColor: Theme.of(context).colorScheme.primary, 
+        backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('chats')
-                  .doc(widget.chatId)
-                  .collection('messages')
-                  .orderBy('timestamp', descending: true)
-                  .snapshots(),
+            // ✅ ALTERADO: StreamBuilder agora espera uma List<Mensagem>.
+            child: StreamBuilder<List<Mensagem>>(
+              stream: _messagesStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                if (snapshot.hasError) {
+                  return Center(child: Text('Erro: ${snapshot.error}'));
+                }
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Center(child: Text('Comece a conversa!'));
                 }
 
-                final mensagens = snapshot.data!.docs;
+                final mensagens = snapshot.data!;
 
                 return ListView.builder(
-                  reverse: true, // Para o chat começar de baixo para cima
+                  reverse: true,
                   itemCount: mensagens.length,
                   itemBuilder: (context, index) {
-                    final msg = mensagens[index];
-                    final eMinhaMensagem = msg['senderId'] == _meuId;
+                    final mensagem = mensagens[index];
+                    final eMinhaMensagem = mensagem.senderId == _meuId;
 
                     return Align(
                       alignment: eMinhaMensagem ? Alignment.centerRight : Alignment.centerLeft,
@@ -97,8 +126,9 @@ class _TelaChatState extends State<TelaChat> {
                           color: eMinhaMensagem ? Theme.of(context).colorScheme.primary : Colors.grey.shade300,
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        // ✅ ALTERADO: Usa as propriedades do objeto Mensagem.
                         child: Text(
-                          msg['texto'],
+                          mensagem.texto,
                           style: TextStyle(color: eMinhaMensagem ? Colors.white : Colors.black87),
                         ),
                       ),
@@ -122,11 +152,14 @@ class _TelaChatState extends State<TelaChat> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                     ),
                     onSubmitted: (_) => _enviarMensagem(),
+                    // Desabilita o campo se o usuário não estiver logado
+                    enabled: _meuId != null,
                   ),
                 ),
                 IconButton(
+                  // Desabilita o botão se o usuário não estiver logado
+                  onPressed: _meuId != null ? _enviarMensagem : null,
                   icon: const Icon(Icons.send),
-                  onPressed: _enviarMensagem,
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ],

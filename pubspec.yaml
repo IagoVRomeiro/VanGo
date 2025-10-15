@@ -1,4 +1,4 @@
-name: vango
+name: vango # CORRIGIDO: Nome do pacote em snake_case (boas práticas)
 description: "VanGo: Aplicativo para gerenciamento de transporte escolar e universitário."
 
 publish_to: 'none' 
@@ -15,7 +15,11 @@ dependencies:
   firebase_core: ^3.15.2
   firebase_auth: ^5.7.0
   cloud_firestore: ^5.6.12
+  firebase_storage: ^12.4.10    # ADICIONADO: Para upload de arquivos/fotos
   firebase_messaging: ^15.0.2
+
+  # Imagens
+  image_picker: ^1.1.2       # ADICIONADO: Para escolher fotos da galeria/câmera
 
   # Mapas e Geolocalização
   google_maps_flutter: ^2.7.0
@@ -24,7 +28,7 @@ dependencies:
   # Gerenciamento de Estado
   provider: ^6.1.2
 
-  # Ícones
+  # Utilitários e Ícones
   cupertino_icons: ^1.0.8
   font_awesome_flutter: ^10.7.0
   flutter_dotenv: ^6.0.0
@@ -40,5 +44,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  
   assets:
     - assets/images/

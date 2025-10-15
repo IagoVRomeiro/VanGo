@@ -1,49 +1,43 @@
-// lib/main.dart
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
-// 1. Importe todas as suas telas
-import 'package:vango/screens/tela_selecao.dart';
-import 'package:vango/screens/tela_motorista.dart';
-import 'package:vango/screens/tela_aluno.dart';
-import 'package:vango/screens/tela_login.dart'; // Importe a tela de login também
+// Imports relativos para seus arquivos
+import 'screens/tela_selecao.dart';
+import 'screens/tela_motorista.dart';
+import 'screens/tela_aluno.dart';
+import 'screens/tela_login.dart';
 
-void main() async {
-  // Garante a inicialização do Flutter e do Firebase
+// O resto do seu código do main.dart...
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
-  runApp(const MeuAplicativo());
+  runApp(const VanGoApp());
 }
 
-class MeuAplicativo extends StatelessWidget {
-  const MeuAplicativo({super.key});
+class VanGoApp extends StatelessWidget {
+  const VanGoApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'VanGo',
       theme: ThemeData(
-        brightness: Brightness.dark,
-        primaryColor: const Color(0xFFE53935),
+        primarySwatch: Colors.red,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      debugShowCheckedModeBanner: false,
-      
-      // 2. Configure as rotas nomeadas
-      initialRoute: '/', // Define a rota inicial
+      // ✅ CORREÇÃO: Rotas usando os nomes das classes diretamente.
+      initialRoute: '/',
       routes: {
-        // A rota '/' (raiz) corresponde à TelaSelecao
-        '/': (context) => const TelaSelecao(), 
-        // A rota '/motorista' corresponde à TelaMotorista
-        '/motorista': (context) => const TelaMotorista(),
-        // A rota '/aluno' corresponde à TelaAluno
-        '/aluno': (context) => const AlunoHomeScreen(), 
-        // É uma boa prática adicionar outras telas principais aqui também
+        '/': (context) => const TelaSelecao(),
+        '/aluno': (context) => const TelaAluno(), // Supondo que TelaAluno exista
         '/login': (context) => const TelaLogin(),
+        // A rota motorista é mais complexa e é melhor tratada com onGenerateRoute
+        // mas para o seu caso atual, uma rota simples funciona.
+        '/motorista': (context) => const TelaMotorista(),
       },
     );
   }

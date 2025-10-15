@@ -4,10 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:vango/models/aluno.dart';
-import 'package:vango/models/motorista.dart';
 import 'package:vango/models/rota.dart';
-// AQUI ESTÁ A CORREÇÃO: trocado '.' por ':'
 import 'package:vango/models/van.dart';
 
 class CriarRotaScreen extends StatefulWidget {
@@ -57,13 +54,15 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       final snapshot = await FirebaseFirestore.instance
           .collection('vans')
           .where('motoristaId', isEqualTo: motoristaId)
-          .where('status', isEqualTo: 'disponível')
+          // ✅ ALTERADO: Usa o nome do enum para a consulta, que é mais seguro.
+          .where('status', isEqualTo: StatusVan.disponivel.name)
           .get();
 
       if (mounted) {
         setState(() {
+          // ✅ ALTERADO: Usa o método fromSnapshot para criar os objetos Van.
           _vansDisponiveis =
-              snapshot.docs.map((doc) => Van.fromMap(doc.data())).toList();
+              snapshot.docs.map((doc) => Van.fromSnapshot(doc)).toList();
           _carregandoVans = false;
         });
       }
@@ -104,36 +103,27 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      final motoristaDoc = await FirebaseFirestore.instance
-          .collection('motoristas')
-          .doc(user.uid)
-          .get();
-
-      if (!motoristaDoc.exists) {
-        throw Exception('Perfil do motorista não encontrado no banco de dados.');
-      }
-      final motorista = Motorista.fromMap(motoristaDoc.data()!);
-
-      final rota = Rota(
-        id: '', 
+      // ✅ ALTERADO: Cria um novo objeto Rota usando apenas os IDs, conforme o modelo aprimorado.
+      final novaRota = Rota(
+        id: '', // O ID será gerado pelo Firestore, então deixamos vazio.
         nome: _nomeController.text.trim(),
-        van: _vanSelecionada!,
-        motorista: motorista,
-        listaAlunos: [], 
-        horarioInicioPrevisto: _horarioInicio!,
-        horarioFimPrevisto: _horarioFim!,
-        distanciaTotal: double.parse(_distanciaController.text),
-        status: 'planejada',
+        vanId: _vanSelecionada!.placa, // Salva apenas o ID (placa) da van.
+        motoristaId: user.uid, // Salva apenas o ID do motorista.
+        listaAlunosIds: [], // A lista de alunos começa vazia.
+        horarioInicioPrevisto: Timestamp.fromDate(_horarioInicio!),
+        horarioFimPrevisto: Timestamp.fromDate(_horarioFim!),
+        distanciaTotal: double.tryParse(_distanciaController.text) ?? 0.0,
+        status: StatusRota.planejada, // Usa o enum para o status.
       );
 
-      final docRef =
-          await FirebaseFirestore.instance.collection('rotas').add(rota.toMap());
-      await docRef.update({'id': docRef.id});
+      // Salva o mapa da nova rota na coleção 'rotas'.
+      await FirebaseFirestore.instance.collection('rotas').add(novaRota.toMap());
+      
+      // ✅ REMOVIDO: A linha 'await docRef.update({'id': docRef.id})' foi removida
+      // pois não salvamos mais o ID dentro do documento.
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -153,9 +143,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -180,6 +168,8 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ... O resto do seu widget build (UI) pode permanecer exatamente o mesmo ...
+    // ... Ele já está bem estruturado e não precisa de alterações.
     return Scaffold(
       appBar: AppBar(
         title: const Text('Criar Nova Rota'),

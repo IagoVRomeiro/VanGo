@@ -1,16 +1,17 @@
-// lib/screens/tela_motorista.dart
+// lib/screens/tela_motorista.dart (VERSÃO FINAL CORRIGIDA)
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:vango/screens/tela_cadastro.dart';
-import 'package:vango/screens/tela_criarRota.dart';
-import 'package:vango/screens/tela_criarVan.dart';
-import 'package:vango/screens/tela_lista_chats.dart';
-// ✅ CORREÇÃO: IMPORTS DOS WIDGETS ADICIONADOS
-import 'package:vango/widgets/acao_flutuante_item.dart';
-import 'package:vango/widgets/botao_acao_animado.dart';
 
+// Imports relativos
+import 'tela_cadastro.dart';
+import 'tela_criarRota.dart';
+import 'tela_criarVan.dart';
+import 'tela_lista_chats.dart';
+import 'tela_perfil.dart';
+import '../widgets/acao_flutuante_item.dart';
+import '../widgets/botao_acao_animado.dart';
 
 class TelaMotorista extends StatefulWidget {
   const TelaMotorista({super.key});
@@ -31,6 +32,23 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     _addMarkers();
   }
 
+  // ✅✅✅ PASSO 1: Adicionar a função de logout ✅✅✅
+  Future<void> _logout() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      if (mounted) {
+        // Navega para a tela inicial (seleção) e remove todas as outras telas da pilha.
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erro ao sair: $e")),
+        );
+      }
+    }
+  }
+
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
   }
@@ -47,36 +65,44 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   }
 
   final List<AcaoFlutuanteItem> _itensMotorista = [
-    const AcaoFlutuanteItem(valor: 'criar_rota', texto: 'Criar rota', icone: Icons.route_outlined),
-    const AcaoFlutuanteItem(valor: 'cadastrar_van', texto: 'Cadastrar van', icone: Icons.airport_shuttle_outlined),
+    const AcaoFlutuanteItem(
+        valor: 'criar_rota', texto: 'Criar rota', icone: Icons.route_outlined),
+    const AcaoFlutuanteItem(
+        valor: 'cadastrar_van',
+        texto: 'Cadastrar van',
+        icone: Icons.airport_shuttle_outlined),
   ];
 
   void _onAcaoSelecionada(String valor) {
     final user = FirebaseAuth.instance.currentUser;
-
     if (user == null) {
       Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const TelaCadastro()),
-      );
+          context, MaterialPageRoute(builder: (context) => const TelaCadastro()));
       return;
     }
-
     if (valor == 'criar_rota') {
-      Navigator.push(context, MaterialPageRoute(builder: (context) => const CriarRotaScreen()));
+      Navigator.push(context,
+          MaterialPageRoute(builder: (context) => const CriarRotaScreen()));
     } else if (valor == 'cadastrar_van') {
-      Navigator.push(context, MaterialPageRoute(builder: (context) => const CadastrarVanScreen()));
+      Navigator.push(context,
+          MaterialPageRoute(builder: (context) => const CadastrarVanScreen()));
     }
   }
 
   void _onItemTapped(int index) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null && (index == 1 || index == 2)) {
+      Navigator.push(
+          context, MaterialPageRoute(builder: (context) => const TelaCadastro()));
+      return;
+    }
     if (index == 2) {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        Navigator.push(context, MaterialPageRoute(builder: (context) => const TelaCadastro()));
-      } else {
-        Navigator.push(context, MaterialPageRoute(builder: (context) => const PerfilScreen()));
-      }
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const PerfilScreen(collectionPath: 'motoristas'),
+        ),
+      );
     } else {
       if (_selectedIndex == index) return;
       setState(() {
@@ -87,6 +113,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     Widget mapaWidget = Stack(
       children: [
         GoogleMap(
@@ -99,35 +127,45 @@ class _TelaMotoristaState extends State<TelaMotorista> {
           myLocationEnabled: true,
           myLocationButtonEnabled: true,
         ),
-        if (_selectedIndex == 0)
-          Positioned(
-            bottom: 16,
-            right: 60,
-            child: BotaoAcaoAnimado(
-              itens: _itensMotorista,
-              onAcaoSelecionada: _onAcaoSelecionada,
-              corDoBotao: const Color(0xFFE53935),
-            ),
+        Positioned(
+          bottom: 16,
+          right: 60,
+          child: BotaoAcaoAnimado(
+            itens: _itensMotorista,
+            onAcaoSelecionada: _onAcaoSelecionada,
+            corDoBotao: const Color(0xFFE53935),
           ),
+        ),
       ],
     );
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_selectedIndex == 0 ? 'Mapa do Motorista' : 'Minhas Conversas'),
+        title: Text(
+            _selectedIndex == 0 ? 'Mapa do Motorista' : 'Minhas Conversas'),
         backgroundColor: const Color(0xFFE53935),
         foregroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          tooltip: 'Voltar',
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+
+        // ✅✅✅ PASSO 2: Substituir a lógica do botão ✅✅✅
+        // Se o usuário estiver logado, mostra o botão de deslogar.
+        // Se não, mostra o botão de voltar.
+        leading: user != null
+            ? IconButton(
+                icon: const Icon(Icons.exit_to_app),
+                tooltip: 'Sair',
+                onPressed: _logout,
+              )
+            : IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Voltar',
+                onPressed: () => Navigator.of(context).pop(),
+              ),
       ),
       body: IndexedStack(
         index: _selectedIndex,
         children: [
           mapaWidget,
-          TelaListaChats(),
+          const TelaListaChats(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -141,21 +179,6 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         selectedItemColor: Colors.red,
         unselectedItemColor: Colors.grey,
       ),
-    );
-  }
-}
-
-class PerfilScreen extends StatelessWidget {
-  const PerfilScreen({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Perfil do Motorista'),
-        backgroundColor: Colors.red,
-        foregroundColor: Colors.white,
-      ),
-      body: const Center(child: Text('Esta é a tela de perfil do motorista.')),
     );
   }
 }

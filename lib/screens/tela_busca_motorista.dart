@@ -1,8 +1,7 @@
-// lib/screens/tela_busca_motorista.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:vango/models/motorista.dart';
+import 'package:vango/screens/tela_detalhe_motorista.dart'; // NOVO: Importar a tela de detalhes
 
 class TelaBuscaMotorista extends StatefulWidget {
   const TelaBuscaMotorista({super.key});
@@ -33,12 +32,17 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
   Future<void> _carregarMotoristas() async {
     try {
       final snapshot = await FirebaseFirestore.instance.collection('motoristas').get();
-      final motoristas = snapshot.docs.map((doc) => Motorista.fromMap(doc.data())).toList();
-      setState(() {
-        _todosMotoristas = motoristas;
-        _motoristasFiltrados = motoristas;
-        _isLoading = false;
-      });
+      // ✅ CORRIGIDO: Usando o método fromSnapshot, que é mais robusto.
+      // Corrigimos o nome do método e passamos os 2 argumentos (id e data)
+final motoristas = snapshot.docs.map((doc) => Motorista.fromMap(doc.id, doc.data())).toList();
+      
+      if (mounted) {
+        setState(() {
+          _todosMotoristas = motoristas;
+          _motoristasFiltrados = motoristas;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -50,7 +54,7 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
   }
 
   void _filtrarMotoristas() {
-    final query = _searchController.text.toLowerCase();
+    final query = _searchController.text.toLowerCase().trim();
     setState(() {
       _motoristasFiltrados = _todosMotoristas.where((motorista) {
         return motorista.nome.toLowerCase().contains(query);
@@ -72,10 +76,12 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Buscar por nome',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -90,17 +96,27 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
                           final motorista = _motoristasFiltrados[index];
                           return Card(
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            elevation: 3,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             child: ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: Colors.grey.shade300,
-                                child: Text(motorista.nome.isNotEmpty ? motorista.nome[0] : '?'),
+                                // ✅ MELHORIA: Mostra a foto do motorista se existir.
+                                backgroundImage: motorista.fotoUrl != null
+                                    ? NetworkImage(motorista.fotoUrl!)
+                                    : const AssetImage('assets/images/user_placeholder.png') as ImageProvider,
+                                radius: 25,
                               ),
-                              title: Text(motorista.nome),
+                              title: Text(motorista.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
                               subtitle: Text('Avaliação: ${motorista.avaliacao.toStringAsFixed(1)} ★'),
-                              trailing: const Icon(Icons.arrow_forward_ios),
+                              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                               onTap: () {
-                                // TODO: Navegar para a tela de detalhes do motorista
-                                debugPrint('Selecionou o motorista: ${motorista.nome}');
+                                // ✅ AÇÃO: Navega para a tela de detalhes do motorista.
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => TelaDetalheMotorista(motorista: motorista),
+                                  ),
+                                );
                               },
                             ),
                           );

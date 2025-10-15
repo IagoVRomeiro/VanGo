@@ -1,24 +1,28 @@
-// lib/screens/tela_aluno.dart
+// lib/screens/tela_aluno.dart (VERSÃO CORRIGIDA)
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:vango/models/aluno.dart';
-import 'package:vango/models/motorista.dart';
-import 'package:vango/screens/tela_busca_motorista.dart';
-import 'package:vango/screens/tela_chat.dart';
-import 'package:vango/widgets/acao_flutuante_item.dart';
-import 'package:vango/widgets/botao_acao_animado.dart';
 
-class AlunoHomeScreen extends StatefulWidget {
-  const AlunoHomeScreen({super.key});
+// Imports relativos
+import '../models/aluno.dart';
+import '../models/motorista.dart';
+import 'tela_busca_motorista.dart';
+import 'tela_chat.dart';
+import 'tela_perfil.dart';
+import 'tela_cadastro.dart';
+import '../widgets/acao_flutuante_item.dart';
+import '../widgets/botao_acao_animado.dart';
+
+class TelaAluno extends StatefulWidget {
+  const TelaAluno({super.key});
 
   @override
-  State<AlunoHomeScreen> createState() => _AlunoHomeScreenState();
+  State<TelaAluno> createState() => _TelaAlunoState();
 }
 
-class _AlunoHomeScreenState extends State<AlunoHomeScreen> {
+class _TelaAlunoState extends State<TelaAluno> {
   late GoogleMapController mapController;
   final LatLng _initialPosition = const LatLng(-19.9245, -43.9352);
   final Set<Marker> _markers = {};
@@ -28,6 +32,23 @@ class _AlunoHomeScreenState extends State<AlunoHomeScreen> {
   void initState() {
     super.initState();
     _addMarkers();
+  }
+
+  // ✅✅✅ PASSO 1: Adicionar a função de logout ✅✅✅
+  Future<void> _logout() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      if (mounted) {
+        // Navega para a tela inicial (seleção) e remove todas as outras.
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erro ao sair: $e")),
+        );
+      }
+    }
   }
 
   void _onMapCreated(GoogleMapController controller) {
@@ -46,18 +67,44 @@ class _AlunoHomeScreenState extends State<AlunoHomeScreen> {
   }
 
   final List<AcaoFlutuanteItem> _itensAluno = [
-    const AcaoFlutuanteItem(valor: 'procurar_motorista', texto: 'Procurar motorista', icone: Icons.search),
+    const AcaoFlutuanteItem(
+        valor: 'procurar_motorista',
+        texto: 'Procurar motorista',
+        icone: Icons.search),
   ];
 
   void _onAcaoSelecionada(String valor) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      Navigator.push(
+          context, MaterialPageRoute(builder: (context) => const TelaCadastro()));
+      return;
+    }
+
     if (valor == 'procurar_motorista') {
-      Navigator.push(context, MaterialPageRoute(builder: (context) => const TelaBuscaMotorista()));
+      Navigator.push(context,
+          MaterialPageRoute(builder: (context) => const TelaBuscaMotorista()));
     }
   }
 
   void _onItemTapped(int index) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null && (index == 1 || index == 2)) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const TelaCadastro()),
+      );
+      return;
+    }
+
     if (index == 2) {
-      Navigator.push(context, MaterialPageRoute(builder: (context) => const AlunoPerfilScreen()));
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const PerfilScreen(collectionPath: 'alunos'),
+        ),
+      );
     } else {
       if (_selectedIndex == index) return;
       setState(() {
@@ -68,11 +115,14 @@ class _AlunoHomeScreenState extends State<AlunoHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     Widget mapaWidget = Stack(
       children: [
         GoogleMap(
           onMapCreated: _onMapCreated,
-          initialCameraPosition: CameraPosition(target: _initialPosition, zoom: 14.0),
+          initialCameraPosition:
+              CameraPosition(target: _initialPosition, zoom: 14.0),
           markers: _markers,
           myLocationEnabled: true,
           myLocationButtonEnabled: true,
@@ -94,12 +144,23 @@ class _AlunoHomeScreenState extends State<AlunoHomeScreen> {
       appBar: AppBar(
         backgroundColor: Colors.amber,
         foregroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          tooltip: 'Voltar',
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(_selectedIndex == 0 ? 'Mapa do Aluno' : 'Chat com Motorista'),
+        
+        // ✅✅✅ PASSO 2: Lógica do botão implementada ✅✅✅
+        // Se o usuário estiver logado, mostra o botão de deslogar.
+        // Se não, mostra o botão de voltar.
+        leading: user != null
+            ? IconButton(
+                icon: const Icon(Icons.exit_to_app),
+                tooltip: 'Sair',
+                onPressed: _logout,
+              )
+            : IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Voltar',
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+        title: Text(
+            _selectedIndex == 0 ? 'Mapa do Aluno' : 'Chat com Motorista'),
       ),
       body: IndexedStack(
         index: _selectedIndex,
@@ -123,6 +184,7 @@ class _AlunoHomeScreenState extends State<AlunoHomeScreen> {
   }
 }
 
+// O widget AlunoChatWrapper não precisa de alterações.
 class AlunoChatWrapper extends StatefulWidget {
   const AlunoChatWrapper({super.key});
 
@@ -131,71 +193,78 @@ class AlunoChatWrapper extends StatefulWidget {
 }
 
 class _AlunoChatWrapperState extends State<AlunoChatWrapper> {
-  Future<Map<String, String>>? _chatData;
+  Future<Map<String, dynamic>>? _chatData;
 
   @override
   void initState() {
     super.initState();
-    _chatData = _getChatData();
+    if (FirebaseAuth.instance.currentUser != null) {
+      _chatData = _getChatData();
+    }
   }
 
-  Future<Map<String, String>> _getChatData() async {
-    final alunoId = FirebaseAuth.instance.currentUser!.uid;
-    final alunoDoc = await FirebaseFirestore.instance.collection('alunos').doc(alunoId).get();
-    if (!alunoDoc.exists) throw Exception('Perfil do aluno não encontrado.');
+  Future<Map<String, dynamic>> _getChatData() async {
+    try {
+      final alunoId = FirebaseAuth.instance.currentUser!.uid;
+      final alunoDoc = await FirebaseFirestore.instance.collection('alunos').doc(alunoId).get();
+      if (!alunoDoc.exists) throw Exception('Perfil do aluno não encontrado.');
 
-    final aluno = Aluno.fromMap(alunoDoc.data()!);
-    final motoristaId = aluno.motoristaId;
-    if (motoristaId.isEmpty) throw Exception('Aluno não vinculado a um motorista.');
+      final aluno = Aluno.fromMap(alunoDoc.id, alunoDoc.data()!);
+      final motoristaId = aluno.motoristaId;
 
-    final motoristaDoc = await FirebaseFirestore.instance.collection('motoristas').doc(motoristaId).get();
-    if (!motoristaDoc.exists) throw Exception('Motorista não encontrado.');
-    final motorista = Motorista.fromMap(motoristaDoc.data()!);
+      if (motoristaId.isEmpty) {
+        return {'error': 'Você ainda não está vinculado a um motorista.'};
+      }
 
-    final ids = [motoristaId, alunoId]..sort();
-    final chatId = ids.join('_');
+      final motoristaDoc = await FirebaseFirestore.instance.collection('motoristas').doc(motoristaId).get();
+      if (!motoristaDoc.exists) throw Exception('Motorista não encontrado.');
+      final motorista = Motorista.fromMap(motoristaDoc.id, motoristaDoc.data()!);
 
-    return {'chatId': chatId, 'nomeReceptor': motorista.nome};
+      final ids = [motoristaId, alunoId]..sort();
+      final chatId = ids.join('_');
+
+      return {'chatId': chatId, 'nomeReceptor': motorista.nome};
+    } catch (e) {
+      return {'error': 'Ocorreu um erro: ${e.toString()}'};
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, String>>(
+    if (FirebaseAuth.instance.currentUser == null) {
+      return const Center(child: Text("Faça login para ver suas mensagens."));
+    }
+
+    return FutureBuilder<Map<String, dynamic>>(
       future: _chatData,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text('Erro ao carregar chat: ${snapshot.error}')));
+          return Center(
+              child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text('Erro: ${snapshot.error}')));
         }
-        if (!snapshot.hasData) {
-          return const Center(child: Text('Não foi possível carregar os dados do chat.'));
+        if (!snapshot.hasData || snapshot.data == null) {
+          return const Center(
+              child: Text('Não foi possível carregar os dados do chat.'));
         }
 
         final data = snapshot.data!;
+        if (data.containsKey('error')) {
+          return Center(
+              child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(data['error'])));
+        }
+
         return TelaChat(
           chatId: data['chatId']!,
           nomeReceptor: data['nomeReceptor']!,
         );
       },
-    );
-  }
-}
-
-class AlunoPerfilScreen extends StatelessWidget {
-  const AlunoPerfilScreen({super.key});
-  @override
-  Widget build(BuildContext context) { 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Perfil do Aluno'),
-        backgroundColor: Colors.amber,
-        foregroundColor: Colors.white,
-      ),
-      body: const Center(
-        child: Text('Esta é a tela de perfil do aluno.'),
-      ),
     );
   }
 }

@@ -1,45 +1,37 @@
-// lib/screens/tela_login.dart
+// lib/screens/tela_login.dart (VERSÃO COMPLETA E CORRIGIDA)
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:vango/screens/tela_cadastro.dart';
-import 'package:vango/screens/tela_motorista.dart';
+
+import 'tela_aluno.dart'; // Import da tela do aluno
+import 'tela_cadastro.dart';
+import 'tela_motorista.dart'; // Import da tela do motorista
 
 class TelaLogin extends StatefulWidget {
   const TelaLogin({super.key});
+
   @override
   State<TelaLogin> createState() => _TelaLoginState();
 }
 
 class _TelaLoginState extends State<TelaLogin> {
-  late final TextEditingController _controladorEmail;
-  late final TextEditingController _controladorSenha;
-  bool _senhaVisivel = false;
   final _formKey = GlobalKey<FormState>();
-
-  @override
-  void initState() {
-    super.initState();
-    _controladorEmail = TextEditingController();
-    _controladorSenha = TextEditingController();
-  }
+  final _emailController = TextEditingController();
+  final _senhaController = TextEditingController();
+  bool _senhaVisivel = false;
 
   @override
   void dispose() {
-    _controladorEmail.dispose();
-    _controladorSenha.dispose();
+    _emailController.dispose();
+    _senhaController.dispose();
     super.dispose();
   }
 
-  Future<void> _fazerLogin() async {
-    if (_controladorEmail.text.isEmpty || _controladorSenha.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, preencha e-mail e senha.'), backgroundColor: Colors.orange),
-      );
-      return;
-    }
+  // ✅✅✅ FUNÇÃO DE LOGIN CORRIGIDA ✅✅✅
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) return;
 
     showDialog(
       context: context,
@@ -48,111 +40,125 @@ class _TelaLoginState extends State<TelaLogin> {
     );
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _controladorEmail.text.trim(),
-        password: _controladorSenha.text.trim(),
+      // 1. Autentica o usuário
+      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _senhaController.text.trim(),
       );
 
-      if (mounted) {
-        Navigator.pop(context);
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const TelaMotorista()),
-        );
-      }
+      final user = cred.user;
+      if (user != null && mounted) {
+        // 2. Busca o documento do usuário na coleção 'users'
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
 
+        Navigator.pop(context); // Fecha o diálogo de loading
+
+        if (userDoc.exists) {
+          final role = userDoc.data()?['role'];
+
+          // 3. Redireciona com base no cargo ('role')
+          if (role == 'motorista') {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const TelaMotorista()),
+              (route) => false, // Remove todas as telas anteriores
+            );
+          } else if (role == 'aluno') {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const TelaAluno()),
+              (route) => false, // Remove todas as telas anteriores
+            );
+          } else {
+            // Caso de segurança: se o cargo não for encontrado
+            _mostrarErro('Não foi possível determinar o tipo de usuário.');
+          }
+        } else {
+          _mostrarErro('Dados do usuário não encontrados.');
+        }
+      }
     } on FirebaseAuthException catch (e) {
-      Navigator.pop(context);
-      
-      String mensagemErro = 'Ocorreu um erro ao fazer login.';
-      if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential') {
-        mensagemErro = 'E-mail ou senha incorretos. Tente novamente.';
-      } else if (e.code == 'invalid-email') {
-        mensagemErro = 'O formato do e-mail é inválido.';
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(mensagemErro), backgroundColor: Colors.redAccent),
-      );
+      if (mounted) Navigator.pop(context);
+      _mostrarErro(e.message ?? 'Ocorreu um erro de autenticação.');
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      _mostrarErro('Ocorreu um erro inesperado: $e');
     }
+  }
+
+  void _mostrarErro(String mensagem) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensagem),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    // A UI é muito parecida com a da tela de cadastro
     const Color corVermelhaPrincipal = Color(0xFFE53935);
-    const Color fundoBotaoEscuro = Color(0xFF2d2d2d);
-    const Color fundoBotaoAmarelo = Color(0xFFFFB300);
-    const Color corBranca = Colors.white;
-    
+    const Color fundoEscuro = Color(0xFF2d2d2d);
+    const Color amareloBotao = Color(0xFFFFB300);
+    const Color branco = Colors.white;
+
     return Scaffold(
       backgroundColor: corVermelhaPrincipal,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+            padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Form(
               key: _formKey,
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 40),
-                  // AQUI ESTÁ A CORREÇÃO ✅
-                  SizedBox(height: 100, child: Image.asset('assets/images/vgo_logo.png')),
-                  const SizedBox(height: 60),
-                  _construirCampoDeTexto(
-                    controlador: _controladorEmail,
-                    dica: 'Email',
+                  SizedBox(
+                    height: 100,
+                    child: Image.asset('assets/images/vgo_logo.png'),
+                  ),
+                  const SizedBox(height: 40),
+                  const Text('Login', style: TextStyle(color: branco, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  const SizedBox(height: 30),
+                  _campoTexto(
+                    controller: _emailController,
+                    dica: 'Seu e-mail',
                     icone: Icons.email_outlined,
+                    keyboardType: TextInputType.emailAddress,
                   ),
                   const SizedBox(height: 16),
-                  _construirCampoDeTexto(
-                    controlador: _controladorSenha,
-                    dica: 'Senha',
+                  _campoTexto(
+                    controller: _senhaController,
+                    dica: 'Sua senha',
                     icone: Icons.lock_outline,
                     isPassword: true,
                   ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'Esqueceu a senha?',
-                      style: TextStyle(color: corBranca.withOpacity(0.9), fontSize: 14),
+                  const SizedBox(height: 30),
+                  SizedBox(
+                    width: double.infinity,
+                    child: _botaoPrincipal(
+                      texto: 'ENTRAR',
+                      corDeFundo: amareloBotao,
+                      corDoTexto: fundoEscuro,
+                      aoPressionar: _login,
                     ),
                   ),
-                  const SizedBox(height: 40),
-                  _construirBotaoPrincipal(
-                    texto: 'ENTRAR',
-                    corDeFundo: fundoBotaoAmarelo,
-                    corDoTexto: fundoBotaoEscuro,
-                    aoPressionar: _fazerLogin,
-                  ),
-                  const SizedBox(height: 24),
-                  const Center(child: Text('ou', style: TextStyle(color: corBranca, fontSize: 16))),
-                  const SizedBox(height: 24),
-                  _construirBotaoPrincipal(
-                    texto: 'ENTRAR COM GOOGLE',
-                    corDeFundo: fundoBotaoEscuro,
-                    corDoTexto: corBranca,
-                    icone: FontAwesomeIcons.google,
-                    aoPressionar: () {},
-                  ),
-                  const SizedBox(height: 60),
+                  const SizedBox(height: 30),
                   RichText(
                     textAlign: TextAlign.center,
                     text: TextSpan(
-                      style: const TextStyle(color: corBranca, fontSize: 15),
+                      style: const TextStyle(color: branco, fontSize: 15),
                       children: [
                         const TextSpan(text: 'Não tem uma conta? '),
                         TextSpan(
                           text: 'Cadastre-se',
-                          style: const TextStyle(color: fundoBotaoAmarelo, fontWeight: FontWeight.bold),
-                          recognizer: TapGestureRecognizer()..onTap = () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const TelaCadastro()),
-                            );
-                          },
+                          style: const TextStyle(color: amareloBotao, fontWeight: FontWeight.bold),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = () {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(builder: (_) => const TelaCadastro()),
+                              );
+                            },
                         ),
                       ],
                     ),
@@ -167,46 +173,49 @@ class _TelaLoginState extends State<TelaLogin> {
     );
   }
 
-  // Seus métodos _construirCampoDeTexto e _construirBotaoPrincipal permanecem os mesmos...
-  Widget _construirCampoDeTexto({
-    required TextEditingController controlador,
+  Widget _campoTexto({
+    required TextEditingController controller,
     required String dica,
     required IconData icone,
     bool isPassword = false,
+    TextInputType? keyboardType,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF2d2d2d),
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), spreadRadius: 1, blurRadius: 5, offset: const Offset(0, 3))],
-      ),
-      child: TextField(
-        controller: controlador,
-        obscureText: isPassword ? !_senhaVisivel : false,
-        style: const TextStyle(color: Colors.white, fontSize: 16),
-        decoration: InputDecoration(
-          contentPadding: const EdgeInsets.symmetric(vertical: 18),
-          hintText: dica,
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-          border: InputBorder.none,
-          prefixIcon: Padding(padding: const EdgeInsets.only(left: 20, right: 15), child: Icon(icone, color: Colors.white, size: 22)),
-          suffixIcon: isPassword
-              ? IconButton(
-                  icon: Icon(_senhaVisivel ? Icons.visibility_off : Icons.visibility, color: Colors.white.withOpacity(0.7)),
-                  onPressed: () => setState(() => _senhaVisivel = !_senhaVisivel),
-                )
-              : null,
+    return TextFormField(
+      controller: controller,
+      obscureText: isPassword ? !_senhaVisivel : false,
+      style: const TextStyle(color: Colors.white),
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: const Color(0xFF2d2d2d),
+        hintText: dica,
+        hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(left: 20, right: 15),
+          child: Icon(icone, color: Colors.white, size: 22),
         ),
+        suffixIcon: isPassword
+            ? IconButton(
+                icon: Icon(_senhaVisivel ? Icons.visibility_off : Icons.visibility, color: Colors.white.withOpacity(0.7)),
+                onPressed: () => setState(() => _senhaVisivel = !_senhaVisivel),
+              )
+            : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
       ),
+      validator: (v) {
+        if (v == null || v.isEmpty) return 'Campo obrigatório';
+        if (keyboardType == TextInputType.emailAddress && !v.contains('@')) return 'E-mail inválido';
+        return null;
+      },
     );
   }
 
-  Widget _construirBotaoPrincipal({
+  Widget _botaoPrincipal({
     required String texto,
     required Color corDeFundo,
     required Color corDoTexto,
     required VoidCallback aoPressionar,
-    IconData? icone,
   }) {
     return ElevatedButton(
       onPressed: aoPressionar,
@@ -216,19 +225,7 @@ class _TelaLoginState extends State<TelaLogin> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         elevation: 5,
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (icone != null) ...[
-            FaIcon(icone, color: corDoTexto, size: 20),
-            const SizedBox(width: 12),
-          ],
-          Text(
-            texto,
-            style: TextStyle(color: corDoTexto, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1),
-          ),
-        ],
-      ),
+      child: Text(texto, style: TextStyle(color: corDoTexto, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
     );
   }
 }

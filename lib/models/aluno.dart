@@ -1,22 +1,24 @@
-// lib/models/aluno.dart
+// lib/models/aluno.dart (VERSÃO COMPLETA E CORRIGIDA)
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+enum StatusPresenca { presente, ausente, embarcou, desembarcou, desconhecido }
 
 class Aluno {
-  String id;
-  String nome;
-  int idade;
-  String serie;
-  String endereco;
-  double latitude;
-  double longitude;
-  String escola;
-  String horarioEntrada;
-  String horarioSaida;
-  String contatoResponsavel;
-  String statusPresenca;
-  String idResponsavel;
-  String? fotoUrl;
-  String? necessidadesEspeciais;
-  String motoristaId; // ✅ CAMPO ADICIONADO AQUI
+  final String id;
+  final String nome;
+  final int idade;
+  final String serie;
+  final String endereco;
+  final GeoPoint localizacao;
+  final String faculdade;
+  final String horarioEntrada;
+  final String horarioSaida;
+  final StatusPresenca statusPresenca;
+  final String motoristaId; // ✅ CAMPO ADICIONADO
+  final String? fotoUrl;
+  final String? necessidadesEspeciais;
+  final Timestamp? criadoEm;
 
   Aluno({
     required this.id,
@@ -24,58 +26,55 @@ class Aluno {
     required this.idade,
     required this.serie,
     required this.endereco,
-    required this.latitude,
-    required this.longitude,
-    required this.escola,
+    required this.localizacao,
+    required this.faculdade,
     required this.horarioEntrada,
     required this.horarioSaida,
-    required this.contatoResponsavel,
     required this.statusPresenca,
-    required this.idResponsavel,
+    required this.motoristaId, // ✅ CAMPO ADICIONADO AO CONSTRUTOR
     this.fotoUrl,
     this.necessidadesEspeciais,
-    required this.motoristaId, // ✅ ADICIONADO AO CONSTRUTOR
+    this.criadoEm,
   });
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
       'nome': nome,
       'idade': idade,
       'serie': serie,
       'endereco': endereco,
-      'latitude': latitude,
-      'longitude': longitude,
-      'escola': escola,
+      'localizacao': localizacao,
+      'faculdade': faculdade,
       'horarioEntrada': horarioEntrada,
       'horarioSaida': horarioSaida,
-      'contatoResponsavel': contatoResponsavel,
-      'statusPresenca': statusPresenca,
-      'idResponsavel': idResponsavel,
+      'statusPresenca': statusPresenca.name,
+      'motoristaId': motoristaId, // ✅ CAMPO ADICIONADO AO MAPA
       'fotoUrl': fotoUrl,
       'necessidadesEspeciais': necessidadesEspeciais,
-      'motoristaId': motoristaId, // ✅ ADICIONADO AO MAPA
+      'criadoEm': criadoEm ?? FieldValue.serverTimestamp(),
     };
   }
 
-  factory Aluno.fromMap(Map<String, dynamic> map) {
+  // ✅ MÉTODO RENOMEADO E AJUSTADO
+  factory Aluno.fromMap(String id, Map<String, dynamic> data) {
     return Aluno(
-      id: map['id'] ?? '',
-      nome: map['nome'] ?? 'Nome não informado',
-      idade: map['idade'] ?? 0,
-      serie: map['serie'] ?? '',
-      endereco: map['endereco'] ?? '',
-      latitude: (map['latitude'] as num?)?.toDouble() ?? 0.0,
-      longitude: (map['longitude'] as num?)?.toDouble() ?? 0.0,
-      escola: map['escola'] ?? '',
-      horarioEntrada: map['horarioEntrada'] ?? '',
-      horarioSaida: map['horarioSaida'] ?? '',
-      contatoResponsavel: map['contatoResponsavel'] ?? '',
-      statusPresenca: map['statusPresenca'] ?? 'desconhecido',
-      idResponsavel: map['idResponsavel'] ?? '',
-      fotoUrl: map['fotoUrl'],
-      necessidadesEspeciais: map['necessidadesEspeciais'],
-      motoristaId: map['motoristaId'] ?? '', // ✅ ADICIONADO AO FACTORY
+      id: id,
+      nome: data['nome'] ?? 'Nome não informado',
+      idade: data['idade'] ?? 0,
+      serie: data['serie'] ?? '',
+      endereco: data['endereco'] ?? '',
+      localizacao: data['localizacao'] ?? const GeoPoint(0, 0),
+      faculdade: data['faculdade'] ?? '',
+      horarioEntrada: data['horarioEntrada'] ?? '',
+      horarioSaida: data['horarioSaida'] ?? '',
+      statusPresenca: StatusPresenca.values.firstWhere(
+        (e) => e.name == data['statusPresenca'],
+        orElse: () => StatusPresenca.desconhecido,
+      ),
+      motoristaId: data['motoristaId'] ?? '', // ✅ CAMPO ADICIONADO
+      fotoUrl: data['fotoUrl'],
+      necessidadesEspeciais: data['necessidadesEspeciais'],
+      criadoEm: data['criadoEm'],
     );
   }
 }
