@@ -3,7 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:vango/models/mensagem.dart'; // ✅ NOVO: Importar o modelo Mensagem
+import 'package:vango/models/mensagem.dart'; 
 
 class TelaChat extends StatefulWidget {
   final String chatId;
@@ -21,10 +21,10 @@ class TelaChat extends StatefulWidget {
 
 class _TelaChatState extends State<TelaChat> {
   final _controller = TextEditingController();
-  // ✅ ALTERADO: Tratamento de null safety para o ID do usuário.
+  
   final String? _meuId = FirebaseAuth.instance.currentUser?.uid;
 
-  // ✅ NOVO: Stream agora retorna uma lista de objetos Mensagem.
+  
   late final Stream<List<Mensagem>> _messagesStream;
 
   @override
@@ -44,7 +44,6 @@ class _TelaChatState extends State<TelaChat> {
   Future<void> _enviarMensagem() async {
     final texto = _controller.text.trim();
     if (texto.isEmpty || _meuId == null) {
-      // Impede o envio se não houver texto ou se o usuário não estiver logado
       return;
     }
 
@@ -54,9 +53,9 @@ class _TelaChatState extends State<TelaChat> {
     final chatDocRef = firestore.collection('chats').doc(widget.chatId);
     final messagesColRef = chatDocRef.collection('messages');
 
-    // ✅ NOVO: Tratamento de erro para operações de escrita.
+    
     try {
-      // Adiciona a nova mensagem
+      
       await messagesColRef.add({
         'texto': texto,
         'senderId': _meuId,
@@ -94,7 +93,7 @@ class _TelaChatState extends State<TelaChat> {
       body: Column(
         children: [
           Expanded(
-            // ✅ ALTERADO: StreamBuilder agora espera uma List<Mensagem>.
+            
             child: StreamBuilder<List<Mensagem>>(
               stream: _messagesStream,
               builder: (context, snapshot) {
@@ -138,7 +137,6 @@ class _TelaChatState extends State<TelaChat> {
               },
             ),
           ),
-          // Campo de input para digitar a mensagem
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
@@ -152,12 +150,10 @@ class _TelaChatState extends State<TelaChat> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                     ),
                     onSubmitted: (_) => _enviarMensagem(),
-                    // Desabilita o campo se o usuário não estiver logado
                     enabled: _meuId != null,
                   ),
                 ),
                 IconButton(
-                  // Desabilita o botão se o usuário não estiver logado
                   onPressed: _meuId != null ? _enviarMensagem : null,
                   icon: const Icon(Icons.send),
                   color: Theme.of(context).colorScheme.primary,

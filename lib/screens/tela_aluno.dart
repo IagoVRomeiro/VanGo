@@ -1,11 +1,8 @@
-// lib/screens/tela_aluno.dart (VERSÃO CORRIGIDA)
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-// Imports relativos
 import '../models/aluno.dart';
 import '../models/motorista.dart';
 import 'tela_busca_motorista.dart';
@@ -34,12 +31,11 @@ class _TelaAlunoState extends State<TelaAluno> {
     _addMarkers();
   }
 
-  // ✅✅✅ PASSO 1: Adicionar a função de logout ✅✅✅
   Future<void> _logout() async {
     try {
       await FirebaseAuth.instance.signOut();
       if (mounted) {
-        // Navega para a tela inicial (seleção) e remove todas as outras.
+        
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     } catch (e) {
@@ -60,7 +56,7 @@ class _TelaAlunoState extends State<TelaAluno> {
       Marker(
         markerId: const MarkerId('school'),
         position: _initialPosition,
-        infoWindow: const InfoWindow(title: 'Escola / Local do Aluno'),
+        infoWindow: const InfoWindow(title: 'Faculdade / Local do Aluno'),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
       ),
     );
@@ -144,10 +140,7 @@ class _TelaAlunoState extends State<TelaAluno> {
       appBar: AppBar(
         backgroundColor: Colors.amber,
         foregroundColor: Colors.white,
-        
-        // ✅✅✅ PASSO 2: Lógica do botão implementada ✅✅✅
-        // Se o usuário estiver logado, mostra o botão de deslogar.
-        // Se não, mostra o botão de voltar.
+      
         leading: user != null
             ? IconButton(
                 icon: const Icon(Icons.exit_to_app),
@@ -184,7 +177,6 @@ class _TelaAlunoState extends State<TelaAluno> {
   }
 }
 
-// O widget AlunoChatWrapper não precisa de alterações.
 class AlunoChatWrapper extends StatefulWidget {
   const AlunoChatWrapper({super.key});
 

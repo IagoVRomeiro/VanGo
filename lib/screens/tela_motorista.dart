@@ -1,8 +1,6 @@
-// lib/screens/tela_motorista.dart (VERSÃO FINAL CORRIGIDA)
-
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 // Imports relativos
 import 'tela_cadastro.dart';
@@ -24,44 +22,43 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   late GoogleMapController mapController;
   final LatLng _initialPosition = const LatLng(-19.9245, -43.9352);
   final Set<Marker> _markers = {};
+  final List<LatLng> _alunos = []; // Lista de alunos para rotas
   int _selectedIndex = 0;
+  bool _isMenuAberto = false;
 
   @override
   void initState() {
     super.initState();
-    _addMarkers();
+    _addMarker(_initialPosition, "Sua Localização");
   }
 
-  // ✅✅✅ PASSO 1: Adicionar a função de logout ✅✅✅
+  void _addMarker(LatLng position, String title) {
+    _markers.add(
+      Marker(
+        markerId: MarkerId(title),
+        position: position,
+        infoWindow: InfoWindow(title: title),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      ),
+    );
+  }
+
   Future<void> _logout() async {
     try {
       await FirebaseAuth.instance.signOut();
       if (mounted) {
-        // Navega para a tela inicial (seleção) e remove todas as outras telas da pilha.
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erro ao sair: $e")),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Erro ao sair: $e")));
       }
     }
   }
 
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
-  }
-
-  void _addMarkers() {
-    _markers.add(
-      Marker(
-        markerId: const MarkerId('currentLocation'),
-        position: _initialPosition,
-        infoWindow: const InfoWindow(title: 'Sua Localização'),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-      ),
-    );
   }
 
   final List<AcaoFlutuanteItem> _itensMotorista = [
@@ -77,38 +74,52 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       Navigator.push(
-          context, MaterialPageRoute(builder: (context) => const TelaCadastro()));
+          context, MaterialPageRoute(builder: (_) => const TelaCadastro()));
       return;
     }
-    if (valor == 'criar_rota') {
-      Navigator.push(context,
-          MaterialPageRoute(builder: (context) => const CriarRotaScreen()));
-    } else if (valor == 'cadastrar_van') {
-      Navigator.push(context,
-          MaterialPageRoute(builder: (context) => const CadastrarVanScreen()));
+
+   // dentro de tela_motorista.dart
+if (valor == 'criar_rota') {
+  Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (_) => const CriarRotaScreen(), // <-- REMOVA O PARÂMETRO
+      ));
+}else if (valor == 'cadastrar_van') {
+      Navigator.push(
+          context, MaterialPageRoute(builder: (_) => const CadastrarVanScreen()));
     }
+
+    setState(() => _isMenuAberto = false);
   }
 
   void _onItemTapped(int index) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null && (index == 1 || index == 2)) {
       Navigator.push(
-          context, MaterialPageRoute(builder: (context) => const TelaCadastro()));
+          context, MaterialPageRoute(builder: (_) => const TelaCadastro()));
       return;
     }
+
     if (index == 2) {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => const PerfilScreen(collectionPath: 'motoristas'),
+          builder: (_) =>
+              const PerfilScreen(collectionPath: 'motoristas'),
         ),
       );
     } else {
       if (_selectedIndex == index) return;
-      setState(() {
-        _selectedIndex = index;
-      });
+      setState(() => _selectedIndex = index);
     }
+  }
+
+  void _adicionarAluno(LatLng position) {
+    setState(() {
+      _alunos.add(position);
+      _addMarker(position, "Aluno ${_alunos.length}");
+    });
   }
 
   @override
@@ -119,21 +130,21 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       children: [
         GoogleMap(
           onMapCreated: _onMapCreated,
-          initialCameraPosition: CameraPosition(
-            target: _initialPosition,
-            zoom: 12.0,
-          ),
+          initialCameraPosition:
+              CameraPosition(target: _initialPosition, zoom: 12.0),
           markers: _markers,
           myLocationEnabled: true,
           myLocationButtonEnabled: true,
+          onTap: (pos) => _adicionarAluno(pos), // toque no mapa para adicionar aluno
         ),
         Positioned(
           bottom: 16,
-          right: 60,
+          right: 20,
           child: BotaoAcaoAnimado(
             itens: _itensMotorista,
             onAcaoSelecionada: _onAcaoSelecionada,
             corDoBotao: const Color(0xFFE53935),
+            onMenuToggle: () => setState(() => _isMenuAberto = !_isMenuAberto),
           ),
         ),
       ],
@@ -142,13 +153,10 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-            _selectedIndex == 0 ? 'Mapa do Motorista' : 'Minhas Conversas'),
+          _selectedIndex == 0 ? 'Mapa do Motorista' : 'Minhas Conversas',
+        ),
         backgroundColor: const Color(0xFFE53935),
         foregroundColor: Colors.white,
-
-        // ✅✅✅ PASSO 2: Substituir a lógica do botão ✅✅✅
-        // Se o usuário estiver logado, mostra o botão de deslogar.
-        // Se não, mostra o botão de voltar.
         leading: user != null
             ? IconButton(
                 icon: const Icon(Icons.exit_to_app),

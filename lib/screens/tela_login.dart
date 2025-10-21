@@ -1,13 +1,11 @@
-// lib/screens/tela_login.dart (VERSÃO COMPLETA E CORRIGIDA)
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import 'tela_aluno.dart'; // Import da tela do aluno
+import 'tela_aluno.dart'; 
 import 'tela_cadastro.dart';
-import 'tela_motorista.dart'; // Import da tela do motorista
+import 'tela_motorista.dart'; 
 
 class TelaLogin extends StatefulWidget {
   const TelaLogin({super.key});
@@ -29,7 +27,6 @@ class _TelaLoginState extends State<TelaLogin> {
     super.dispose();
   }
 
-  // ✅✅✅ FUNÇÃO DE LOGIN CORRIGIDA ✅✅✅
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -40,7 +37,6 @@ class _TelaLoginState extends State<TelaLogin> {
     );
 
     try {
-      // 1. Autentica o usuário
       final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _senhaController.text.trim(),
@@ -48,27 +44,24 @@ class _TelaLoginState extends State<TelaLogin> {
 
       final user = cred.user;
       if (user != null && mounted) {
-        // 2. Busca o documento do usuário na coleção 'users'
         final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
 
-        Navigator.pop(context); // Fecha o diálogo de loading
+        Navigator.pop(context); 
 
         if (userDoc.exists) {
           final role = userDoc.data()?['role'];
 
-          // 3. Redireciona com base no cargo ('role')
           if (role == 'motorista') {
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (context) => const TelaMotorista()),
-              (route) => false, // Remove todas as telas anteriores
+              (route) => false, 
             );
           } else if (role == 'aluno') {
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (context) => const TelaAluno()),
-              (route) => false, // Remove todas as telas anteriores
+              (route) => false, 
             );
           } else {
-            // Caso de segurança: se o cargo não for encontrado
             _mostrarErro('Não foi possível determinar o tipo de usuário.');
           }
         } else {
@@ -95,7 +88,6 @@ class _TelaLoginState extends State<TelaLogin> {
 
   @override
   Widget build(BuildContext context) {
-    // A UI é muito parecida com a da tela de cadastro
     const Color corVermelhaPrincipal = Color(0xFFE53935);
     const Color fundoEscuro = Color(0xFF2d2d2d);
     const Color amareloBotao = Color(0xFFFFB300);

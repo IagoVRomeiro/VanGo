@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:vango/models/van.dart';
 
+
 extension StatusVanExtension on StatusVan {
   String get displayName {
     switch (this) {
@@ -39,7 +40,6 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
   final _fotoUrlController = TextEditingController();
 
   bool _docValida = true;
-  // ✅ ALTERADO: O estado agora usa o enum StatusVan, com um valor inicial seguro.
   StatusVan _statusSelecionado = StatusVan.disponivel;
   bool _isLoading = false;
 
@@ -71,17 +71,16 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     }
 
     setState(() => _isLoading = true);
-
-    // ✅ ALTERADO: Cria o objeto Van passando o enum diretamente.
-    final van = Van(
-      placa: _placaController.text.trim().toUpperCase(),
-      modelo: _modeloController.text.trim(),
-      marca: _marcaController.text.trim(),
+final van = Van(
+  id: '', // <-- ADICIONE ESTA LINHA
+  placa: _placaController.text.trim(),
+  marca: _marcaController.text.trim(),
+  modelo: _modeloController.text.trim(),
       ano: int.parse(_anoController.text),
       capacidade: int.parse(_capacidadeController.text),
       cor: _corController.text.trim(),
       documentacaoValida: _docValida,
-      status: _statusSelecionado, // Passa o enum, não a string
+      status: _statusSelecionado, 
       motoristaId: motoristaId,
       fotoUrl: _fotoUrlController.text.trim().isEmpty
           ? null
@@ -89,7 +88,6 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     );
 
     try {
-      // Usa a placa como ID único do documento para evitar duplicatas
       await FirebaseFirestore.instance
           .collection('vans')
           .doc(van.placa)
@@ -151,13 +149,12 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    // ✅ ALTERADO: Dropdown agora trabalha com o enum StatusVan.
                     DropdownButtonFormField<StatusVan>(
                       value: _statusSelecionado,
                       items: StatusVan.values
                           .map((status) => DropdownMenuItem(
                                 value: status,
-                                // Usa o helper para mostrar um nome amigável
+                                
                                 child: Text(status.displayName),
                               ))
                           .toList(),
@@ -196,7 +193,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     );
   }
 
-  // Widget auxiliar (sem alteração)
+  
   Widget _buildTextField(TextEditingController controller, String label,
       {TextInputType keyboardType = TextInputType.text,
       bool isRequired = true}) {

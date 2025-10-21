@@ -1,5 +1,7 @@
+// lib/models/van.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// 1. Colocamos o ENUM aqui para que ele seja importado junto com a classe Van.
 enum StatusVan {
   disponivel,
   emManutencao,
@@ -15,9 +17,11 @@ enum StatusVan {
 }
 
 class Van {
+  // 2. Garantimos que ID, MARCA e MODELO existem.
+  final String id;
   final String placa;
-  final String modelo;
   final String marca;
+  final String modelo;
   final String cor;
   final int ano;
   final int capacidade;
@@ -28,9 +32,11 @@ class Van {
   final Timestamp? criadoEm;
 
   Van({
+    // Adicionamos os campos que faltavam ao construtor
+    required this.id,
     required this.placa,
-    required this.modelo,
     required this.marca,
+    required this.modelo,
     required this.ano,
     required this.capacidade,
     required this.cor,
@@ -43,8 +49,9 @@ class Van {
 
   Map<String, dynamic> toMap() {
     return {
-      'modelo': modelo,
+      'placa': placa,
       'marca': marca,
+      'modelo': modelo,
       'ano': ano,
       'capacidade': capacidade,
       'cor': cor,
@@ -61,9 +68,10 @@ class Van {
     if (data == null) throw Exception("Documento da van não encontrado ou está vazio.");
 
     return Van(
-      placa: snapshot.id,
-      modelo: data['modelo'] ?? '',
+      id: snapshot.id, // O ID do documento
+      placa: data['placa'] ?? '',
       marca: data['marca'] ?? '',
+      modelo: data['modelo'] ?? '',
       ano: data['ano'] ?? DateTime.now().year,
       capacidade: data['capacidade'] ?? 0,
       cor: data['cor'] ?? '',

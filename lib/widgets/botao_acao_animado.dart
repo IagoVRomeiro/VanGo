@@ -1,5 +1,3 @@
-// lib/widgets/botao_acao_animado.dart
-
 import 'package:flutter/material.dart';
 import 'acao_flutuante_item.dart';
 
@@ -8,11 +6,15 @@ class BotaoAcaoAnimado extends StatefulWidget {
   final Color corDoBotao;
   final void Function(String valor) onAcaoSelecionada;
 
+  // 🔹 Novo: callback para avisar quando o menu abre/fecha
+  final VoidCallback? onMenuToggle;
+
   const BotaoAcaoAnimado({
     super.key,
     required this.itens,
     required this.corDoBotao,
     required this.onAcaoSelecionada,
+    this.onMenuToggle,
   });
 
   @override
@@ -46,27 +48,25 @@ class _BotaoAcaoAnimadoState extends State<BotaoAcaoAnimado>
     } else {
       _controller.reverse();
     }
+
+    // 🔹 Notifica o pai (TelaMotorista) sobre a abertura/fechamento do menu
+    widget.onMenuToggle?.call();
   }
 
-void _handleItemTap(String valor) {
-  _toggle(); // fecha o menu
-
-  Future.microtask(() {
-    if (mounted) {
-      widget.onAcaoSelecionada(valor);
-    }
-  });
-}
-
-
+  void _handleItemTap(String valor) {
+    _toggle(); // fecha o menu
+    Future.microtask(() {
+      if (mounted) widget.onAcaoSelecionada(valor);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Stack(
-      clipBehavior: Clip.none, // Permite que os botões saiam para fora
+      clipBehavior: Clip.none,
       alignment: Alignment.bottomRight,
       children: [
-        // Botões secundários (itens)
+        // 🔹 Botões secundários (itens)
         ...widget.itens.asMap().entries.map((entry) {
           final index = entry.key;
           final item = entry.value;
@@ -99,7 +99,7 @@ void _handleItemTap(String valor) {
           );
         }).toList(),
 
-        // Botão principal
+        // 🔹 Botão principal
         FloatingActionButton(
           onPressed: _toggle,
           backgroundColor: widget.corDoBotao,

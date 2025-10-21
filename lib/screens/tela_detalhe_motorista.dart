@@ -77,7 +77,6 @@ class TelaDetalheMotorista extends StatelessWidget {
                         fontSize: 26, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  // ✅ CORRIGIDO: Removida a linha que exibia a experiência
                   Chip(
                     label: Text(
                       'Avaliação: ${motorista.avaliacao.toStringAsFixed(1)} ★',

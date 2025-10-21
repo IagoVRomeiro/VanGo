@@ -5,7 +5,6 @@ class TelaSobreCarrossel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Lista de páginas (widgets) para o carrossel
     final List<Widget> pages = [
       _buildPage(
         context,

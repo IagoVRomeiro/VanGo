@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:vango/models/motorista.dart';
-import 'package:vango/screens/tela_detalhe_motorista.dart'; // NOVO: Importar a tela de detalhes
+import 'package:vango/screens/tela_detalhe_motorista.dart';
 
 class TelaBuscaMotorista extends StatefulWidget {
   const TelaBuscaMotorista({super.key});
@@ -32,8 +32,6 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
   Future<void> _carregarMotoristas() async {
     try {
       final snapshot = await FirebaseFirestore.instance.collection('motoristas').get();
-      // ✅ CORRIGIDO: Usando o método fromSnapshot, que é mais robusto.
-      // Corrigimos o nome do método e passamos os 2 argumentos (id e data)
 final motoristas = snapshot.docs.map((doc) => Motorista.fromMap(doc.id, doc.data())).toList();
       
       if (mounted) {
@@ -100,7 +98,6 @@ final motoristas = snapshot.docs.map((doc) => Motorista.fromMap(doc.id, doc.data
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             child: ListTile(
                               leading: CircleAvatar(
-                                // ✅ MELHORIA: Mostra a foto do motorista se existir.
                                 backgroundImage: motorista.fotoUrl != null
                                     ? NetworkImage(motorista.fotoUrl!)
                                     : const AssetImage('assets/images/user_placeholder.png') as ImageProvider,
@@ -110,7 +107,6 @@ final motoristas = snapshot.docs.map((doc) => Motorista.fromMap(doc.id, doc.data
                               subtitle: Text('Avaliação: ${motorista.avaliacao.toStringAsFixed(1)} ★'),
                               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                               onTap: () {
-                                // ✅ AÇÃO: Navega para a tela de detalhes do motorista.
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(

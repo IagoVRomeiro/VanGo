@@ -20,13 +20,11 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   final _nomeController = TextEditingController();
   final _distanciaController = TextEditingController();
 
-  // Estado do formulário
   Van? _vanSelecionada;
   DateTime? _horarioInicio;
   DateTime? _horarioFim;
   bool _isLoading = false;
 
-  // Listas para os dropdowns
   List<Van> _vansDisponiveis = [];
   bool _carregandoVans = true;
 
@@ -54,13 +52,11 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       final snapshot = await FirebaseFirestore.instance
           .collection('vans')
           .where('motoristaId', isEqualTo: motoristaId)
-          // ✅ ALTERADO: Usa o nome do enum para a consulta, que é mais seguro.
           .where('status', isEqualTo: StatusVan.disponivel.name)
           .get();
 
       if (mounted) {
         setState(() {
-          // ✅ ALTERADO: Usa o método fromSnapshot para criar os objetos Van.
           _vansDisponiveis =
               snapshot.docs.map((doc) => Van.fromSnapshot(doc)).toList();
           _carregandoVans = false;
@@ -92,6 +88,16 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       );
       return;
     }
+    
+    // NOVO: Validação para garantir que o horário de fim seja posterior ao de início
+    if (_horarioInicio!.isAfter(_horarioFim!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('O horário de fim deve ser depois do horário de início.'),
+            backgroundColor: Colors.orange),
+      );
+      return;
+    }
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -106,25 +112,21 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // ✅ ALTERADO: Cria um novo objeto Rota usando apenas os IDs, conforme o modelo aprimorado.
       final novaRota = Rota(
-        id: '', // O ID será gerado pelo Firestore, então deixamos vazio.
+        id: '', 
         nome: _nomeController.text.trim(),
-        vanId: _vanSelecionada!.placa, // Salva apenas o ID (placa) da van.
-        motoristaId: user.uid, // Salva apenas o ID do motorista.
-        listaAlunosIds: [], // A lista de alunos começa vazia.
+        // NOVO: Usando o ID do documento da van em vez da placa
+        vanId: _vanSelecionada!.id, 
+        motoristaId: user.uid,
+        listaAlunosIds: [], 
         horarioInicioPrevisto: Timestamp.fromDate(_horarioInicio!),
         horarioFimPrevisto: Timestamp.fromDate(_horarioFim!),
         distanciaTotal: double.tryParse(_distanciaController.text) ?? 0.0,
-        status: StatusRota.planejada, // Usa o enum para o status.
+        status: StatusRota.planejada, 
       );
 
-      // Salva o mapa da nova rota na coleção 'rotas'.
       await FirebaseFirestore.instance.collection('rotas').add(novaRota.toMap());
       
-      // ✅ REMOVIDO: A linha 'await docRef.update({'id': docRef.id})' foi removida
-      // pois não salvamos mais o ID dentro do documento.
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -168,8 +170,6 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ... O resto do seu widget build (UI) pode permanecer exatamente o mesmo ...
-    // ... Ele já está bem estruturado e não precisa de alterações.
     return Scaffold(
       appBar: AppBar(
         title: const Text('Criar Nova Rota'),
