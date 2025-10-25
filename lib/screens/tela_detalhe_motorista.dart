@@ -87,8 +87,7 @@ class TelaDetalheMotorista extends StatelessWidget {
                   const Divider(height: 40),
                   _buildInfoRow(Icons.directions_car, 'Veículo',
                       motorista.veiculo ?? 'Não informado'),
-                  _buildInfoRow(
-                      Icons.pin, 'Placa', motorista.placa ?? 'Não informada'),
+                  // Linha da placa removida daqui
                   _buildInfoRow(Icons.phone, 'Telefone', motorista.telefone),
                   const SizedBox(height: 40),
                   ElevatedButton.icon(
@@ -128,4 +127,3 @@ class TelaDetalheMotorista extends StatelessWidget {
     );
   }
 }
-

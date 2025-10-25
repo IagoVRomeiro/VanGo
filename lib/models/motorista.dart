@@ -1,5 +1,3 @@
-// lib/models/motorista.dart (VERSÃO COMPLETA E CORRIGIDA)
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum StatusMotorista {
@@ -27,8 +25,9 @@ class Motorista {
   final StatusMotorista status;
   final String? fotoUrl;
   final String? veiculo;
-  final String? placa;
   final Timestamp? criadoEm;
+  // 🔹 ADICIONADO: Lista de IDs de alunos vinculados
+  final List<String>? alunosIds;
 
   Motorista({
     required this.id,
@@ -42,8 +41,9 @@ class Motorista {
     required this.status,
     this.fotoUrl,
     this.veiculo,
-    this.placa,
     this.criadoEm,
+    // 🔹 ADICIONADO
+    this.alunosIds,
   });
 
   Map<String, dynamic> toMap() {
@@ -58,12 +58,13 @@ class Motorista {
       'status': status.name,
       'fotoUrl': fotoUrl,
       'veiculo': veiculo,
-      'placa': placa,
       'criadoEm': criadoEm ?? FieldValue.serverTimestamp(),
+      // 🔹 ADICIONADO
+      'alunosIds': alunosIds ?? [],
     };
   }
 
-  // ✅ MÉTODO RENOMEADO E AJUSTADO
+
   factory Motorista.fromMap(String id, Map<String, dynamic> data) {
     return Motorista(
       id: id,
@@ -77,8 +78,10 @@ class Motorista {
       status: StatusMotorista.fromString(data['status']),
       fotoUrl: data['fotoUrl'],
       veiculo: data['veiculo'],
-      placa: data['placa'],
       criadoEm: data['criadoEm'],
+      // 🔹 ADICIONADO: Converte o campo do Firestore para uma lista de Strings
+      alunosIds: List<String>.from(data['alunosIds'] ?? []),
     );
   }
 }
+

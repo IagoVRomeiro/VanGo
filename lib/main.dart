@@ -31,7 +31,8 @@ class VanGoApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const TelaSelecao(),
-        '/aluno': (context) => const TelaAluno(), 
+        '/aluno': (context) => TelaAluno(),
+ 
         '/login': (context) => const TelaLogin(),
         '/motorista': (context) => const TelaMotorista(),
       },

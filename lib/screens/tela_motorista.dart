@@ -4,12 +4,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 // Imports relativos
 import 'tela_cadastro.dart';
-import 'tela_criarRota.dart';
-import 'tela_criarVan.dart';
 import 'tela_lista_chats.dart';
 import 'tela_perfil.dart';
-import '../widgets/acao_flutuante_item.dart';
-import '../widgets/botao_acao_animado.dart';
+import 'tela_viagem.dart';
+// 🔹 ADICIONADO: Import da nova tela
+import 'tela_gerenciar_alunos.dart';
+// 🔹 ADICIONADO: Import da tela de notificações
+import 'tela_notificacoes.dart';
 
 class TelaMotorista extends StatefulWidget {
   const TelaMotorista({super.key});
@@ -24,7 +25,6 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   final Set<Marker> _markers = {};
   final List<LatLng> _alunos = []; // Lista de alunos para rotas
   int _selectedIndex = 0;
-  bool _isMenuAberto = false;
 
   @override
   void initState() {
@@ -61,65 +61,55 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     mapController = controller;
   }
 
-  final List<AcaoFlutuanteItem> _itensMotorista = [
-    const AcaoFlutuanteItem(
-        valor: 'criar_rota', texto: 'Criar rota', icone: Icons.route_outlined),
-    const AcaoFlutuanteItem(
-        valor: 'cadastrar_van',
-        texto: 'Cadastrar van',
-        icone: Icons.airport_shuttle_outlined),
-  ];
-
-  void _onAcaoSelecionada(String valor) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      Navigator.push(
-          context, MaterialPageRoute(builder: (_) => const TelaCadastro()));
-      return;
-    }
-
-   // dentro de tela_motorista.dart
-if (valor == 'criar_rota') {
-  Navigator.push(
-      context,
-      MaterialPageRoute(
-          builder: (_) => const CriarRotaScreen(), // <-- REMOVA O PARÂMETRO
-      ));
-}else if (valor == 'cadastrar_van') {
-      Navigator.push(
-          context, MaterialPageRoute(builder: (_) => const CadastrarVanScreen()));
-    }
-
-    setState(() => _isMenuAberto = false);
-  }
-
   void _onItemTapped(int index) {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null && (index == 1 || index == 2)) {
+    // 🔹 ATUALIZADO: Checa 'Viagem' (1), 'Alunos' (2), 'Chat' (3) ou 'Perfil' (4)
+    if (user == null && (index == 1 || index == 2 || index == 3 || index == 4)) {
       Navigator.push(
           context, MaterialPageRoute(builder: (_) => const TelaCadastro()));
       return;
     }
 
-    if (index == 2) {
+    // 🔹 ATUALIZADO: 'Perfil' agora é o índice 4
+    if (index == 4) {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              const PerfilScreen(collectionPath: 'motoristas'),
+          builder: (_) => const PerfilScreen(collectionPath: 'motoristas'),
         ),
       );
     } else {
+      // Itens 0, 1, 2 e 3 apenas mudam o estado
       if (_selectedIndex == index) return;
       setState(() => _selectedIndex = index);
     }
   }
 
   void _adicionarAluno(LatLng position) {
+    // Lógica para adicionar aluno ao mapa (exemplo)
     setState(() {
       _alunos.add(position);
       _addMarker(position, "Aluno ${_alunos.length}");
     });
+  }
+
+  // 🔹 ATUALIZADO: Helper para definir o título do AppBar
+  String _getAppBarTitle(int index) {
+    switch (index) {
+      case 0:
+        return 'Mapa do Motorista';
+      case 1:
+        return 'Gerenciar Viagem';
+      // 🔹 ADICIONADO
+      case 2:
+        return 'Gerenciar Alunos';
+      // 🔹 ATUALIZADO
+      case 3:
+        return 'Minhas Conversas';
+      default:
+        // Se o índice for 4 (Perfil), ele navega, então o título não muda
+        return _getAppBarTitle(_selectedIndex);
+    }
   }
 
   @override
@@ -137,24 +127,12 @@ if (valor == 'criar_rota') {
           myLocationButtonEnabled: true,
           onTap: (pos) => _adicionarAluno(pos), // toque no mapa para adicionar aluno
         ),
-        Positioned(
-          bottom: 16,
-          right: 20,
-          child: BotaoAcaoAnimado(
-            itens: _itensMotorista,
-            onAcaoSelecionada: _onAcaoSelecionada,
-            corDoBotao: const Color(0xFFE53935),
-            onMenuToggle: () => setState(() => _isMenuAberto = !_isMenuAberto),
-          ),
-        ),
       ],
     );
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _selectedIndex == 0 ? 'Mapa do Motorista' : 'Minhas Conversas',
-        ),
+        title: Text(_getAppBarTitle(_selectedIndex)),
         backgroundColor: const Color(0xFFE53935),
         foregroundColor: Colors.white,
         leading: user != null
@@ -168,21 +146,47 @@ if (valor == 'criar_rota') {
                 tooltip: 'Voltar',
                 onPressed: () => Navigator.of(context).pop(),
               ),
+        // 🔹 ADICIONADO: Botão de Notificações
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            tooltip: 'Notificações',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const TelaNotificacoes(),
+                ),
+              );
+            },
+          ),
+        ],
       ),
+      // 🔹 ATUALIZADO: IndexedStack agora tem 4 filhos
       body: IndexedStack(
         index: _selectedIndex,
         children: [
-          mapaWidget,
-          const TelaListaChats(),
+          mapaWidget, // Índice 0
+          const TelaViagem(), // Índice 1
+          const TelaGerenciarAlunos(), // Índice 2 (NOVO)
+          const TelaListaChats(), // Índice 3
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
+        // 'fixed' é essencial para 5 itens
+        type: BottomNavigationBarType.fixed,
+        // 🔹 ATUALIZADO: Agora com 5 itens
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'), // 0
+          BottomNavigationBarItem(
+              icon: Icon(Icons.edit_road_outlined), label: 'Viagem'), // 1
+          // 🔹 ADICIONADO: Nova aba "Alunos"
+          BottomNavigationBarItem(
+              icon: Icon(Icons.people_alt_outlined), label: 'Alunos'), // 2
+          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'), // 3
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'), // 4
         ],
         selectedItemColor: Colors.red,
         unselectedItemColor: Colors.grey,
@@ -190,3 +194,4 @@ if (valor == 'criar_rota') {
     );
   }
 }
+

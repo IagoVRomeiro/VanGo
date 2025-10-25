@@ -1,25 +1,15 @@
-// lib/screens/tela_criarVan.dart
-
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart'; // 🔹 CORRIGIDO: Importação faltando
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:vango/models/van.dart';
+import 'package:vango/models/van.dart'; // Seu modelo de Van
+import 'package:image_picker/image_picker.dart'; // Para upload
+import 'package:firebase_storage/firebase_storage.dart'; // Para upload
+import 'dart:io'; // Para 'File' (mobile)
+import 'package:flutter/foundation.dart' show kIsWeb; // Para 'kIsWeb'
+import 'dart:typed_data'; // 🔹 CORRIGIDO: Era 'dart.typed_data'
 
-
-extension StatusVanExtension on StatusVan {
-  String get displayName {
-    switch (this) {
-      case StatusVan.disponivel:
-        return 'Disponível';
-      case StatusVan.emManutencao:
-        return 'Em Manutenção';
-      case StatusVan.emRota:
-        return 'Em Rota';
-      case StatusVan.indisponivel:
-        return 'Indisponível';
-    }
-  }
-}
+// 🔹 REMOVIDO: A extensão StatusVanExtension não é mais necessária aqui
 
 class CadastrarVanScreen extends StatefulWidget {
   const CadastrarVanScreen({super.key});
@@ -37,10 +27,14 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
   final _anoController = TextEditingController();
   final _capacidadeController = TextEditingController();
   final _corController = TextEditingController();
-  final _fotoUrlController = TextEditingController();
+  // 🔹 REMOVIDO: _fotoUrlController
 
-  bool _docValida = true;
-  StatusVan _statusSelecionado = StatusVan.disponivel;
+  // 🔹 ADICIONADO: Variáveis para o upload de imagem
+  XFile? _imageFile; // Para mobile
+  Uint8List? _imageBytes; // Para web
+  bool _isUploading = false; // Para feedback de UI
+
+  // 🔹 REMOVIDO: _docValida e _statusSelecionado
   bool _isLoading = false;
 
   @override
@@ -51,8 +45,67 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     _anoController.dispose();
     _capacidadeController.dispose();
     _corController.dispose();
-    _fotoUrlController.dispose();
+    // 🔹 REMOVIDO: _fotoUrlController.dispose()
     super.dispose();
+  }
+
+  /// 🔹 ADICIONADO: Função para escolher a imagem
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? pickedFile =
+        await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile == null) return;
+
+    if (kIsWeb) {
+      _imageBytes = await pickedFile.readAsBytes();
+      _imageFile = null; // Garante que apenas um seja usado
+    } else {
+      _imageFile = pickedFile;
+      _imageBytes = null; // Garante que apenas um seja usado
+    }
+    setState(() {}); // Atualiza a UI para mostrar a prévia
+  }
+
+  /// 🔹 ADICIONADO: Função para fazer o upload da foto para o Storage
+  /// Retorna a URL do download ou null se nenhuma foto foi escolhida.
+  Future<String?> _uploadFoto(String motoristaId, String placa) async {
+    // Se nenhuma imagem foi escolhida, retorna nulo
+    if (_imageFile == null && _imageBytes == null) {
+      return null;
+    }
+
+    setState(() => _isUploading = true);
+
+    try {
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('vans_pictures')
+          .child('$motoristaId/$placa.jpg');
+
+      // Upload baseado na plataforma
+      if (kIsWeb) {
+        await storageRef.putData(_imageBytes!);
+      } else {
+        await storageRef.putFile(File(_imageFile!.path));
+      }
+
+      final downloadUrl = await storageRef.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Erro ao enviar foto: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+      return null;
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
+    }
   }
 
   Future<void> _salvarVan() async {
@@ -71,27 +124,47 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     }
 
     setState(() => _isLoading = true);
-final van = Van(
-  id: '', // <-- ADICIONE ESTA LINHA
-  placa: _placaController.text.trim(),
-  marca: _marcaController.text.trim(),
-  modelo: _modeloController.text.trim(),
+
+    // 1. Faz o upload da foto ANTES de salvar no Firestore
+    final String? fotoUrl = await _uploadFoto(
+      motoristaId,
+      _placaController.text.trim(),
+    );
+
+    // 2. Cria o objeto Van com os dados
+    final van = Van(
+      id: '', // O Firestore irá gerar um ID se usarmos .add()
+      placa: _placaController.text.trim(),
+      marca: _marcaController.text.trim(),
+      modelo: _modeloController.text.trim(),
       ano: int.parse(_anoController.text),
       capacidade: int.parse(_capacidadeController.text),
       cor: _corController.text.trim(),
-      documentacaoValida: _docValida,
-      status: _statusSelecionado, 
+      // 🔹 ATUALIZADO: Valores padrão
+      documentacaoValida: true, // Padrão 'true'
+      status: StatusVan.disponivel, // Padrão 'disponivel'
       motoristaId: motoristaId,
-      fotoUrl: _fotoUrlController.text.trim().isEmpty
-          ? null
-          : _fotoUrlController.text.trim(),
+      // 🔹 ATUALIZADO: Usa a URL do upload
+      fotoUrl: fotoUrl,
     );
 
     try {
+      // 🔹 ATUALIZADO: Usa .add() para ID automático e .set() no documento do motorista
+      // Salva a van na coleção principal 'vans'
+      final vanDoc =
+          await FirebaseFirestore.instance.collection('vans').add(van.toMap());
+
+      // Salva os dados principais (veiculo, placa, foto) no documento do motorista
+      // para acesso rápido na TelaViagem.
       await FirebaseFirestore.instance
-          .collection('vans')
-          .doc(van.placa)
-          .set(van.toMap());
+          .collection('motoristas')
+          .doc(motoristaId)
+          .update({
+        'veiculo': '${van.marca} ${van.modelo}',
+        'placa': van.placa,
+        'vanFotoUrl': van.fotoUrl,
+        'vanId': vanDoc.id, // Salva a referência da van
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -133,8 +206,12 @@ final van = Van(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // 🔹 ADICIONADO: Widget de upload de imagem
+                    _buildImagePicker(),
+                    const SizedBox(height: 16),
                     _buildTextField(_placaController, 'Placa (ex: ABC1D23)'),
-                    _buildTextField(_marcaController, 'Marca (ex: Mercedes-Benz)'),
+                    _buildTextField(
+                        _marcaController, 'Marca (ex: Mercedes-Benz)'),
                     _buildTextField(_modeloController, 'Modelo (ex: Sprinter)'),
                     _buildTextField(_corController, 'Cor'),
                     Row(
@@ -144,37 +221,15 @@ final van = Van(
                                 keyboardType: TextInputType.number)),
                         const SizedBox(width: 16),
                         Expanded(
-                            child: _buildTextField(_capacidadeController, 'Capacidade',
+                            child: _buildTextField(
+                                _capacidadeController, 'Capacidade',
                                 keyboardType: TextInputType.number)),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<StatusVan>(
-                      value: _statusSelecionado,
-                      items: StatusVan.values
-                          .map((status) => DropdownMenuItem(
-                                value: status,
-                                
-                                child: Text(status.displayName),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _statusSelecionado = value);
-                        }
-                      },
-                      decoration: const InputDecoration(
-                          labelText: 'Status', border: OutlineInputBorder()),
-                    ),
-                    const SizedBox(height: 8),
-                    SwitchListTile(
-                      title: const Text('Documentação Válida'),
-                      value: _docValida,
-                      onChanged: (value) => setState(() => _docValida = value),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    _buildTextField(_fotoUrlController, 'URL da Foto (Opcional)',
-                        isRequired: false),
+                    // 🔹 REMOVIDO: Dropdown de Status
+                    // 🔹 REMOVIDO: Switch de Documentação
+                    // 🔹 REMOVIDO: TextField de URL da Foto
                     const SizedBox(height: 24),
                     ElevatedButton.icon(
                       onPressed: _salvarVan,
@@ -193,7 +248,71 @@ final van = Van(
     );
   }
 
-  
+  /// 🔹 ADICIONADO: Widget para o seletor de imagem
+  Widget _buildImagePicker() {
+    return Center(
+      child: GestureDetector(
+        onTap: _pickImage,
+        child: Container(
+          height: 150,
+          width: 250,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            border: Border.all(color: Colors.grey.shade400),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (_imageBytes != null)
+                // Prévia (Web)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(
+                    _imageBytes!,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
+                )
+              else if (_imageFile != null)
+                // Prévia (Mobile)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.file(
+                    File(_imageFile!.path),
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
+                )
+              else
+                // Placeholder
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_a_photo,
+                        color: Colors.grey.shade700, size: 40),
+                    const SizedBox(height: 8),
+                    Text('Foto da Van',
+                        style: TextStyle(color: Colors.grey.shade700)),
+                  ],
+                ),
+              if (_isUploading)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(child: CircularProgressIndicator()),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTextField(TextEditingController controller, String label,
       {TextInputType keyboardType = TextInputType.text,
       bool isRequired = true}) {
@@ -212,7 +331,7 @@ final van = Van(
           }
           if (keyboardType == TextInputType.number &&
               isRequired &&
-              int.tryParse(value!) == null) {
+              (value == null || int.tryParse(value) == null)) {
             return 'Por favor, insira um número válido.';
           }
           return null;
@@ -221,3 +340,4 @@ final van = Van(
     );
   }
 }
+

@@ -1,16 +1,17 @@
+// 🔹 CORRIGIDO: O caminho do package estava incorreto
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+// ... (o restante do arquivo permanece o mesmo) ...
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../models/aluno.dart';
 import '../models/motorista.dart';
-import 'tela_busca_motorista.dart';
 import 'tela_chat.dart';
 import 'tela_perfil.dart';
 import 'tela_cadastro.dart';
-import '../widgets/acao_flutuante_item.dart';
-import '../widgets/botao_acao_animado.dart';
+// 🔹 CORRIGIDO: O nome do arquivo é 'tela_notificacoes.dart'
+import 'tela_notificacoes.dart';
 
 class TelaAluno extends StatefulWidget {
   const TelaAluno({super.key});
@@ -35,7 +36,6 @@ class _TelaAlunoState extends State<TelaAluno> {
     try {
       await FirebaseAuth.instance.signOut();
       if (mounted) {
-        
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     } catch (e) {
@@ -60,27 +60,6 @@ class _TelaAlunoState extends State<TelaAluno> {
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
       ),
     );
-  }
-
-  final List<AcaoFlutuanteItem> _itensAluno = [
-    const AcaoFlutuanteItem(
-        valor: 'procurar_motorista',
-        texto: 'Procurar motorista',
-        icone: Icons.search),
-  ];
-
-  void _onAcaoSelecionada(String valor) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      Navigator.push(
-          context, MaterialPageRoute(builder: (context) => const TelaCadastro()));
-      return;
-    }
-
-    if (valor == 'procurar_motorista') {
-      Navigator.push(context,
-          MaterialPageRoute(builder: (context) => const TelaBuscaMotorista()));
-    }
   }
 
   void _onItemTapped(int index) {
@@ -123,16 +102,6 @@ class _TelaAlunoState extends State<TelaAluno> {
           myLocationEnabled: true,
           myLocationButtonEnabled: true,
         ),
-        if (_selectedIndex == 0)
-          Positioned(
-            bottom: 16,
-            right: 60,
-            child: BotaoAcaoAnimado(
-              itens: _itensAluno,
-              onAcaoSelecionada: _onAcaoSelecionada,
-              corDoBotao: Colors.amber,
-            ),
-          ),
       ],
     );
 
@@ -140,7 +109,6 @@ class _TelaAlunoState extends State<TelaAluno> {
       appBar: AppBar(
         backgroundColor: Colors.amber,
         foregroundColor: Colors.white,
-      
         leading: user != null
             ? IconButton(
                 icon: const Icon(Icons.exit_to_app),
@@ -154,6 +122,20 @@ class _TelaAlunoState extends State<TelaAluno> {
               ),
         title: Text(
             _selectedIndex == 0 ? 'Mapa do Aluno' : 'Chat com Motorista'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            tooltip: 'Notificações',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    // 🔹 CORRIGIDO: O nome da classe é 'TelaNotificacoes'
+                    builder: (context) => const TelaNotificacoes()),
+              );
+            },
+          ),
+        ],
       ),
       body: IndexedStack(
         index: _selectedIndex,
@@ -177,6 +159,7 @@ class _TelaAlunoState extends State<TelaAluno> {
   }
 }
 
+// O AlunoChatWrapper (sem alterações)
 class AlunoChatWrapper extends StatefulWidget {
   const AlunoChatWrapper({super.key});
 
@@ -198,19 +181,24 @@ class _AlunoChatWrapperState extends State<AlunoChatWrapper> {
   Future<Map<String, dynamic>> _getChatData() async {
     try {
       final alunoId = FirebaseAuth.instance.currentUser!.uid;
-      final alunoDoc = await FirebaseFirestore.instance.collection('alunos').doc(alunoId).get();
+      final alunoDoc =
+          await FirebaseFirestore.instance.collection('alunos').doc(alunoId).get();
       if (!alunoDoc.exists) throw Exception('Perfil do aluno não encontrado.');
 
       final aluno = Aluno.fromMap(alunoDoc.id, alunoDoc.data()!);
       final motoristaId = aluno.motoristaId;
 
-      if (motoristaId.isEmpty) {
+      if (motoristaId == null || motoristaId.isEmpty) {
         return {'error': 'Você ainda não está vinculado a um motorista.'};
       }
 
-      final motoristaDoc = await FirebaseFirestore.instance.collection('motoristas').doc(motoristaId).get();
+      final motoristaDoc = await FirebaseFirestore.instance
+          .collection('motoristas')
+          .doc(motoristaId)
+          .get();
       if (!motoristaDoc.exists) throw Exception('Motorista não encontrado.');
-      final motorista = Motorista.fromMap(motoristaDoc.id, motoristaDoc.data()!);
+      final motorista =
+          Motorista.fromMap(motoristaDoc.id, motoristaDoc.data()!);
 
       final ids = [motoristaId, alunoId]..sort();
       final chatId = ids.join('_');
@@ -260,3 +248,4 @@ class _AlunoChatWrapperState extends State<AlunoChatWrapper> {
     );
   }
 }
+

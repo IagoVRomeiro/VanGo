@@ -58,7 +58,8 @@ class _TelaLoginState extends State<TelaLogin> {
             );
           } else if (role == 'aluno') {
             Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (context) => const TelaAluno()),
+              MaterialPageRoute(builder: (context) => TelaAluno()),
+
               (route) => false, 
             );
           } else {

@@ -1,9 +1,6 @@
-// lib/screens/tela_cadastro.dart (VERSÃO CORRIGIDA)
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/gestures.dart';
-// ✅✅✅ CORREÇÃO: O import estava incorreto. Esta é a forma correta. ✅✅✅
 import 'package:flutter/material.dart';
 
 // Imports relativos
@@ -119,16 +116,19 @@ class _TelaCadastroState extends State<TelaCadastro> {
     batch.set(motoristaDocRef, novoMotorista.toMap());
   }
 
+  // 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹
+  // AS CORREÇÕES ESTÃO AQUI
+  // 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹
   void _salvarAluno(WriteBatch batch, User user) {
     final alunoDocRef = FirebaseFirestore.instance.collection('alunos').doc(user.uid);
     final novoAluno = Aluno(
       id: user.uid,
       nome: _nomeController.text.trim(),
-      motoristaId: '',
-      idade: 0,
-      serie: '',
+      motoristaId: null, // Corrigido para nulo
+      // 'idade: 0,' FOI REMOVIDO
+      // 'serie: '',' FOI REMOVIDO
       endereco: '',
-      localizacao: const GeoPoint(0, 0),
+      localizacao: GeoPoint(0, 0), // 'const' FOI REMOVIDO
       faculdade: '',
       horarioEntrada: '',
       horarioSaida: '',
@@ -136,6 +136,9 @@ class _TelaCadastroState extends State<TelaCadastro> {
     );
     batch.set(alunoDocRef, novoAluno.toMap());
   }
+  // 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹
+  // FIM DAS CORREÇÕES
+  // 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹
 
   void _mostrarErro(String mensagem) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -306,3 +309,4 @@ class _TelaCadastroState extends State<TelaCadastro> {
     );
   }
 }
+

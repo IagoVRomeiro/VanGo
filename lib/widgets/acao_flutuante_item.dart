@@ -1,5 +1,3 @@
-// lib/widgets/acao_flutuante_item.dart
-
 import 'package:flutter/material.dart';
 
 // Esta classe representa um único item no nosso menu flutuante.
@@ -8,7 +6,7 @@ class AcaoFlutuanteItem {
   final String texto; // O texto que o usuário vê, ex: 'Criar rota'
   final IconData icone; // O ícone ao lado do texto
 
-  const AcaoFlutuanteItem({
+  AcaoFlutuanteItem({ // Removido 'const' para permitir atualização da lista
     required this.valor,
     required this.texto,
     required this.icone,
