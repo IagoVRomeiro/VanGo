@@ -6,7 +6,7 @@ class Aluno {
   final String id;
   final String nome;
   final String endereco;
-  final GeoPoint localizacao; // O problema está na inicialização deste campo
+  final GeoPoint localizacao; 
   final String? faculdade;
   final String horarioEntrada;
   final String horarioSaida;

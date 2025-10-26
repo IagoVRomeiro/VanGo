@@ -34,7 +34,7 @@ class VanGoApp extends StatelessWidget {
         '/aluno': (context) => TelaAluno(),
  
         '/login': (context) => const TelaLogin(),
-        '/motorista': (context) => const TelaMotorista(),
+       '/motorista': (context) => TelaMotorista(), 
       },
     );
   }

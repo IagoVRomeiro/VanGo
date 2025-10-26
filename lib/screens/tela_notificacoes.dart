@@ -1,192 +1,306 @@
-// lib/screens/tela_notificacoes.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../models/motorista.dart';
+import '../models/aluno.dart';    // Importa Aluno
+import '../models/motorista.dart'; // Importa Motorista
+import '../models/usuario.dart'; // Importa Usuario para pegar o Role
 
 class TelaNotificacoes extends StatefulWidget {
-  const TelaNotificacoes({super.key});
+  // 🔹 CORRIGIDO: Removido 'const'
+   TelaNotificacoes({super.key});
 
   @override
   State<TelaNotificacoes> createState() => _TelaNotificacoesState();
 }
 
 class _TelaNotificacoesState extends State<TelaNotificacoes> {
-  String? _alunoId;
+  User? _currentUser;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  Future<UserRole>? _userRoleFuture;
 
   @override
   void initState() {
     super.initState();
-    _alunoId = FirebaseAuth.instance.currentUser?.uid;
+    _currentUser = FirebaseAuth.instance.currentUser;
+    if (_currentUser != null) {
+      _userRoleFuture = _getUserRole(_currentUser!.uid);
+    }
   }
 
-  Future<void> _aceitarConvite(String contratoId, String motoristaId) async {
-    if (_alunoId == null) return;
-
+  Future<UserRole> _getUserRole(String userId) async {
     try {
-      await _firestore.runTransaction((transaction) async {
-        final contratoRef = _firestore.collection('contratos').doc(contratoId);
-        transaction.update(contratoRef, {'status': 'aprovado'});
+      final doc = await _firestore.collection('users').doc(userId).get();
+      if (doc.exists) {
+        return UserRole.fromString(doc.data()?['role']);
+      }
+      return UserRole.indefinido;
+    } catch (e) {
+      print("Erro ao buscar role: $e");
+      return UserRole.indefinido;
+    }
+  }
 
-        final motoristaRef =
-            _firestore.collection('motoristas').doc(motoristaId);
-        transaction.update(motoristaRef, {
-          'alunosIds': FieldValue.arrayUnion([_alunoId])
+  // --- Lógica de Aceitar/Recusar ---
+  Future<void> _aceitarConviteAluno(String contratoId, String motoristaId) async {
+     final alunoId = _currentUser?.uid;
+     if (alunoId == null) return;
+      try {
+        await _firestore.runTransaction((transaction) async {
+          final contratoRef = _firestore.collection('contratos').doc(contratoId);
+          transaction.update(contratoRef, {'status': 'aprovado'});
+          final motoristaRef = _firestore.collection('motoristas').doc(motoristaId);
+          transaction.update(motoristaRef, {'alunosIds': FieldValue.arrayUnion([alunoId])});
+          final alunoRef = _firestore.collection('alunos').doc(alunoId);
+          transaction.update(alunoRef, {'motoristaId': motoristaId});
         });
-
-        final alunoRef = _firestore.collection('alunos').doc(_alunoId);
-        transaction.update(alunoRef, {'motoristaId': motoristaId});
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Você foi vinculado ao motorista!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vinculado!'), backgroundColor: Colors.green));
+      } catch (e) {
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red));
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao aceitar convite: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 
-  Future<void> _recusarConvite(String contratoId) async {
-    try {
+  Future<void> _recusarConviteAluno(String contratoId) async {
+     try {
       await _firestore.collection('contratos').doc(contratoId).delete();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Convite recusado.'),
-            backgroundColor: Colors.grey,
-          ),
-        );
-      }
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Recusado.'), backgroundColor: Colors.grey));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao recusar convite: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red));
     }
   }
+
+  Future<void> _aceitarSolicitacaoMotorista(String contratoId, String alunoId) async {
+    final motoristaId = _currentUser?.uid;
+    if (motoristaId == null) return;
+      try {
+        await _firestore.runTransaction((transaction) async {
+          final contratoRef = _firestore.collection('contratos').doc(contratoId);
+          transaction.update(contratoRef, {'status': 'aprovado'});
+          final motoristaRef = _firestore.collection('motoristas').doc(motoristaId);
+          transaction.update(motoristaRef, {'alunosIds': FieldValue.arrayUnion([alunoId])});
+          final alunoRef = _firestore.collection('alunos').doc(alunoId);
+          transaction.update(alunoRef, {'motoristaId': motoristaId});
+        });
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Aceito!'), backgroundColor: Colors.green));
+      } catch (e) {
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red));
+      }
+  }
+
+   Future<void> _recusarSolicitacaoMotorista(String contratoId) async {
+      try {
+        await _firestore.collection('contratos').doc(contratoId).delete();
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Recusado.'), backgroundColor: Colors.grey));
+      } catch (e) {
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red));
+      }
+  }
+  // --- Fim da Lógica ---
 
   @override
   Widget build(BuildContext context) {
+    Color appBarColor = Colors.amber; // Cor padrão Aluno
+    final Color motoristaColor = const Color(0xFFE53935);
+
     return Scaffold(
+      // AppBar inicial (será substituído pelo FutureBuilder)
       appBar: AppBar(
         title: const Text('Notificações'),
-        backgroundColor: Colors.amber,
+        backgroundColor: appBarColor,
         foregroundColor: Colors.white,
       ),
-      body: _alunoId == null
-          ? const Center(
-              child: Text("Faça login para ver suas notificações."),
-            )
-          : StreamBuilder<QuerySnapshot>(
-              stream: _firestore
-                  .collection('contratos')
-                  .where('alunoId', isEqualTo: _alunoId)
-                  .where('status', isEqualTo: 'convite_motorista')
-                  .snapshots(),
+      body: _currentUser == null
+          ? _buildLoginPrompt(context)
+          : FutureBuilder<UserRole>(
+              future: _userRoleFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'Nenhuma notificação nova.',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                  );
+                if (snapshot.hasError || !snapshot.hasData || snapshot.data == UserRole.indefinido) {
+                  return const Center(child: Text('Não foi possível carregar suas notificações.'));
                 }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(8.0),
-                  itemCount: snapshot.data!.docs.length,
-                  itemBuilder: (context, index) {
-                    final contrato = snapshot.data!.docs[index];
-                    final data = contrato.data() as Map<String, dynamic>;
-                    final motoristaId = data['motoristaId'] as String?;
-                    final contratoId = contrato.id;
+                final userRole = snapshot.data!;
+                appBarColor = userRole == UserRole.motorista ? motoristaColor : Colors.amber;
 
-                    if (motoristaId == null) {
-                      return const ListTile(
-                          title: Text('Erro: Convite inválido'));
-                    }
-
-                    return FutureBuilder<DocumentSnapshot>(
-                      future: _firestore
-                          .collection('motoristas')
-                          .doc(motoristaId)
-                          .get(),
-                      builder: (context, motoristaSnapshot) {
-                        if (!motoristaSnapshot.hasData ||
-                            !motoristaSnapshot.data!.exists) {
-                          return const ListTile(
-                              title: Text('Carregando convite...'));
+                // Retorna um novo Scaffold com a AppBar colorida
+                return Scaffold(
+                   appBar: AppBar(
+                      title: const Text('Notificações'),
+                      backgroundColor: appBarColor,
+                      foregroundColor: Colors.white,
+                      leading: Navigator.canPop(context) ? BackButton(color: Colors.white) : null,
+                    ),
+                   body: StreamBuilder<QuerySnapshot>(
+                      stream: _getNotificationsStream(userRole, _currentUser!.uid),
+                      builder: (context, notificationSnapshot) {
+                        if (notificationSnapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (!notificationSnapshot.hasData || notificationSnapshot.data!.docs.isEmpty) {
+                          return const Center(
+                            child: Text('Nenhuma notificação nova.', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                          );
                         }
 
-                        final motorista = Motorista.fromMap(
-                          motoristaSnapshot.data!.id,
-                          motoristaSnapshot.data!.data()
-                              as Map<String, dynamic>,
-                        );
+                        return ListView.builder(
+                          padding: const EdgeInsets.all(8.0),
+                          itemCount: notificationSnapshot.data!.docs.length,
+                          itemBuilder: (context, index) {
+                            final contrato = notificationSnapshot.data!.docs[index];
+                            final data = contrato.data() as Map<String, dynamic>;
+                            final contratoId = contrato.id;
 
-                        return Card(
-                          margin: const EdgeInsets.symmetric(
-                              vertical: 4.0, horizontal: 8.0),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundImage: motorista.fotoUrl != null
-                                  ? NetworkImage(motorista.fotoUrl!)
-                                  : null,
-                              child: motorista.fotoUrl == null
-                                  ? const Icon(Icons.person)
-                                  : null,
-                            ),
-                            title: Text(motorista.nome),
-                            subtitle: const Text(
-                                'Enviou um convite para ser seu motorista.'),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.check_circle,
-                                      color: Colors.green),
-                                  tooltip: 'Aceitar',
-                                  onPressed: () =>
-                                      _aceitarConvite(contratoId, motoristaId),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.cancel,
-                                      color: Colors.red),
-                                  tooltip: 'Recusar',
-                                  onPressed: () =>
-                                      _recusarConvite(contratoId),
-                                ),
-                              ],
-                            ),
-                          ),
+                            if (userRole == UserRole.aluno) {
+                              final motoristaId = data['motoristaId'] as String?;
+                              if(motoristaId == null) return const SizedBox.shrink();
+                              return _buildAlunoNotificationCard(contratoId, motoristaId);
+                            } else {
+                              final alunoId = data['alunoId'] as String?;
+                              if(alunoId == null) return const SizedBox.shrink();
+                              return _buildMotoristaNotificationCard(contratoId, alunoId);
+                            }
+                          },
                         );
                       },
-                    );
-                  },
+                    ),
                 );
               },
             ),
     );
   }
+
+  Stream<QuerySnapshot> _getNotificationsStream(UserRole role, String userId) {
+    if (role == UserRole.aluno) {
+      return _firestore
+          .collection('contratos')
+          .where('alunoId', isEqualTo: userId)
+          .where('status', isEqualTo: 'convite_motorista')
+          .snapshots();
+    } else {
+      return _firestore
+          .collection('contratos')
+          .where('motoristaId', isEqualTo: userId)
+          .where('status', isEqualTo: 'pendente')
+          .snapshots();
+    }
+  }
+
+  Widget _buildAlunoNotificationCard(String contratoId, String motoristaId) {
+     return FutureBuilder<DocumentSnapshot>(
+      future: _firestore.collection('motoristas').doc(motoristaId).get(),
+      builder: (context, motoristaSnapshot) {
+        if (!motoristaSnapshot.hasData || !motoristaSnapshot.data!.exists) {
+          return const ListTile(title: Text('Carregando convite...'));
+        }
+        final motorista = Motorista.fromMap(
+          motoristaSnapshot.data!.id,
+          motoristaSnapshot.data!.data() as Map<String, dynamic>,
+        );
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundImage: motorista.fotoUrl != null ? NetworkImage(motorista.fotoUrl!) : null,
+              child: motorista.fotoUrl == null ? const Icon(Icons.person) : null,
+            ),
+            title: Text(motorista.nome),
+            subtitle: const Text('Enviou um convite para ser seu motorista.'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.check_circle, color: Colors.green),
+                  tooltip: 'Aceitar',
+                  onPressed: () => _aceitarConviteAluno(contratoId, motoristaId),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.cancel, color: Colors.red),
+                  tooltip: 'Recusar',
+                  onPressed: () => _recusarConviteAluno(contratoId),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMotoristaNotificationCard(String contratoId, String alunoId) {
+      return FutureBuilder<DocumentSnapshot>(
+      future: _firestore.collection('alunos').doc(alunoId).get(),
+      builder: (context, alunoSnapshot) {
+        if (!alunoSnapshot.hasData || !alunoSnapshot.data!.exists) {
+          return const ListTile(title: Text('Carregando solicitação...'));
+        }
+        final aluno = Aluno.fromMap(
+          alunoSnapshot.data!.id,
+          alunoSnapshot.data!.data() as Map<String, dynamic>,
+        );
+         return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+          child: ListTile(
+             leading: CircleAvatar(
+              backgroundImage: aluno.fotoUrl != null ? NetworkImage(aluno.fotoUrl!) : null,
+              child: aluno.fotoUrl == null ? Text(aluno.nome.isNotEmpty ? aluno.nome[0] : 'A') : null,
+            ),
+            title: Text(aluno.nome),
+            subtitle: const Text('Enviou uma solicitação de vínculo.'),
+             trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.check_circle, color: Colors.green),
+                  tooltip: 'Aceitar',
+                  onPressed: () => _aceitarSolicitacaoMotorista(contratoId, alunoId),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.cancel, color: Colors.red),
+                  tooltip: 'Recusar',
+                  onPressed: () => _recusarSolicitacaoMotorista(contratoId),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLoginPrompt(BuildContext context) {
+      return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.lock_outline, size: 80, color: Colors.grey),
+          const SizedBox(height: 16),
+          const Text(
+            "Você precisa fazer login para ver as notificações.",
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pushNamed(context, '/login');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14,),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12),),
+            ),
+            child: const Text("Fazer Login", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),),
+          ),
+        ],
+      ),
+    );
+  }
+
+ // 🔹 CORRIGIDO: _buildSectionTitle removido (não era usado)
+
+ // 🔹 CORRIGIDO: Erro de sintaxe no AppBar Actions (ternary incompleto) - Removido (não era usado)
+
 }
+

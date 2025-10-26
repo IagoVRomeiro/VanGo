@@ -46,20 +46,19 @@ class _TelaLoginState extends State<TelaLogin> {
       if (user != null && mounted) {
         final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
 
-        Navigator.pop(context); 
+        Navigator.pop(context); // fecha o progress dialog
 
         if (userDoc.exists) {
           final role = userDoc.data()?['role'];
 
           if (role == 'motorista') {
             Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (context) => const TelaMotorista()),
+              MaterialPageRoute(builder: (context) => TelaMotorista()),
               (route) => false, 
             );
           } else if (role == 'aluno') {
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (context) => TelaAluno()),
-
               (route) => false, 
             );
           } else {
@@ -110,7 +109,15 @@ class _TelaLoginState extends State<TelaLogin> {
                     child: Image.asset('assets/images/vgo_logo.png'),
                   ),
                   const SizedBox(height: 40),
-                  const Text('Login', style: TextStyle(color: branco, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  const Text(
+                    'Login', 
+                    style: TextStyle(
+                      color: branco, 
+                      fontSize: 26, 
+                      fontWeight: FontWeight.bold, 
+                      letterSpacing: 1
+                    ),
+                  ),
                   const SizedBox(height: 30),
                   _campoTexto(
                     controller: _emailController,
@@ -149,7 +156,7 @@ class _TelaLoginState extends State<TelaLogin> {
                             ..onTap = () {
                               Navigator.pushReplacement(
                                 context,
-                                MaterialPageRoute(builder: (_) => const TelaCadastro()),
+                                MaterialPageRoute(builder: (context) => TelaCadastro()),
                               );
                             },
                         ),
@@ -189,7 +196,10 @@ class _TelaLoginState extends State<TelaLogin> {
         ),
         suffixIcon: isPassword
             ? IconButton(
-                icon: Icon(_senhaVisivel ? Icons.visibility_off : Icons.visibility, color: Colors.white.withOpacity(0.7)),
+                icon: Icon(
+                  _senhaVisivel ? Icons.visibility_off : Icons.visibility, 
+                  color: Colors.white.withOpacity(0.7)
+                ),
                 onPressed: () => setState(() => _senhaVisivel = !_senhaVisivel),
               )
             : null,
@@ -218,7 +228,15 @@ class _TelaLoginState extends State<TelaLogin> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         elevation: 5,
       ),
-      child: Text(texto, style: TextStyle(color: corDoTexto, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+      child: Text(
+        texto, 
+        style: TextStyle(
+          color: corDoTexto, 
+          fontSize: 16, 
+          fontWeight: FontWeight.bold, 
+          letterSpacing: 1.1
+        ),
+      ),
     );
   }
 }

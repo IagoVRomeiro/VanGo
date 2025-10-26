@@ -2,8 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/aluno.dart'; // Importa o modelo Aluno
+import '../models/motorista.dart'; // Importa Motorista para desvincular
 
-/// Tela para o motorista gerenciar solicitações e convites de alunos.
+/// Tela para o motorista gerenciar alunos vinculados, convites e solicitações.
 class TelaGerenciarAlunos extends StatefulWidget {
   const TelaGerenciarAlunos({super.key});
 
@@ -15,7 +16,6 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
   String? _motoristaId;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 🔹 ADICIONADO: Controlador para o email e estado de loading
   final TextEditingController _emailController = TextEditingController();
   bool _isConvidando = false;
 
@@ -31,12 +31,8 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
     super.dispose();
   }
 
-  // -------------------------------------------------------------------
-  // LÓGICA DE ACEITAR/RECUSAR (Solicitações recebidas)
-  // (Sem alterações)
-  // -------------------------------------------------------------------
-
-  /// Aceita a solicitação de um aluno
+  // --- Lógica de Aceitar/Recusar Solicitação ---
+  // (Mantida para ser usada pelas notificações ou futuras implementações)
   Future<void> _aceitarSolicitacao(String contratoId, String alunoId) async {
     if (_motoristaId == null) return;
     try {
@@ -69,7 +65,6 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
     }
   }
 
-  /// Recusa a solicitação de um aluno
   Future<void> _recusarSolicitacao(String contratoId) async {
     try {
       await _firestore.collection('contratos').doc(contratoId).delete();
@@ -90,10 +85,9 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
       }
     }
   }
+  // --- Fim Aceitar/Recusar ---
 
-  // -------------------------------------------------------------------
-  // 🔹 NOVO: LÓGICA DE ENVIAR CONVITE
-  // -------------------------------------------------------------------
+  // --- Lógica de Enviar Convite ---
   Future<void> _enviarConvite() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
@@ -132,11 +126,12 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
         throw Exception('Este aluno já está vinculado a você.');
       }
 
-      // 3. Verifica se já existe um contrato pendente
+      // 3. Verifica se já existe um contrato pendente ou convite
       final contratoQuery = await _firestore
           .collection('contratos')
           .where('motoristaId', isEqualTo: _motoristaId)
           .where('alunoId', isEqualTo: alunoId)
+          .where('status', whereIn: ['pendente', 'convite_motorista'])
           .limit(1)
           .get();
 
@@ -174,108 +169,168 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
       }
     }
   }
+  // --- Fim Enviar Convite ---
+
+  // 🔹 NOVO: Lógica para Desvincular Aluno
+  Future<void> _desvincularAluno(String alunoId) async {
+    if (_motoristaId == null) return;
+
+    // Confirmação
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar Desvinculação'),
+        content: const Text('Tem certeza que deseja desvincular este aluno? O contrato será removido.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Desvincular', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmado != true) return;
+
+    try {
+      await _firestore.runTransaction((transaction) async {
+        // 1. Remove o ID do aluno do array 'alunosIds' do motorista
+        final motoristaRef =
+            _firestore.collection('motoristas').doc(_motoristaId);
+        transaction.update(motoristaRef, {
+          'alunosIds': FieldValue.arrayRemove([alunoId])
+        });
+
+        // 2. Remove o 'motoristaId' do documento do aluno
+        final alunoRef = _firestore.collection('alunos').doc(alunoId);
+        transaction.update(alunoRef, {'motoristaId': FieldValue.delete()}); // Remove o campo
+
+        // 3. Encontra e deleta o contrato aprovado entre eles
+        final contratoQuery = await _firestore
+            .collection('contratos')
+            .where('motoristaId', isEqualTo: _motoristaId)
+            .where('alunoId', isEqualTo: alunoId)
+            .where('status', isEqualTo: 'aprovado') // Garante que é o aprovado
+            .limit(1)
+            .get();
+
+        if (contratoQuery.docs.isNotEmpty) {
+          final contratoRef = contratoQuery.docs.first.reference;
+          transaction.delete(contratoRef);
+        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Aluno desvinculado com sucesso.'),
+              backgroundColor: Colors.grey),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Erro ao desvincular aluno: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+  // --- Fim Desvincular Aluno ---
 
   @override
   Widget build(BuildContext context) {
     if (_motoristaId == null) {
-      // ... (tela de erro)
-      return Scaffold(
-        appBar: AppBar(title: const Text('Gerenciar Alunos')),
-        body: const Center(child: Text('Erro: Motorista não está logado.')),
-      );
+      return const Center(child: Text('Erro: Motorista não está logado.'));
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Gerenciar Alunos'),
-        backgroundColor: const Color(0xFFE53935),
-        foregroundColor: Colors.white,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // -------------------------------------------
-            // Seção 1: Solicitações Recebidas
-            // -------------------------------------------
-            Text(
-              'Solicitações Pendentes',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            _buildListaSolicitacoesRecebidas(),
-            const Divider(height: 40),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // -------------------------------------------
+          // 🔹 ATUALIZADO: Seção 1: Lista de Alunos Vinculados
+          // -------------------------------------------
+          Text(
+            'Lista de Alunos Vinculados', // 🔹 TÍTULO ALTERADO
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          _buildListaAlunosVinculados(), // 🔹 FUNÇÃO ALTERADA
+          const Divider(height: 40),
 
-            // -------------------------------------------
-            // Seção 2: Enviar Convite
-            // -------------------------------------------
-            Text(
-              'Convidar Aluno',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
+          // -------------------------------------------
+          // Seção 2: Enviar Convite
+          // -------------------------------------------
+          Text(
+            'Convidar Aluno',
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _emailController,
+            decoration: const InputDecoration(
+              labelText: 'Email do Aluno',
+              hintText: 'Digite o email para convidar',
+              border: OutlineInputBorder(),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _emailController, // 🔹 ATUALIZADO
-              decoration: const InputDecoration(
-                labelText: 'Email do Aluno',
-                hintText: 'Digite o email para convidar',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.emailAddress,
+            keyboardType: TextInputType.emailAddress,
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: _isConvidando ? null : _enviarConvite,
+            icon: _isConvidando
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.send),
+            label: Text(_isConvidando ? 'ENVIANDO...' : 'ENVIAR CONVITE'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE53935),
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 48),
             ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: _isConvidando ? null : _enviarConvite, // 🔹 ATUALIZADO
-              icon: _isConvidando // 🔹 ATUALIZADO
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.send),
-              label: Text(_isConvidando
-                  ? 'ENVIANDO...'
-                  : 'ENVIAR CONVITE'), // 🔹 ATUALIZADO
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE53935),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 48),
-              ),
-            ),
-            const Divider(height: 40),
+          ),
+          const Divider(height: 40),
 
-            // -------------------------------------------
-            // 🔹 NOVO: Seção 3: Convites Enviados
-            // -------------------------------------------
-            Text(
-              'Convites Enviados',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            _buildListaConvitesEnviados(),
-          ],
-        ),
+          // -------------------------------------------
+          // Seção 3: Convites Enviados
+          // -------------------------------------------
+          Text(
+            'Convites Enviados',
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          _buildListaConvitesEnviados(),
+        ],
       ),
     );
   }
 
-  /// Constrói a lista de solicitações PENDENTES (enviadas pelo aluno)
-  Widget _buildListaSolicitacoesRecebidas() {
+  // 🔹 ATUALIZADO: Constrói a lista de alunos VINCULADOS (aprovados)
+  Widget _buildListaAlunosVinculados() {
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
           .collection('contratos')
           .where('motoristaId', isEqualTo: _motoristaId)
-          .where('status', isEqualTo: 'pendente') // Status 'pendente'
+          .where('status', isEqualTo: 'aprovado') // 🔹 QUERY ALTERADA
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -285,7 +340,7 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(16.0),
-              child: Text('Nenhuma solicitação pendente.'),
+              child: Text('Nenhum aluno vinculado no momento.'), // 🔹 TEXTO ALTERADO
             ),
           );
         }
@@ -298,7 +353,7 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
             final contrato = snapshot.data!.docs[index];
             final data = contrato.data() as Map<String, dynamic>;
             final alunoId = data['alunoId'] as String?;
-            final contratoId = contrato.id;
+            // final contratoId = contrato.id; // Não precisamos mais do contratoId aqui
 
             if (alunoId == null) return const SizedBox.shrink();
 
@@ -319,24 +374,13 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
                     title: Text(aluno.nome ?? 'Aluno sem nome'),
                     subtitle:
                         Text(aluno.faculdade ?? 'Faculdade não informada'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.check_circle,
-                              color: Colors.green),
-                          tooltip: 'Aceitar',
-                          onPressed: () =>
-                              _aceitarSolicitacao(contratoId, alunoId),
-                        ),
-                        IconButton(
+                    // 🔹 BOTÕES ALTERADOS: Agora mostra botão de desvincular
+                    trailing: IconButton(
                           icon:
-                              const Icon(Icons.cancel, color: Colors.red),
-                          tooltip: 'Recusar',
-                          onPressed: () => _recusarSolicitacao(contratoId),
+                              const Icon(Icons.link_off, color: Colors.grey),
+                          tooltip: 'Desvincular Aluno',
+                          onPressed: () => _desvincularAluno(alunoId),
                         ),
-                      ],
-                    ),
                   ),
                 );
               },
@@ -346,14 +390,15 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
       },
     );
   }
+  // --- Fim da lista de alunos vinculados ---
 
-  /// 🔹 NOVO: Constrói a lista de convites ENVIADOS (pelo motorista)
+  // Widget para construir a lista de convites enviados ...
   Widget _buildListaConvitesEnviados() {
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
           .collection('contratos')
           .where('motoristaId', isEqualTo: _motoristaId)
-          .where('status', isEqualTo: 'convite_motorista') // Status 'convite'
+          .where('status', isEqualTo: 'convite_motorista')
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -405,6 +450,7 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
                           icon:
                               const Icon(Icons.delete_outline, color: Colors.grey),
                           tooltip: 'Cancelar Convite',
+                          // Usa a mesma lógica de recusar solicitação para cancelar
                           onPressed: () => _recusarSolicitacao(contratoId),
                         ),
                       ],
@@ -418,5 +464,6 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
       },
     );
   }
+  // Fim do widget de convites enviados
 }
 
