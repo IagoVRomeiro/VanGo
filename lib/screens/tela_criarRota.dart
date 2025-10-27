@@ -1,10 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-// 🔹 ADICIONADO: Imports dos modelos necessários
 import '../models/aluno.dart';
 import '../models/motorista.dart';
 import '../models/van.dart';
+import '../models/rota.dart'; // ⬅️ IMPORTA O NOVO MODELO
 
 class CriarRotaScreen extends StatefulWidget {
   final String? rotaId;
@@ -18,7 +18,6 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _nomeController = TextEditingController();
-  // final _localDestinoController = TextEditingController(); // Removido
 
   Van? _vanSelecionada;
   TimeOfDay? _horarioInicio;
@@ -27,6 +26,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   List<Van> _vansDisponiveis = [];
   bool _carregandoDados = true;
   bool _isEditMode = false;
+  Timestamp? _criadoEm; // Para preservar data de criação
 
   final Map<String, bool> _diasSemana = {
     'Seg': false, 'Ter': false, 'Qua': false,
@@ -36,10 +36,9 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   List<Aluno> _motoristaAlunosDisponiveis = [];
   Set<String> _alunosSelecionadosParaRota = {};
 
-  // 🔹 NOVO: Estado para o Dropdown de Faculdades
-  List<String> _listaFaculdades = []; // Lista carregada da API/Estática
-  String? _faculdadeSelecionada; // Faculdade escolhida no dropdown
-  bool _carregandoFaculdades = true; // Indicador de loading para faculdades
+  List<String> _listaFaculdades = [];
+  String? _faculdadeSelecionada;
+  bool _carregandoFaculdades = true;
 
   @override
   void initState() {
@@ -47,21 +46,18 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
     if (widget.rotaId != null) {
       _isEditMode = true;
     }
-    // Carrega vans, alunos E faculdades
     _carregarDadosIniciais();
   }
 
   @override
   void dispose() {
     _nomeController.dispose();
-    // _localDestinoController.dispose(); // Removido
     super.dispose();
   }
 
-  // 🔹 ATUALIZADO: Carrega vans, alunos e faculdades
   Future<void> _carregarDadosIniciais() async {
     setState(() {
-      _carregandoDados = true; // Garante que o loading principal esteja ativo
+      _carregandoDados = true;
       _carregandoFaculdades = true;
     });
 
@@ -77,18 +73,16 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
     }
 
     try {
-      // Carrega Vans e Alunos em paralelo (ou sequencialmente)
       await Future.wait([
         _carregarVans(motoristaId),
         _carregarAlunosMotorista(motoristaId),
-        _carregarFaculdades(), // 🔹 NOVO: Carrega a lista de faculdades
+        _carregarFaculdades(),
       ]);
 
-      // Se estiver em modo de edição, carrega os dados da rota
       if (_isEditMode) {
-        await _carregarDadosDaRota(motoristaId, widget.rotaId!);
+        // 🔹 Carrega os dados da rota usando o ID
+        await _carregarDadosDaRota(widget.rotaId!);
       }
-
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -98,16 +92,15 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
         );
       }
     } finally {
-       if (mounted) {
+      if (mounted) {
         setState(() {
           _carregandoDados = false;
-          _carregandoFaculdades = false; // Termina loading das faculdades também
+          _carregandoFaculdades = false;
         });
       }
     }
   }
 
-  // Funções separadas para carregar vans e alunos
   Future<void> _carregarVans(String motoristaId) async {
     final vansSnapshot = await FirebaseFirestore.instance
         .collection('vans')
@@ -121,33 +114,31 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   }
 
   Future<void> _carregarAlunosMotorista(String motoristaId) async {
-     final motoristaDoc = await FirebaseFirestore.instance
-          .collection('motoristas')
-          .doc(motoristaId)
-          .get();
-      if (motoristaDoc.exists && mounted) {
-        final motorista = Motorista.fromMap(motoristaDoc.id, motoristaDoc.data()!);
-        final List<String> alunosIds = motorista.alunosIds ?? [];
-        if (alunosIds.isNotEmpty) {
-          final alunosSnapshot = await FirebaseFirestore.instance
-              .collection('alunos')
-              .where(FieldPath.documentId, whereIn: alunosIds)
-              .get();
-          if (mounted) {
-            _motoristaAlunosDisponiveis = alunosSnapshot.docs
-                .map((doc) => Aluno.fromMap(doc.id, doc.data()!))
-                .toList();
-          }
+    final motoristaDoc = await FirebaseFirestore.instance
+        .collection('motoristas')
+        .doc(motoristaId)
+        .get();
+    if (motoristaDoc.exists && mounted) {
+      final motorista =
+          Motorista.fromMap(motoristaDoc.id, motoristaDoc.data()!);
+      final List<String> alunosIds = motorista.alunosIds ?? [];
+      if (alunosIds.isNotEmpty) {
+        final alunosSnapshot = await FirebaseFirestore.instance
+            .collection('alunos')
+            .where(FieldPath.documentId, whereIn: alunosIds)
+            .get();
+        if (mounted) {
+          _motoristaAlunosDisponiveis = alunosSnapshot.docs
+              .map((doc) => Aluno.fromMap(doc.id, doc.data()!))
+              .toList();
         }
       }
+    }
   }
 
-  // 🔹 NOVO: Função para carregar faculdades (substitua pelo seu método)
   Future<void> _carregarFaculdades() async {
-    // TODO: Implemente aqui a lógica para buscar as faculdades
-    //       usando Google Places API, Overpass API ou outra fonte.
-    // Exemplo com lista estática:
-    await Future.delayed(const Duration(milliseconds: 500)); // Simula delay da API
+    // Simulação de API
+    await Future.delayed(const Duration(milliseconds: 500));
     if (mounted) {
       setState(() {
         _listaFaculdades = [
@@ -157,72 +148,70 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
           'UNA - Aimorés',
           'Newton Paiva - Unidade Silva Lobo',
           'Centro Universitário de Belo Horizonte - UniBH',
-          // Adicione mais faculdades aqui
         ];
-        _listaFaculdades.sort(); // Opcional: Ordena a lista
+        _listaFaculdades.sort();
         _carregandoFaculdades = false;
       });
     }
-     // Em caso de erro na API real, trate-o aqui e defina _carregandoFaculdades = false;
   }
 
-
-  Future<void> _carregarDadosDaRota(String motoristaId, String rotaId) async {
+  /// 🔹 ATUALIZADO: Carrega da coleção raiz '/rotas' e usa o modelo Rota
+  Future<void> _carregarDadosDaRota(String rotaId) async {
     try {
       final doc = await FirebaseFirestore.instance
-          .collection('motoristas')
-          .doc(motoristaId)
-          .collection('rotas')
+          .collection('rotas') // Coleção Raiz
           .doc(rotaId)
           .get();
 
       if (doc.exists && mounted) {
-        final data = doc.data()!;
-        _nomeController.text = data['nome'] ?? '';
-        // 🔹 ATUALIZADO: Define a faculdade selecionada no dropdown
-        _faculdadeSelecionada = data['localDestino'];
-        // Garante que a faculdade carregada esteja na lista (caso contrário, pode dar erro no Dropdown)
-        if (_faculdadeSelecionada != null && !_listaFaculdades.contains(_faculdadeSelecionada)) {
-           // Opção 1: Adiciona à lista se não existir (pode poluir a lista)
-           // _listaFaculdades.add(_faculdadeSelecionada!);
-           // _listaFaculdades.sort();
-           // Opção 2: Reseta para nulo se não for válida (mais seguro)
-            _faculdadeSelecionada = null;
+        // Usa o factory do modelo
+        final rota = Rota.fromSnapshot(doc);
+
+        _nomeController.text = rota.nome;
+        _faculdadeSelecionada = rota.localDestino; // ⬅️ CORRIGIDO
+        _criadoEm = rota.criadoEm;
+
+        if (_faculdadeSelecionada != null &&
+            !_listaFaculdades.contains(_faculdadeSelecionada)) {
+          _faculdadeSelecionada = null;
         }
 
-        _horarioInicio = _timeOfDayFromString(data['horarioInicioPrevisto']);
-        _horarioFim = _timeOfDayFromString(data['horarioFimPrevisto']);
+        _horarioInicio = _timeOfDayFromString(rota.horarioInicioPrevisto); // ⬅️ CORRIGIDO
+        _horarioFim = _timeOfDayFromString(rota.horarioFimPrevisto); // ⬅️ CORRIGIDO
 
         try {
           _vanSelecionada = _vansDisponiveis.firstWhere(
-            (van) => van.id == data['vanId'],
+            (van) => van.id == rota.vanId,
           );
-        } catch (e) { _vanSelecionada = null; }
+        } catch (e) {
+          _vanSelecionada = null;
+        }
 
-        final diasData = (data['diasSemana'] as Map?)?.cast<String, bool>() ?? {};
         setState(() {
           _diasSemana.forEach((key, value) {
-            _diasSemana[key] = diasData[key] ?? false;
+            _diasSemana[key] = rota.diasSemana[key] ?? false; // ⬅️ CORRIGIDO
           });
-          _alunosSelecionadosParaRota =
-              Set<String>.from(data['listaAlunosIds'] ?? []);
+          _alunosSelecionadosParaRota = Set<String>.from(rota.listaAlunosIds);
         });
       }
     } catch (e) {
-       if(mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar rota: $e'), backgroundColor: Colors.red),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Erro ao carregar rota: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
   }
 
+  /// 🔹 ATUALIZADO: Salva usando o Modelo Rota na coleção raiz
   Future<void> _salvarRota() async {
     if (!_formKey.currentState!.validate()) return;
 
     final bool diaSelecionado = _diasSemana.values.any((dia) => dia == true);
     if (!diaSelecionado) {
-       ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Selecione pelo menos um dia da semana.'),
             backgroundColor: Colors.orange),
@@ -230,8 +219,10 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       return;
     }
 
-    // 🔹 ATUALIZADO: Valida a faculdade selecionada
-    if (_faculdadeSelecionada == null || _vanSelecionada == null || _horarioInicio == null || _horarioFim == null) {
+    if (_faculdadeSelecionada == null ||
+        _vanSelecionada == null ||
+        _horarioInicio == null ||
+        _horarioFim == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Por favor, preencha todos os campos.'),
@@ -246,50 +237,49 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
     if (inicioEmMinutos >= fimEmMinutos) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('O horário de chegada deve ser depois do horário de início.'),
+            content:
+                Text('O horário de chegada deve ser depois do horário de início.'),
             backgroundColor: Colors.orange),
       );
       return;
     }
 
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      //... (erro handling)
-      return;
-    }
+    if (user == null) return;
 
     setState(() => _isLoading = true);
 
     try {
-      final rotaCollection = FirebaseFirestore.instance
-          .collection('motoristas')
-          .doc(user.uid)
-          .collection('rotas');
+      // 🔹 CORREÇÃO: Cria o objeto Rota
+      final rotaData = Rota(
+        id: _isEditMode ? widget.rotaId! : '',
+        nome: _nomeController.text.trim(),
+        localDestino: _faculdadeSelecionada!, // ⬅️ CORRIGIDO
+        vanId: _vanSelecionada!.id,
+        motoristaId: user.uid,
+        listaAlunosIds: _alunosSelecionadosParaRota.toList(),
+        diasSemana: _diasSemana, // ⬅️ CORRIGIDO
+        horarioInicioPrevisto: _horarioInicio!.to24HourString(),
+        horarioFimPrevisto: _horarioFim!.to24HourString(),
+        status: StatusRota.planejada,
+        criadoEm: _criadoEm, // Preserva o 'criadoEm' original
+      );
 
-      final Map<String, dynamic> dadosDaRota = {
-        'nome': _nomeController.text.trim(),
-        // 🔹 ATUALIZADO: Salva a faculdade do dropdown
-        'localDestino': _faculdadeSelecionada,
-        'vanId': _vanSelecionada!.id,
-        'motoristaId': user.uid,
-        'listaAlunosIds': _alunosSelecionadosParaRota.toList(),
-        'horarioInicioPrevisto': _horarioInicio!.to24HourString(),
-        'horarioFimPrevisto': _horarioFim!.to24HourString(),
-        'diasSemana': _diasSemana,
-        'status': 'planejada',
-      };
+      final rotaCollection = FirebaseFirestore.instance.collection('rotas');
 
       if (_isEditMode) {
-        await rotaCollection.doc(widget.rotaId!).update(dadosDaRota);
+        // Usa o toUpdateMap() para não sobrescrever o 'criadoEm'
+        await rotaCollection.doc(widget.rotaId!).update(rotaData.toUpdateMap());
       } else {
-        await rotaCollection.add(dadosDaRota);
+        // Usa o toMap() normal que inclui o serverTimestamp
+        await rotaCollection.add(rotaData.toMap());
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text('Rota ${_isEditMode ? 'atualizada' : 'criada'} com sucesso!'),
+              content: Text(
+                  'Rota ${_isEditMode ? 'atualizada' : 'criada'} com sucesso!'),
               backgroundColor: Colors.green),
         );
         Navigator.of(context).pop();
@@ -318,18 +308,17 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   }
 
   Widget _buildDiasSemanaChips() {
-    // ... (sem mudanças)
-     return Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 16.0, bottom: 8.0, left: 4.0),
           child: Text(
             "Dias da Semana",
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Colors.black54,
-              fontWeight: FontWeight.bold
-            ),
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(color: Colors.black54, fontWeight: FontWeight.bold),
           ),
         ),
         Wrap(
@@ -354,21 +343,20 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   }
 
   Widget _buildSeletorAlunos() {
-    // ... (sem mudanças)
-     return Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 24.0, bottom: 8.0, left: 4.0),
           child: Text(
             "Alunos na Rota",
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Colors.black54,
-              fontWeight: FontWeight.bold
-            ),
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(color: Colors.black54, fontWeight: FontWeight.bold),
           ),
         ),
-        _carregandoDados // Usa o loading principal aqui também
+        _carregandoDados
             ? const Center(child: Text("Carregando alunos..."))
             : _motoristaAlunosDisponiveis.isEmpty
                 ? const Center(
@@ -390,9 +378,8 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                           _alunosSelecionadosParaRota.contains(aluno.id);
 
                       return CheckboxListTile(
-                        title: Text(aluno.nome ?? 'Aluno sem nome'),
-                        subtitle:
-                            Text(aluno.faculdade ?? 'Faculdade não informada'),
+                        title: Text(aluno.nome),
+                        subtitle: Text(aluno.endereco), // 🔹 CORRIGIDO
                         value: isSelected,
                         onChanged: (bool? value) {
                           setState(() {
@@ -418,7 +405,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
         backgroundColor: const Color(0xFFE53935),
         foregroundColor: Colors.white,
       ),
-      body: _carregandoDados // Loading principal para vans e alunos
+      body: _carregandoDados
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
@@ -432,11 +419,9 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                         decoration: const InputDecoration(
                             labelText: 'Nome da Rota (ex: Manhã - PUC Coreu)',
                             border: OutlineInputBorder()),
-                        validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null),
-
+                        validator: (v) =>
+                            v!.isEmpty ? 'Campo obrigatório' : null),
                     const SizedBox(height: 16),
-
-                    // 🔹 ATUALIZADO: Dropdown para Faculdades
                     _carregandoFaculdades
                         ? const Center(child: Text('Carregando faculdades...'))
                         : DropdownButtonFormField<String>(
@@ -452,16 +437,16 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                             decoration: InputDecoration(
                               labelText: 'Local de Destino (Faculdade)',
                               border: const OutlineInputBorder(),
-                              errorText: _listaFaculdades.isEmpty && !_carregandoFaculdades
+                              errorText: _listaFaculdades.isEmpty &&
+                                      !_carregandoFaculdades
                                   ? 'Nenhuma faculdade encontrada.'
                                   : null,
                             ),
-                            validator: (value) =>
-                                value == null ? 'Selecione uma faculdade.' : null,
+                            validator: (value) => value == null
+                                ? 'Selecione uma faculdade.'
+                                : null,
                           ),
-
                     const SizedBox(height: 16),
-
                     DropdownButtonFormField<Van>(
                       value: _vanSelecionada,
                       items: _vansDisponiveis
@@ -483,11 +468,8 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                       validator: (value) =>
                           value == null ? 'Selecione uma van.' : null,
                     ),
-
                     _buildDiasSemanaChips(),
-
                     const SizedBox(height: 16),
-
                     ListTile(
                       title: const Text('Horário de Início'),
                       subtitle: Text(_horarioInicio == null
@@ -501,7 +483,6 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                         }
                       },
                     ),
-
                     ListTile(
                       title: const Text('Horário de Chegada (Previsto)'),
                       subtitle: Text(_horarioFim == null
@@ -513,10 +494,8 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                         if (hora != null) setState(() => _horarioFim = hora);
                       },
                     ),
-
                     const Divider(height: 24),
                     _buildSeletorAlunos(),
-
                     const SizedBox(height: 24),
                     ElevatedButton.icon(
                       onPressed: _isLoading ? null : _salvarRota,
@@ -529,8 +508,8 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                                 color: Colors.white,
                               ))
                           : const Icon(Icons.save),
-                      label:
-                          Text(_isEditMode ? 'ATUALIZAR ROTA' : 'SALVAR ROTA'),
+                      label: Text(
+                          _isEditMode ? 'ATUALIZAR ROTA' : 'SALVAR ROTA'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFE53935),
                         foregroundColor: Colors.white,
@@ -545,7 +524,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   }
 }
 
-// Helpers de TimeOfDay (sem mudanças)
+// Helpers de TimeOfDay
 extension TimeOfDayExtension on TimeOfDay {
   String to24HourString() {
     final String hourString = hour.toString().padLeft(2, '0');
@@ -565,4 +544,3 @@ TimeOfDay? _timeOfDayFromString(String? timeString) {
     return null;
   }
 }
-

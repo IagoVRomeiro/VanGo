@@ -1,18 +1,30 @@
+// lib/models/rota.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum StatusRota { planejada, emAndamento, concluida, cancelada }
+enum StatusRota {
+  planejada,
+  emAndamento,
+  concluida,
+  cancelada;
+
+  static StatusRota fromString(String? status) {
+    return StatusRota.values.firstWhere(
+      (e) => e.name == status,
+      orElse: () => StatusRota.planejada,
+    );
+  }
+}
 
 class Rota {
   final String id;
   final String nome;
   final String vanId;
   final String motoristaId;
+  final String localDestino; // ⬅️ CAMPO NOVO
   final List<String> listaAlunosIds;
-  final Timestamp horarioInicioPrevisto;
-  final Timestamp horarioFimPrevisto;
-  final Timestamp? horarioInicioReal;
-  final Timestamp? horarioFimReal;
-  final double distanciaTotal;
+  final Map<String, bool> diasSemana; // ⬅️ CAMPO NOVO
+  final String horarioInicioPrevisto; // ⬅️ TIPO MUDADO
+  final String horarioFimPrevisto;  // ⬅️ TIPO MUDADO
   final StatusRota status;
   final Timestamp? criadoEm;
 
@@ -21,12 +33,11 @@ class Rota {
     required this.nome,
     required this.vanId,
     required this.motoristaId,
+    required this.localDestino, // ⬅️ NOVO
     required this.listaAlunosIds,
-    required this.horarioInicioPrevisto,
-    required this.horarioFimPrevisto,
-    this.horarioInicioReal,
-    this.horarioFimReal,
-    required this.distanciaTotal,
+    required this.diasSemana, // ⬅️ NOVO
+    required this.horarioInicioPrevisto, // ⬅️ MUDADO
+    required this.horarioFimPrevisto, // ⬅️ MUDADO
     required this.status,
     this.criadoEm,
   });
@@ -36,36 +47,51 @@ class Rota {
       'nome': nome,
       'vanId': vanId,
       'motoristaId': motoristaId,
+      'localDestino': localDestino,
       'listaAlunosIds': listaAlunosIds,
+      'diasSemana': diasSemana,
       'horarioInicioPrevisto': horarioInicioPrevisto,
       'horarioFimPrevisto': horarioFimPrevisto,
-      'horarioInicioReal': horarioInicioReal,
-      'horarioFimReal': horarioFimReal,
-      'distanciaTotal': distanciaTotal,
       'status': status.name,
+      // Se 'criadoEm' for nulo, NÃO o adicione (para updates)
+      // Se não for nulo (modo de edição), adicione
+      // Se for nulo E não for modo de edição (novo), use serverTimestamp
       'criadoEm': criadoEm ?? FieldValue.serverTimestamp(),
     };
   }
+  
+  // Um toMap seguro para Updates (que não mexe no 'criadoEm')
+  Map<String, dynamic> toUpdateMap() {
+    return {
+      'nome': nome,
+      'vanId': vanId,
+      'motoristaId': motoristaId,
+      'localDestino': localDestino,
+      'listaAlunosIds': listaAlunosIds,
+      'diasSemana': diasSemana,
+      'horarioInicioPrevisto': horarioInicioPrevisto,
+      'horarioFimPrevisto': horarioFimPrevisto,
+      'status': status.name,
+      // NÃO inclui 'criadoEm' para não sobrescrevê-lo
+    };
+  }
+
 
   factory Rota.fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot) {
     final data = snapshot.data();
-    if (data == null) throw Exception("Documento da rota não encontrado ou está vazio.");
+    if (data == null) throw Exception("Documento da rota não encontrado.");
 
     return Rota(
       id: snapshot.id,
       nome: data['nome'] ?? 'Rota sem nome',
       vanId: data['vanId'] ?? '',
       motoristaId: data['motoristaId'] ?? '',
+      localDestino: data['localDestino'] ?? '', // ⬅️ NOVO
       listaAlunosIds: List<String>.from(data['listaAlunosIds'] ?? []),
-      horarioInicioPrevisto: data['horarioInicioPrevisto'] ?? Timestamp.now(),
-      horarioFimPrevisto: data['horarioFimPrevisto'] ?? Timestamp.now(),
-      horarioInicioReal: data['horarioInicioReal'],
-      horarioFimReal: data['horarioFimReal'],
-      distanciaTotal: (data['distanciaTotal'] as num?)?.toDouble() ?? 0.0,
-      status: StatusRota.values.firstWhere(
-        (e) => e.name == data['status'],
-        orElse: () => StatusRota.planejada,
-      ),
+      diasSemana: (data['diasSemana'] as Map?)?.cast<String, bool>() ?? {}, // ⬅️ NOVO
+      horarioInicioPrevisto: data['horarioInicioPrevisto'] ?? '00:00', // ⬅️ MUDADO
+      horarioFimPrevisto: data['horarioFimPrevisto'] ?? '00:00', // ⬅️ MUDADO
+      status: StatusRota.fromString(data['status']),
       criadoEm: data['criadoEm'],
     );
   }

@@ -1,14 +1,20 @@
+// lib/screens/tela_viagem.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+// Imports dos modelos
+import '../models/aluno.dart';
+import '../models/motorista.dart'; // 🔹 Import do Motorista
+import '../models/van.dart';       // 🔹 Import da Van
+import '../models/rota.dart';       // 🔹 Import da Rota
+
 // Imports das telas de destino
 import 'tela_criarRota.dart';
 import 'tela_criarVan.dart';
-// 🔹 ADICIONADO: Import do modelo Aluno
-import '../models/aluno.dart'; // Presumindo que este arquivo exista
-// 🔹 ADICIONADO: Import da nova tela de gerenciamento
 import 'tela_gerenciar_alunos.dart';
+import 'tela_cadastro.dart'; // 🔹 Import da TelaCadastro
 
 class TelaViagem extends StatefulWidget {
   const TelaViagem({super.key});
@@ -18,13 +24,7 @@ class TelaViagem extends StatefulWidget {
 }
 
 class _TelaViagemState extends State<TelaViagem> {
-  String? _uid;
-
-  @override
-  void initState() {
-    super.initState();
-    _uid = FirebaseAuth.instance.currentUser?.uid;
-  }
+  final User? _currentUser = FirebaseAuth.instance.currentUser;
 
   // Helper para o título das seções
   Widget _buildSectionTitle(BuildContext context, String title) {
@@ -43,16 +43,13 @@ class _TelaViagemState extends State<TelaViagem> {
   // -----------------------------------------------------------------
   // SEÇÃO 1: GERENCIAMENTO DA VAN
   // -----------------------------------------------------------------
-  Widget _buildGerenciamentoVan(Map<String, dynamic> motoristaData) {
-    final veiculo = motoristaData['veiculo'];
-    final vanCadastrada =
-        veiculo != null && veiculo is String && veiculo.isNotEmpty;
-
-    if (vanCadastrada) {
+  // 🔹 ATUALIZADO: Recebe um objeto 'Van' (que pode ser nulo)
+  Widget _buildGerenciamentoVan(Van? van) {
+    if (van != null) {
       // Card da Van Cadastrada
       return ListTile(
         leading: Image.network(
-          motoristaData['vanFotoUrl'] ??
+          van.vanFotoUrl ?? // ⬅️ Corrigido
               'https://placehold.co/100x100/EFEFEF/AAAAAA?text=Van',
           width: 50,
           height: 50,
@@ -60,8 +57,8 @@ class _TelaViagemState extends State<TelaViagem> {
           errorBuilder: (context, error, stackTrace) =>
               const Icon(Icons.airport_shuttle_outlined, size: 40),
         ),
-        title: Text(motoristaData['veiculo'] ?? 'Veículo não cadastrado'),
-        subtitle: Text(motoristaData['placa'] ?? 'Placa não informada'),
+        title: Text('${van.marca} ${van.modelo}'), // ⬅️ Corrigido
+        subtitle: Text(van.placa), // ⬅️ Corrigido
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
         onTap: () {
           Navigator.push(
@@ -73,17 +70,28 @@ class _TelaViagemState extends State<TelaViagem> {
     } else {
       // Card para Adicionar Van
       return ListTile(
-        // 🔹 ATUALIZADO: Tamanho do ícone padronizado
         leading: const Icon(Icons.add_circle_outline,
             color: Color(0xFFE53935), size: 40),
         title: const Text('Cadastrar Van'),
         subtitle: const Text('Adicione os dados do seu veículo'),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const CadastrarVanScreen()),
-          );
+          // 🔹 ESTA É A SUA "REGRA 3"
+          if (_currentUser == null) {
+            // Se por algum motivo o usuário não estiver logado,
+            // (embora a TelaMotorista já deva bloquear isso),
+            // nós o enviamos para o cadastro.
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TelaCadastro()),
+            );
+          } else {
+            // Usuário logado, vai para a tela de cadastro da van
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CadastrarVanScreen()),
+            );
+          }
         },
       );
     }
@@ -92,12 +100,12 @@ class _TelaViagemState extends State<TelaViagem> {
   // -----------------------------------------------------------------
   // SEÇÃO 2: GERENCIAMENTO DE ROTAS
   // -----------------------------------------------------------------
-  Widget _buildGerenciamentoRotas(Map<String, dynamic> motoristaData) {
+  // 🔹 ATUALIZADO: Busca da coleção raiz '/rotas'
+  Widget _buildGerenciamentoRotas() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('motoristas')
-          .doc(_uid)
-          .collection('rotas')
+          .collection('rotas') // ⬅️ Corrigido: Coleção Raiz
+          .where('motoristaId', isEqualTo: _currentUser!.uid)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -115,35 +123,28 @@ class _TelaViagemState extends State<TelaViagem> {
           physics: const NeverScrollableScrollPhysics(),
           itemCount: snapshot.data!.docs.length,
           itemBuilder: (context, index) {
-            final doc = snapshot.data!.docs[index];
-            final data = doc.data() as Map<String, dynamic>;
-            final nome = data['nome'] ?? 'Rota sem nome';
-            // 🔹 ATUALIZADO: Mostra o local de destino
-            final localDestino =
-                data['localDestino'] ?? 'Destino não informado';
+            // 🔹 ATUALIZADO: Usa o modelo Rota
+            final rota = Rota.fromSnapshot(snapshot.data!.docs[index]
+                as DocumentSnapshot<Map<String, dynamic>>);
 
-            // 🔹 ATUALIZADO: Lógica para mostrar dias da semana
-            final diasData =
-                (data['diasSemana'] as Map?)?.cast<String, bool>() ?? {};
-            final diasAtivos = diasData.entries
+            final diasAtivos = rota.diasSemana.entries
                 .where((e) => e.value == true)
                 .map((e) => e.key)
                 .join(', ');
             final subtitulo =
-                '$localDestino${diasAtivos.isNotEmpty ? " ($diasAtivos)" : ""}';
+                '${rota.localDestino}${diasAtivos.isNotEmpty ? " ($diasAtivos)" : ""}';
 
             return ListTile(
               leading: const Icon(Icons.route_outlined,
                   color: Color(0xFFE53935), size: 40),
-              title: Text(nome),
+              title: Text(rota.nome),
               subtitle: Text(subtitulo),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    // Envia o ID da rota para a tela de edição
-                    builder: (_) => CriarRotaScreen(rotaId: doc.id),
+                    builder: (_) => CriarRotaScreen(rotaId: rota.id),
                   ),
                 );
               },
@@ -154,29 +155,21 @@ class _TelaViagemState extends State<TelaViagem> {
     );
   }
 
-  // 🔹 ATUALIZADO: Aceita 'motoristaData' para checagem
-  Widget _buildCriarRotaTile(
-      BuildContext context, Map<String, dynamic> motoristaData) {
+  // 🔹 ATUALIZADO: Recebe o objeto 'Van' para checagem
+  Widget _buildCriarRotaTile(BuildContext context, Van? van) {
     return ListTile(
-      // 🔹 ATUALIZADO: Tamanho do ícone padronizado
       leading: const Icon(Icons.add_circle_outline,
           color: Color(0xFFE53935), size: 40),
       title: const Text('Criar Nova Rota'),
       subtitle: const Text('Adicionar um novo trajeto'),
       onTap: () {
-        // 🔹 ATUALIZADO: Verifica se a van está cadastrada ANTES de navegar
-        final veiculo = motoristaData['veiculo'];
-        final vanCadastrada =
-            veiculo != null && veiculo is String && veiculo.isNotEmpty;
-
-        if (vanCadastrada) {
-          // Envia null para o ID, indicando modo de criação
+        // 🔹 ATUALIZADO: Verifica se a van (não 'motoristaData') existe
+        if (van != null) {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const CriarRotaScreen()),
           );
         } else {
-          // 🔹 ATUALIZADO: Mostra aviso se não houver van
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
@@ -192,22 +185,18 @@ class _TelaViagemState extends State<TelaViagem> {
   // -----------------------------------------------------------------
   // SEÇÃO 3: GERENCIAMENTO DE ALUNOS
   // -----------------------------------------------------------------
-  Widget _buildGerenciamentoAlunos(Map<String, dynamic> motoristaData) {
-    final List<String> alunosIds =
-        List<String>.from(motoristaData['alunosIds'] ?? []);
-
+  // 🔹 ATUALIZADO: Recebe a 'listaDeIds' do motorista
+  Widget _buildGerenciamentoAlunos(List<String> alunosIds) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ListTile(
-          // 🔹 ATUALIZADO: Tamanho do ícone padronizado
           leading: const Icon(Icons.people_outline,
               color: Color(0xFFE53935), size: 40),
           title: const Text("Alunos Vinculados"),
           subtitle: const Text("Ver lista de passageiros e solicitações"),
           trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-          // 🔹 ATUALIZADO: Navega para a nova tela
           onTap: () {
             Navigator.push(
               context,
@@ -215,13 +204,13 @@ class _TelaViagemState extends State<TelaViagem> {
             );
           },
         ),
-
         if (alunosIds.isEmpty)
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Center(child: Text("Nenhum aluno vinculado.")),
           )
         else
+          // (O seu StreamBuilder de Alunos aqui estava correto e foi mantido)
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('alunos')
@@ -241,18 +230,18 @@ class _TelaViagemState extends State<TelaViagem> {
                   child: Center(child: Text("Nenhum passageiro encontrado.")),
                 );
               }
-
+              // ... (ListView.builder de alunos)
               return ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: snapshot.data!.docs.length,
                 itemBuilder: (context, index) {
                   final doc = snapshot.data!.docs[index];
-                  final aluno = Aluno.fromMap(
-                      doc.id, doc.data() as Map<String, dynamic>);
-                  final nome = aluno.nome ?? 'Aluno sem nome';
+                  final aluno =
+                      Aluno.fromMap(doc.id, doc.data() as Map<String, dynamic>);
+                  final nome = aluno.nome;
                   final faculdade =
-                      aluno.faculdade ?? 'Faculdade não informada';
+                      aluno.endereco;
 
                   return ListTile(
                     leading: CircleAvatar(
@@ -272,73 +261,119 @@ class _TelaViagemState extends State<TelaViagem> {
 
   @override
   Widget build(BuildContext context) {
-    if (_uid == null) {
-      return const Scaffold(
+  
+    
+    if (_currentUser == null) {
+
+      return Scaffold(
         body: Center(
-          child: Text("Erro: Usuário não está logado."),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text(
+                "Você precisa estar logado para ver esta página.",
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                child: const Text("Ir para Cadastro/Login"),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const TelaCadastro()),
+                  );
+                },
+              )
+            ],
+          ),
         ),
       );
     }
 
+    // O 'build' principal agora busca o Motorista
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('motoristas')
-            .doc(_uid)
+            .doc(_currentUser!.uid) 
             .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+        builder: (context, motoristaSnapshot) {
+          if (motoristaSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (!snapshot.hasData || !snapshot.data!.exists) {
+          if (!motoristaSnapshot.hasData || !motoristaSnapshot.data!.exists) {
             return const Center(
                 child: Text('Erro: Não foi possível carregar o perfil.'));
           }
 
-          final motoristaData = snapshot.data!.data() as Map<String, dynamic>;
+          // 1. Temos o Motorista
+          final motorista = Motorista.fromMap(motoristaSnapshot.data!.id,
+              motoristaSnapshot.data!.data() as Map<String, dynamic>);
+          final vanId = motorista.vanId;
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 🔹 SEÇÃO 1: Gerenciamento da Van
-              _buildSectionTitle(context, 'Gerenciamento do Veículo'),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                margin: const EdgeInsets.symmetric(vertical: 8.0),
-                child: _buildGerenciamentoVan(motoristaData),
-              ),
+          // 2. Agora, buscamos a Van (com um StreamBuilder aninhado)
+          return StreamBuilder<DocumentSnapshot>(
+            stream: vanId != null
+                ? FirebaseFirestore.instance.collection('vans').doc(vanId).snapshots()
+                : null, // Se vanId for nulo, o stream é nulo
+            builder: (context, vanSnapshot) {
+              
+              Van? van; // A van pode ser nula
+              if (vanSnapshot.connectionState == ConnectionState.active &&
+                  vanSnapshot.hasData &&
+                  vanSnapshot.data!.exists) {
+                van = Van.fromSnapshot(
+                    vanSnapshot.data! as DocumentSnapshot<Map<String, dynamic>>);
+              }
+              
+              // Se o 'vanId' existir mas a van ainda estiver carregando
+              if (vanId != null && vanSnapshot.connectionState == ConnectionState.waiting) {
+                 return const Center(child: CircularProgressIndicator());
+              }
 
-              // 🔹 SEÇÃO 2: Gerenciamento de Rotas
-              _buildSectionTitle(context, 'Gerenciamento da Rota'),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                margin: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildGerenciamentoRotas(motoristaData),
-                    const Divider(height: 1),
-                    // 🔹 ATUALIZADO: Passa 'motoristaData'
-                    _buildCriarRotaTile(context, motoristaData),
-                  ],
-                ),
-              ),
+              // 3. Finalmente, construímos a tela
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // SEÇÃO 1: Gerenciamento da Van (passa o objeto 'van' ou null)
+                  _buildSectionTitle(context, 'Gerenciamento do Veículo'),
+                  Card(
+                    clipBehavior: Clip.antiAlias,
+                    margin: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: _buildGerenciamentoVan(van),
+                  ),
 
-              // 🔹 ATUALIZADO: SEÇÃO 3: Gerenciamento de Alunos
-              _buildSectionTitle(context, 'Alunos'),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                margin: const EdgeInsets.symmetric(vertical: 8.0),
-                child: _buildGerenciamentoAlunos(motoristaData),
-              ),
+                  // SEÇÃO 2: Gerenciamento de Rotas
+                  _buildSectionTitle(context, 'Gerenciamento da Rota'),
+                  Card(
+                    clipBehavior: Clip.antiAlias,
+                    margin: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildGerenciamentoRotas(),
+                        const Divider(height: 1),
+                        _buildCriarRotaTile(context, van), // Passa o 'van'
+                      ],
+                    ),
+                  ),
 
-              const SizedBox(height: 80), // Espaço para o footer
-            ],
+                  // SEÇÃO 3: Gerenciamento de Alunos
+                  _buildSectionTitle(context, 'Alunos'),
+                  Card(
+                    clipBehavior: Clip.antiAlias,
+                    margin: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: _buildGerenciamentoAlunos(motorista.alunosIds ?? []),
+                  ),
+
+                  const SizedBox(height: 80), // Espaço para o footer
+                ],
+              );
+            },
           );
         },
       ),
     );
   }
 }
-

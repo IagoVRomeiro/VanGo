@@ -11,6 +11,7 @@ import 'tela_cadastro.dart';
 import 'tela_notificacoes.dart';
 import 'tela_login.dart';
 
+
 class TelaAluno extends StatefulWidget {
   TelaAluno({super.key});
 
@@ -34,7 +35,6 @@ class _TelaAlunoState extends State<TelaAluno> {
     try {
       await FirebaseAuth.instance.signOut();
       if (mounted) {
-        // Redireciona para a TelaLogin
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const TelaLogin()),
           (route) => false,
@@ -64,11 +64,10 @@ class _TelaAlunoState extends State<TelaAluno> {
     );
   }
 
-  // 🎯 CORREÇÃO: Removido o callback onNavigate da chamada PerfilScreen
   void _onItemTapped(int index) {
     final user = FirebaseAuth.instance.currentUser;
 
-    if (user == null && (index == 1 || index == 2)) {
+    if (user == null && (index == 1 || index == 2 || index == 3)) { 
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const TelaLogin()),
@@ -76,20 +75,36 @@ class _TelaAlunoState extends State<TelaAluno> {
       return;
     }
 
-    // Navega para Perfil (índice 2)
     if (index == 2) {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => const PerfilScreen( // 'const' adicionado
-            collectionPath: 'alunos',
-            // ⬅️ onNavigate REMOVIDO
+          builder: (context) => Scaffold(
+            appBar: AppBar(
+              title: const Text('Procurar Motorista'),
+              backgroundColor: Colors.amber,
+              foregroundColor: Colors.white,
+            ),
+            body: const Center(
+              child: Text('Aqui ficará a lista de motoristas para procurar.'),
+            ),
           ),
         ),
       );
-      // Não atualiza o selectedIndex aqui, pois a navegação é para outra tela
-    } else {
-      // Muda a aba para Mapa (0) ou Chat (1)
+     
+    }
+    else if (index == 3) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const PerfilScreen(
+            collectionPath: 'alunos',
+          ),
+        ),
+      );
+    }
+
+    else {
       if (_selectedIndex == index) return;
       setState(() {
         _selectedIndex = index;
@@ -97,7 +112,6 @@ class _TelaAlunoState extends State<TelaAluno> {
     }
   }
 
-  // Helper para definir o título do AppBar
   String _getAppBarTitle(int index) {
     switch (index) {
       case 0:
@@ -105,7 +119,9 @@ class _TelaAlunoState extends State<TelaAluno> {
       case 1:
         return 'Chat com Motorista';
       case 2:
-        return 'Meu Perfil'; // Título antes de navegar
+        return 'Procurar Motorista'; 
+      case 3:
+        return 'Meu Perfil';
       default:
         return _getAppBarTitle(_selectedIndex);
     }
@@ -160,19 +176,22 @@ class _TelaAlunoState extends State<TelaAluno> {
       body: IndexedStack(
         index: _selectedIndex,
         children: [
-          mapaWidget, // Índice 0
-          const AlunoChatWrapper(), // Índice 1
-          // Índice 2 (Perfil) não é mais parte do IndexedStack
+          mapaWidget, 
+          const AlunoChatWrapper(), 
+
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
+        type: BottomNavigationBarType.fixed, 
         items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'), // 0
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'), // 1
+          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'), 
+          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'), 
+          BottomNavigationBarItem( 
+              icon: Icon(Icons.search), label: 'Procurar'), 
           BottomNavigationBarItem(
-              icon: Icon(Icons.person), label: 'Perfil'), // 2
+              icon: Icon(Icons.person), label: 'Perfil'), 
         ],
         selectedItemColor: Colors.amber,
         unselectedItemColor: Colors.grey,
@@ -254,7 +273,6 @@ class _AlunoChatWrapperState extends State<AlunoChatWrapper> {
                   child: Text(data['error'] as String)));
         }
 
-        // Placeholder para TelaChat
         return Center(
             child: Text(
                 "Tela de Chat para ${data['nomeReceptor']} (ID: ${data['chatId']})")); // Placeholder
@@ -262,4 +280,3 @@ class _AlunoChatWrapperState extends State<AlunoChatWrapper> {
     );
   }
 }
-

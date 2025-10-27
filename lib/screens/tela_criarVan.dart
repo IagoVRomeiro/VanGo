@@ -1,15 +1,13 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart'; // 🔹 CORRIGIDO: Importação faltando
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:vango/models/van.dart'; // Seu modelo de Van
-import 'package:image_picker/image_picker.dart'; // Para upload
-import 'package:firebase_storage/firebase_storage.dart'; // Para upload
+import 'package:vango/models/van.dart'; // Seu modelo de Van (que espera 'vanFotoUrl')
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io'; // Para 'File' (mobile)
 import 'package:flutter/foundation.dart' show kIsWeb; // Para 'kIsWeb'
-import 'dart:typed_data'; // 🔹 CORRIGIDO: Era 'dart.typed_data'
-
-// 🔹 REMOVIDO: A extensão StatusVanExtension não é mais necessária aqui
+import 'dart:typed_data';
 
 class CadastrarVanScreen extends StatefulWidget {
   const CadastrarVanScreen({super.key});
@@ -27,14 +25,12 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
   final _anoController = TextEditingController();
   final _capacidadeController = TextEditingController();
   final _corController = TextEditingController();
-  // 🔹 REMOVIDO: _fotoUrlController
 
-  // 🔹 ADICIONADO: Variáveis para o upload de imagem
+  // Variáveis para o upload de imagem
   XFile? _imageFile; // Para mobile
   Uint8List? _imageBytes; // Para web
   bool _isUploading = false; // Para feedback de UI
 
-  // 🔹 REMOVIDO: _docValida e _statusSelecionado
   bool _isLoading = false;
 
   @override
@@ -45,11 +41,10 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     _anoController.dispose();
     _capacidadeController.dispose();
     _corController.dispose();
-    // 🔹 REMOVIDO: _fotoUrlController.dispose()
     super.dispose();
   }
 
-  /// 🔹 ADICIONADO: Função para escolher a imagem
+  /// Função para escolher a imagem
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     final XFile? pickedFile =
@@ -67,7 +62,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     setState(() {}); // Atualiza a UI para mostrar a prévia
   }
 
-  /// 🔹 ADICIONADO: Função para fazer o upload da foto para o Storage
+  /// Função para fazer o upload da foto para o Storage
   /// Retorna a URL do download ou null se nenhuma foto foi escolhida.
   Future<String?> _uploadFoto(String motoristaId, String placa) async {
     // Se nenhuma imagem foi escolhida, retorna nulo
@@ -108,6 +103,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     }
   }
 
+  /// 🔹 FUNÇÃO _salvarVan ATUALIZADA 🔹
   Future<void> _salvarVan() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -140,29 +136,25 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
       ano: int.parse(_anoController.text),
       capacidade: int.parse(_capacidadeController.text),
       cor: _corController.text.trim(),
-      // 🔹 ATUALIZADO: Valores padrão
-      documentacaoValida: true, // Padrão 'true'
       status: StatusVan.disponivel, // Padrão 'disponivel'
       motoristaId: motoristaId,
-      // 🔹 ATUALIZADO: Usa a URL do upload
-      fotoUrl: fotoUrl,
+      
+      // 🔹 CORRIGIDO: Usa o parâmetro 'vanFotoUrl' do modelo Van
+      vanFotoUrl: fotoUrl,
     );
 
     try {
-      // 🔹 ATUALIZADO: Usa .add() para ID automático e .set() no documento do motorista
       // Salva a van na coleção principal 'vans'
       final vanDoc =
           await FirebaseFirestore.instance.collection('vans').add(van.toMap());
 
-      // Salva os dados principais (veiculo, placa, foto) no documento do motorista
-      // para acesso rápido na TelaViagem.
+      // 🔹 CORRIGIDO: Atualiza o motorista APENAS com o ID da van.
+      // Isso evita a duplicação de dados (placa, veiculo, etc.)
+      // que foi o motivo da nossa primeira refatoração.
       await FirebaseFirestore.instance
           .collection('motoristas')
           .doc(motoristaId)
           .update({
-        'veiculo': '${van.marca} ${van.modelo}',
-        'placa': van.placa,
-        'vanFotoUrl': van.fotoUrl,
         'vanId': vanDoc.id, // Salva a referência da van
       });
 
@@ -206,7 +198,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // 🔹 ADICIONADO: Widget de upload de imagem
+                    // Widget de upload de imagem
                     _buildImagePicker(),
                     const SizedBox(height: 16),
                     _buildTextField(_placaController, 'Placa (ex: ABC1D23)'),
@@ -226,10 +218,6 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
                                 keyboardType: TextInputType.number)),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    // 🔹 REMOVIDO: Dropdown de Status
-                    // 🔹 REMOVIDO: Switch de Documentação
-                    // 🔹 REMOVIDO: TextField de URL da Foto
                     const SizedBox(height: 24),
                     ElevatedButton.icon(
                       onPressed: _salvarVan,
@@ -248,7 +236,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     );
   }
 
-  /// 🔹 ADICIONADO: Widget para o seletor de imagem
+  /// Widget para o seletor de imagem
   Widget _buildImagePicker() {
     return Center(
       child: GestureDetector(
@@ -313,6 +301,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     );
   }
 
+  /// Helper para construir os TextFields
   Widget _buildTextField(TextEditingController controller, String label,
       {TextInputType keyboardType = TextInputType.text,
       bool isRequired = true}) {
@@ -340,4 +329,3 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     );
   }
 }
-

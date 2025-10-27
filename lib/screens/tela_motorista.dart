@@ -1,10 +1,13 @@
+// lib/screens/tela_motorista.dart
+
+// 🔹 CORREÇÃO: Imports corrigidos
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 // Imports relativos
 import 'tela_login.dart';
-import 'tela_cadastro.dart';
+import 'tela_cadastro.dart'; // Import necessário para o prompt
 import 'tela_lista_chats.dart';
 import 'tela_perfil.dart';
 import 'tela_viagem.dart';
@@ -12,7 +15,11 @@ import 'tela_gerenciar_alunos.dart';
 import 'tela_notificacoes.dart';
 
 class TelaMotorista extends StatefulWidget {
-  TelaMotorista({super.key});
+  // 🔹 1. ADICIONE O PARÂMETRO
+  final int initialIndex;
+
+  // 🔹 2. ATUALIZE O CONSTRUTOR
+  const TelaMotorista({super.key, this.initialIndex = 0});
 
   @override
   State<TelaMotorista> createState() => _TelaMotoristaState();
@@ -23,11 +30,17 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   final LatLng _initialPosition = const LatLng(-19.9245, -43.9352);
   final Set<Marker> _markers = {};
   final List<LatLng> _alunos = [];
-  int _selectedIndex = 0;
+  
+  // 🔹 3. MUDE COMO O ÍNDICE É DECLARADO
+  late int _selectedIndex; // Remova a inicialização (= 0) daqui
 
   @override
   void initState() {
     super.initState();
+    
+    // 🔹 4. DEFINA O ÍNDICE A PARTIR DO WIDGET
+    _selectedIndex = widget.initialIndex; // Define o índice recebido
+    
     _addMarker(_initialPosition, "Sua Localização");
   }
 
@@ -46,7 +59,6 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     try {
       await FirebaseAuth.instance.signOut();
       if (mounted) {
-        // Redireciona para a TelaLogin, removendo todas as rotas anteriores
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const TelaLogin()),
           (route) => false,
@@ -64,11 +76,10 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     mapController = controller;
   }
 
-  // 🎯 CORREÇÃO: Fluxo revertido para navegação simples sem footer
   void _onItemTapped(int index) {
     final user = FirebaseAuth.instance.currentUser;
     // Checa se está deslogado e tenta acessar abas protegidas
-    if (user == null && (index >= 1 && index <= 4)) {
+    if (user == null && (index >= 1 && index <= 3)) { // 🔹 Corrigido: índice 3 é o último protegido
       Navigator.push(
           context, MaterialPageRoute(builder: (_) => const TelaLogin()));
       return;
@@ -79,9 +90,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => const PerfilScreen( // ⬅️ 'const' adicionado
+          builder: (_) => const PerfilScreen(
             collectionPath: 'motoristas',
-            // ⬅️ 'onNavigate' REMOVIDO
           ),
         ),
       );
@@ -113,10 +123,64 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       case 4:
         return 'Meu Perfil'; // Título antes de navegar
       default:
-        // Se _selectedIndex for inválido (raro), volta para o Mapa
+        setState(() => _selectedIndex = 0); // Corrige índice inválido
         return 'Mapa do Motorista';
     }
   }
+
+  // 🔹 Widget de placeholder para convidados
+  Widget _buildLoginPromptWidget(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.lock_outline_rounded, size: 90, color: Colors.grey),
+            const SizedBox(height: 24),
+            const Text(
+              'Funcionalidade Exclusiva para Motoristas',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Faça login ou crie uma conta para gerenciar suas viagens e alunos.',
+              style: TextStyle(fontSize: 16, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE53935),
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TelaLogin()),
+                );
+              },
+              child: const Text('Fazer Login'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TelaCadastro()),
+                );
+              },
+              child: const Text('Não tenho uma conta (Criar)'),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +211,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
                 tooltip: 'Sair',
                 onPressed: _logout,
               )
-            : IconButton( // Fallback se não estiver logado
+            : IconButton(
                 icon: const Icon(Icons.arrow_back),
                 tooltip: 'Voltar',
                 onPressed: () => Navigator.of(context).pop(),
@@ -165,14 +229,24 @@ class _TelaMotoristaState extends State<TelaMotorista> {
           ),
         ],
       ),
+      // 🔹 BODY ATUALIZADO (para proteger abas no modo convidado)
       body: IndexedStack(
         index: _selectedIndex,
         children: [
           mapaWidget, // Índice 0
-          const TelaViagem(), // Índice 1
-          const TelaGerenciarAlunos(), // Índice 2
-          const TelaListaChats(), // Índice 3
-          // Índice 4 (Perfil) não fica aqui, é navegado
+          
+          // Índice 1 (Protegido)
+          user != null ? const TelaViagem() : _buildLoginPromptWidget(context), 
+          
+          // Índice 2 (Protegido)
+          user != null ? const TelaGerenciarAlunos() : _buildLoginPromptWidget(context), 
+          
+          // Índice 3 (Protegido)
+          user != null ? const TelaListaChats() : _buildLoginPromptWidget(context),
+          
+          // Índice 4 (Perfil) é tratado por _onItemTapped, 
+          // mas adicionamos um placeholder caso o índice seja 4 por engano
+          _buildLoginPromptWidget(context),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -195,4 +269,3 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     );
   }
 }
-

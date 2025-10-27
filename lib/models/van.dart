@@ -1,7 +1,6 @@
 // lib/models/van.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// 1. Colocamos o ENUM aqui para que ele seja importado junto com a classe Van.
 enum StatusVan {
   disponivel,
   emManutencao,
@@ -17,7 +16,6 @@ enum StatusVan {
 }
 
 class Van {
-  // 2. Garantimos que ID, MARCA e MODELO existem.
   final String id;
   final String placa;
   final String marca;
@@ -25,14 +23,15 @@ class Van {
   final String cor;
   final int ano;
   final int capacidade;
-  final bool documentacaoValida;
   final StatusVan status;
-  final String motoristaId;
-  final String? fotoUrl;
+  final String motoristaId; // <-- Ótimo, FK para o motorista
   final Timestamp? criadoEm;
 
+  // 🔹 RENOMEADO: 'fotoUrl' para 'vanFotoUrl'
+  // Para diferenciar da 'fotoUrl' do usuário na classe 'Usuario'.
+  final String? vanFotoUrl;
+
   Van({
-    // Adicionamos os campos que faltavam ao construtor
     required this.id,
     required this.placa,
     required this.marca,
@@ -40,10 +39,9 @@ class Van {
     required this.ano,
     required this.capacidade,
     required this.cor,
-    required this.documentacaoValida,
     required this.status,
     required this.motoristaId,
-    this.fotoUrl,
+    this.vanFotoUrl, 
     this.criadoEm,
   });
 
@@ -55,10 +53,9 @@ class Van {
       'ano': ano,
       'capacidade': capacidade,
       'cor': cor,
-      'documentacaoValida': documentacaoValida,
       'status': status.name,
       'motoristaId': motoristaId,
-      'fotoUrl': fotoUrl,
+      'vanFotoUrl': vanFotoUrl, 
       'criadoEm': criadoEm ?? FieldValue.serverTimestamp(),
     };
   }
@@ -68,17 +65,16 @@ class Van {
     if (data == null) throw Exception("Documento da van não encontrado ou está vazio.");
 
     return Van(
-      id: snapshot.id, // O ID do documento
+      id: snapshot.id,
       placa: data['placa'] ?? '',
       marca: data['marca'] ?? '',
       modelo: data['modelo'] ?? '',
       ano: data['ano'] ?? DateTime.now().year,
       capacidade: data['capacidade'] ?? 0,
       cor: data['cor'] ?? '',
-      documentacaoValida: data['documentacaoValida'] ?? false,
       status: StatusVan.fromString(data['status']),
       motoristaId: data['motoristaId'] ?? '',
-      fotoUrl: data['fotoUrl'],
+      vanFotoUrl: data['vanFotoUrl'],
       criadoEm: data['criadoEm'],
     );
   }

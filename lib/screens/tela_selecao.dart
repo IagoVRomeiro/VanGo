@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart'; // Importa para usar TapGestureRecognizer
+import 'package:flutter/gestures.dart';
 
 import '../widgets/botao_selecao_perfil.dart';
 import 'tela_motorista.dart';
-import 'tela_aluno.dart';
+// import 'tela_busca_motorista.dart'; // ⬅️ Este import não é mais necessário aqui
+import 'tela_aluno.dart'; // ⬅️ 1. ADICIONAR ESTE IMPORT
 import 'tela_sobre_carrossel.dart';
-import 'tela_login.dart'; // ⬅️ IMPORTA A TELA DE LOGIN
+import 'tela_login.dart';
 
 class TelaSelecao extends StatelessWidget {
   const TelaSelecao({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // 
+    // O código anterior estava em falta destas definições de constantes
+    // 
     const Color corVermelhaPrincipal = Color(0xFFE53935);
     const Color fundoBotaoEscuro = Color(0xFF2d2d2d);
     const Color fundoBotaoAmarelo = Color(0xFFFFB300);
@@ -23,7 +27,7 @@ class TelaSelecao extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: corVermelhaPrincipal,
         elevation: 0,
-        automaticallyImplyLeading: false, // Remove botão de voltar automático
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline, color: corBranca),
@@ -59,8 +63,13 @@ class TelaSelecao extends StatelessWidget {
                   corDeFundo: fundoBotaoEscuro,
                   corDoTexto: corBranca,
                   aoPressionar: () {
-                    // Navega para a tela de login antes de decidir o destino
-                    Navigator.pushNamed(context, '/login', arguments: {'role': 'motorista'});
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            const TelaMotorista(initialIndex: 0),
+                      ),
+                    );
                   },
                 ),
                 const SizedBox(height: 24),
@@ -70,13 +79,16 @@ class TelaSelecao extends StatelessWidget {
                   corDeFundo: fundoBotaoAmarelo,
                   corDoTexto: corTextoEscuro,
                   aoPressionar: () {
-                     // Navega para a tela de login antes de decidir o destino
-                    Navigator.pushNamed(context, '/login', arguments: {'role': 'aluno'});
+                    // 🔹 CORRIGIDO: Navega para a tela de Aluno
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TelaAluno(), // ⬅️ 2. MUDADO AQUI
+                      ),
+                    );
                   },
                 ),
                 const SizedBox(height: 40), // Espaço antes do link de login
-
-                // 🎯 ADICIONADO: Link para a Tela de Login
                 Center(
                   child: RichText(
                     text: TextSpan(
@@ -86,14 +98,18 @@ class TelaSelecao extends StatelessWidget {
                         TextSpan(
                           text: 'Faça Login',
                           style: const TextStyle(
-                            color: fundoBotaoAmarelo, // Usa a cor amarela para destaque
+                            color: fundoBotaoAmarelo, // Destaque
                             fontWeight: FontWeight.bold,
                             decoration: TextDecoration.underline,
                           ),
                           recognizer: TapGestureRecognizer()
                             ..onTap = () {
                               // Navega diretamente para a tela de login
-                              Navigator.pushNamed(context, '/login');
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => const TelaLogin()),
+                              );
                             },
                         ),
                       ],
@@ -108,3 +124,4 @@ class TelaSelecao extends StatelessWidget {
     );
   }
 }
+

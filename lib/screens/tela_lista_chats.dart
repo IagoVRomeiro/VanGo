@@ -5,8 +5,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-// Imports relativos (supondo que já estejam corrigidos no seu projeto)
 import '../models/aluno.dart';
+// 🔹 IMPORT NECESSÁRIO (para o 'Usuario' se você quiser usar o modelo)
+// import '../models/usuario.dart'; 
 import 'tela_chat.dart';
 
 class TelaListaChats extends StatelessWidget {
@@ -46,34 +47,49 @@ class TelaListaChats extends StatelessWidget {
             final alunoId = participants.firstWhere((id) => id != motoristaId);
             final lastMessage = chat['lastMessage'] as Map<String, dynamic>? ?? {};
 
-            return FutureBuilder<DocumentSnapshot>(
-              future: FirebaseFirestore.instance.collection('alunos').doc(alunoId).get(),
-              builder: (context, alunoSnapshot) {
-                if (!alunoSnapshot.hasData) {
+            // 🔹 CORREÇÃO: Busca os dois documentos (aluno e usuário)
+            return FutureBuilder<List<DocumentSnapshot>>(
+              future: Future.wait([
+                FirebaseFirestore.instance.collection('alunos').doc(alunoId).get(),
+                FirebaseFirestore.instance.collection('users').doc(alunoId).get(),
+              ]),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
                   return const ListTile(title: Text('Carregando conversa...'));
                 }
 
-                if (!alunoSnapshot.data!.exists || alunoSnapshot.data!.data() == null) {
-                  return const ListTile(title: Text('Aluno não encontrado'));
+                if (snapshot.data == null || snapshot.data!.length < 2) {
+                  return const ListTile(title: Text('Erro ao carregar dados.'));
                 }
 
-                // ✅✅✅ A ÚNICA LINHA CORRIGIDA ESTÁ AQUI ✅✅✅
-                // Passamos o ID do documento e os dados para o método fromMap.
+                final alunoSnapshot = snapshot.data![0];
+                final userSnapshot = snapshot.data![1]; // ⬅️ Doc do 'users'
+
+                if (!alunoSnapshot.exists || !userSnapshot.exists) {
+                  return const ListTile(title: Text('Aluno ou usuário não encontrado'));
+                }
+
+                // Dados do Aluno
                 final aluno = Aluno.fromMap(
-                  alunoSnapshot.data!.id,
-                  alunoSnapshot.data!.data() as Map<String, dynamic>
+                  alunoSnapshot.id,
+                  alunoSnapshot.data() as Map<String, dynamic>
                 );
                 
+                // 🔹 CORREÇÃO: Pega a foto do 'userSnapshot'
+                final userData = userSnapshot.data() as Map<String, dynamic>;
+                final String? fotoUrl = userData['fotoUrl'];
+
                 final timestamp = lastMessage['timestamp'] as Timestamp?;
 
                 return Card(
                   margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: ListTile(
+                    // 🔹 CORREÇÃO: Usa a variável 'fotoUrl'
                     leading: CircleAvatar(
-                      backgroundImage: aluno.fotoUrl != null && aluno.fotoUrl!.isNotEmpty
-                          ? NetworkImage(aluno.fotoUrl!)
+                      backgroundImage: fotoUrl != null && fotoUrl.isNotEmpty
+                          ? NetworkImage(fotoUrl)
                           : null,
-                      child: aluno.fotoUrl == null || aluno.fotoUrl!.isEmpty
+                      child: fotoUrl == null || fotoUrl.isEmpty
                           ? Text(aluno.nome.isNotEmpty ? aluno.nome[0].toUpperCase() : '?')
                           : null,
                     ),

@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ⬅️ Correto
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/aluno.dart'; // Importa o modelo Aluno
@@ -180,7 +180,8 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirmar Desvinculação'),
-        content: const Text('Tem certeza que deseja desvincular este aluno? O contrato será removido.'),
+        content: const Text(
+            'Tem certeza que deseja desvincular este aluno? O contrato será removido.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -188,7 +189,8 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Desvincular', style: TextStyle(color: Colors.red)),
+            child:
+                const Text('Desvincular', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -207,7 +209,8 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
 
         // 2. Remove o 'motoristaId' do documento do aluno
         final alunoRef = _firestore.collection('alunos').doc(alunoId);
-        transaction.update(alunoRef, {'motoristaId': FieldValue.delete()}); // Remove o campo
+        transaction
+            .update(alunoRef, {'motoristaId': FieldValue.delete()}); // Remove o campo
 
         // 3. Encontra e deleta o contrato aprovado entre eles
         final contratoQuery = await _firestore
@@ -340,7 +343,8 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(16.0),
-              child: Text('Nenhum aluno vinculado no momento.'), // 🔹 TEXTO ALTERADO
+              child: Text(
+                  'Nenhum aluno vinculado no momento.'), // 🔹 TEXTO ALTERADO
             ),
           );
         }
@@ -371,16 +375,14 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 4.0),
                   child: ListTile(
-                    title: Text(aluno.nome ?? 'Aluno sem nome'),
-                    subtitle:
-                        Text(aluno.faculdade ?? 'Faculdade não informada'),
+                    title: Text(aluno.nome), // 🔹 CORRIGIDO
+                    subtitle: Text(aluno.endereco), // 🔹 CORRIGIDO
                     // 🔹 BOTÕES ALTERADOS: Agora mostra botão de desvincular
                     trailing: IconButton(
-                          icon:
-                              const Icon(Icons.link_off, color: Colors.grey),
-                          tooltip: 'Desvincular Aluno',
-                          onPressed: () => _desvincularAluno(alunoId),
-                        ),
+                      icon: const Icon(Icons.link_off, color: Colors.grey),
+                      tooltip: 'Desvincular Aluno',
+                      onPressed: () => _desvincularAluno(alunoId),
+                    ),
                   ),
                 );
               },
@@ -439,16 +441,15 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 4.0),
                   child: ListTile(
-                    title: Text(aluno.nome ?? 'Aluno sem nome'),
-                    subtitle:
-                        Text(aluno.faculdade ?? 'Faculdade não informada'),
+                    title: Text(aluno.nome), // 🔹 CORRIGIDO
+                    subtitle: Text(aluno.endereco), // 🔹 CORRIGIDO
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Chip(label: Text('Pendente')),
                         IconButton(
-                          icon:
-                              const Icon(Icons.delete_outline, color: Colors.grey),
+                          icon: const Icon(Icons.delete_outline,
+                              color: Colors.grey),
                           tooltip: 'Cancelar Convite',
                           // Usa a mesma lógica de recusar solicitação para cancelar
                           onPressed: () => _recusarSolicitacao(contratoId),
@@ -466,4 +467,3 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
   }
   // Fim do widget de convites enviados
 }
-

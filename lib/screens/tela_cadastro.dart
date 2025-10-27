@@ -1,3 +1,4 @@
+// lib/screens/tela_cadastro.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/gestures.dart';
@@ -5,13 +6,12 @@ import 'package:flutter/material.dart';
 
 // Imports relativos
 import '../models/aluno.dart';
-import '../models/motorista.dart';
+import '../models/motorista.dart'; // ⬅️ Precisa do enum StatusMotorista
 import '../models/usuario.dart';
 import 'tela_login.dart';
 
-import 'tela_motorista.dart'; // ⬅️ IMPORT CORRIGIDO: Tela do Motorista
-import 'tela_aluno.dart';    // ⬅️ IMPORT CORRIGIDO: Tela do Aluno
-
+import 'tela_motorista.dart';
+import 'tela_aluno.dart';
 
 enum TipoUsuario { motorista, aluno }
 
@@ -41,76 +41,71 @@ class _TelaCadastroState extends State<TelaCadastro> {
   }
 
   Future<void> _criarConta() async {
-  if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => const Center(child: CircularProgressIndicator()),
-  );
-
-  try {
-    final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-      email: _emailController.text.trim(),
-      password: _senhaController.text.trim(),
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
-    final user = cred.user;
 
-    if (user != null) {
-      final batch = FirebaseFirestore.instance.batch();
-      _criarRegistroUsuario(batch, user);
-
-      if (_tipoUsuarioSelecionado == TipoUsuario.motorista) {
-        _salvarMotorista(batch, user);
-      } else {
-        _salvarAluno(batch, user);
-      }
-
-      await batch.commit();
-    }
-
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Conta criada com sucesso!'),
-          backgroundColor: Colors.green,
-        ),
+    try {
+      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _senhaController.text.trim(),
       );
+      final user = cred.user;
 
-      // 💥 LÓGICA DE REDIRECIONAMENTO CONDICIONAL E SEM 'CONST'
-      if (_tipoUsuarioSelecionado == TipoUsuario.motorista) {
-        Navigator.pushReplacement(
-          context,
-          // Agora o construtor é chamado corretamente, sem 'const'
-          MaterialPageRoute(builder: (_) =>  TelaMotorista()),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          // Agora o construtor é chamado corretamente, sem 'const'
-          MaterialPageRoute(builder: (_) =>  TelaAluno()),
-        );
+      if (user != null) {
+        await user.updateDisplayName(_nomeController.text.trim());
+
+        final batch = FirebaseFirestore.instance.batch();
+        _criarRegistroUsuario(batch, user);
+
+        if (_tipoUsuarioSelecionado == TipoUsuario.motorista) {
+          _salvarMotorista(batch, user);
+        } else {
+          _salvarAluno(batch, user);
+        }
+        await batch.commit();
       }
-    }
-  } on FirebaseAuthException catch (e) {
-    if (mounted) Navigator.pop(context);
-    
-    String errorMessage;
-    if (e.code == 'email-already-in-use') {
-      errorMessage =
-          'Este e-mail já está em uso. Tente fazer o login.';
-    } else {
-      errorMessage = e.message ?? 'Ocorreu um erro de autenticação inesperado.';
-    }
 
-    _mostrarErro(errorMessage);
+      if (mounted) {
+        Navigator.pop(context); // Fecha o loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Conta criada com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
+        );
 
-  } catch (e) {
-    if (mounted) Navigator.pop(context);
-    _mostrarErro('Ocorreu um erro ao salvar os dados: $e');
+        if (_tipoUsuarioSelecionado == TipoUsuario.motorista) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => TelaMotorista()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => TelaAluno()),
+          );
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) Navigator.pop(context); // Fecha o loading
+
+      String errorMessage;
+      if (e.code == 'email-already-in-use') {
+        errorMessage = 'Este e-mail já está em uso. Tente fazer o login.';
+      } else {
+        errorMessage = e.message ?? 'Ocorreu um erro de autenticação inesperado.';
+      }
+      _mostrarErro(errorMessage);
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Fecha o loading
+      _mostrarErro('Ocorreu um erro ao salvar os dados: $e');
+    }
   }
-}
 
   void _criarRegistroUsuario(WriteBatch batch, User user) {
     final userDocRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
@@ -121,12 +116,14 @@ class _TelaCadastroState extends State<TelaCadastro> {
           ? UserRole.motorista
           : UserRole.aluno,
       criadoEm: Timestamp.now(),
+      // fotoUrl: null, // fotoUrl é opcional e será nula por padrão
     );
     batch.set(userDocRef, novoUsuario.toMap());
   }
 
   void _salvarMotorista(WriteBatch batch, User user) {
-    final motoristaDocRef = FirebaseFirestore.instance.collection('motoristas').doc(user.uid);
+    final motoristaDocRef =
+        FirebaseFirestore.instance.collection('motoristas').doc(user.uid);
     final novoMotorista = Motorista(
       id: user.uid,
       nome: _nomeController.text.trim(),
@@ -136,7 +133,10 @@ class _TelaCadastroState extends State<TelaCadastro> {
       telefone: '',
       endereco: '',
       avaliacao: 0.0,
-      status: StatusMotorista.indisponivel,
+      // 🔹 CORREÇÃO AQUI 🔹
+      // Trocamos 'indisponivel' por 'indefinido'
+      status: StatusMotorista.indefinido,
+      // fotoUrl, vanId, alunosIds são nulos por padrão
     );
     batch.set(motoristaDocRef, novoMotorista.toMap());
   }
@@ -148,11 +148,8 @@ class _TelaCadastroState extends State<TelaCadastro> {
       nome: _nomeController.text.trim(),
       motoristaId: null,
       endereco: '',
-      localizacao: GeoPoint(0, 0),
-      faculdade: '',
-      horarioEntrada: '',
-      horarioSaida: '',
-      statusPresenca: StatusPresenca.desconhecido,
+      localizacao: const GeoPoint(0, 0),
+    statusPresenca: StatusPresenca.ausente,
     );
     batch.set(alunoDocRef, novoAluno.toMap());
   }
@@ -165,6 +162,9 @@ class _TelaCadastroState extends State<TelaCadastro> {
       ),
     );
   }
+
+  // (O restante do seu widget build, _campoTexto, _botaoPrincipal, etc. 
+  //  está correto e não precisa de mudanças)
 
   @override
   Widget build(BuildContext context) {
@@ -184,24 +184,34 @@ class _TelaCadastroState extends State<TelaCadastro> {
               child: Column(
                 children: [
                   const SizedBox(height: 40),
-                  // 🎯 CORREÇÃO: Restaurando o uso de Image.asset com o caminho confirmado
                   SizedBox(
                     height: 100,
-                    child: Image.asset('assets/images/vgo_logo.png'), 
+                    child: Image.asset('assets/images/vgo_logo.png'),
                   ),
                   const SizedBox(height: 40),
-                  const Text('Criar Conta', style: TextStyle(color: branco, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  const Text('Criar Conta',
+                      style: TextStyle(
+                          color: branco,
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1)),
                   const SizedBox(height: 30),
                   Container(
-                    decoration: BoxDecoration(color: fundoEscuro, borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(
+                        color: fundoEscuro,
+                        borderRadius: BorderRadius.circular(10)),
                     padding: const EdgeInsets.all(4),
                     child: SegmentedButton<TipoUsuario>(
                       segments: const [
-                        ButtonSegment(value: TipoUsuario.motorista, label: Text('Sou Motorista')),
-                        ButtonSegment(value: TipoUsuario.aluno, label: Text('Sou Aluno')),
+                        ButtonSegment(
+                            value: TipoUsuario.motorista,
+                            label: Text('Sou Motorista')),
+                        ButtonSegment(
+                            value: TipoUsuario.aluno, label: Text('Sou Aluno')),
                       ],
                       selected: {_tipoUsuarioSelecionado},
-                      onSelectionChanged: (s) => setState(() => _tipoUsuarioSelecionado = s.first),
+                      onSelectionChanged: (s) =>
+                          setState(() => _tipoUsuarioSelecionado = s.first),
                       style: SegmentedButton.styleFrom(
                         backgroundColor: fundoEscuro,
                         foregroundColor: branco,
@@ -229,6 +239,7 @@ class _TelaCadastroState extends State<TelaCadastro> {
                     dica: 'Crie uma senha',
                     icone: Icons.lock_outline,
                     isPassword: true,
+                   
                   ),
                   const SizedBox(height: 30),
                   SizedBox(
@@ -249,12 +260,14 @@ class _TelaCadastroState extends State<TelaCadastro> {
                         const TextSpan(text: 'Já tem uma conta? '),
                         TextSpan(
                           text: 'Faça login',
-                          style: const TextStyle(color: amareloBotao, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                              color: amareloBotao, fontWeight: FontWeight.bold),
                           recognizer: TapGestureRecognizer()
                             ..onTap = () {
                               Navigator.pushReplacement(
                                 context,
-                                MaterialPageRoute(builder: (_) => const TelaLogin()),
+                                MaterialPageRoute(
+                                    builder: (_) => const TelaLogin()),
                               );
                             },
                         ),
@@ -294,16 +307,21 @@ class _TelaCadastroState extends State<TelaCadastro> {
         ),
         suffixIcon: isPassword
             ? IconButton(
-                icon: Icon(_senhaVisivel ? Icons.visibility_off : Icons.visibility, color: Colors.white.withOpacity(0.7)),
+                icon: Icon(
+                    _senhaVisivel ? Icons.visibility_off : Icons.visibility,
+                    color: Colors.white.withOpacity(0.7)),
                 onPressed: () => setState(() => _senhaVisivel = !_senhaVisivel),
               )
             : null,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
       ),
       validator: (v) {
         if (v == null || v.isEmpty) return 'Campo obrigatório';
-        if (keyboardType == TextInputType.emailAddress && !v.contains('@')) return 'E-mail inválido';
+        if (keyboardType == TextInputType.emailAddress && !v.contains('@'))
+          return 'E-mail inválido';
         return null;
       },
     );
@@ -323,7 +341,12 @@ class _TelaCadastroState extends State<TelaCadastro> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         elevation: 5,
       ),
-      child: Text(texto, style: TextStyle(color: corDoTexto, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+      child: Text(texto,
+          style: TextStyle(
+              color: corDoTexto,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.1)),
     );
   }
 }

@@ -1,17 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// (Enum StatusMotorista aqui...)
 enum StatusMotorista {
   disponivel,
   emRota,
-  indisponivel;
+  indefinido;
 
   static StatusMotorista fromString(String? status) {
     return StatusMotorista.values.firstWhere(
       (e) => e.name == status,
-      orElse: () => StatusMotorista.indisponivel,
+      orElse: () => StatusMotorista.indefinido,
     );
   }
 }
+
 
 class Motorista {
   final String id;
@@ -23,11 +25,9 @@ class Motorista {
   final String endereco;
   final double avaliacao;
   final StatusMotorista status;
-  final String? fotoUrl;
-  final String? veiculo;
   final Timestamp? criadoEm;
-  // 🔹 ADICIONADO: Lista de IDs de alunos vinculados
   final List<String>? alunosIds;
+  final String? vanId; 
 
   Motorista({
     required this.id,
@@ -39,11 +39,9 @@ class Motorista {
     required this.endereco,
     required this.avaliacao,
     required this.status,
-    this.fotoUrl,
-    this.veiculo,
     this.criadoEm,
-    // 🔹 ADICIONADO
     this.alunosIds,
+    this.vanId,
   });
 
   Map<String, dynamic> toMap() {
@@ -56,11 +54,9 @@ class Motorista {
       'endereco': endereco,
       'avaliacao': avaliacao,
       'status': status.name,
-      'fotoUrl': fotoUrl,
-      'veiculo': veiculo,
       'criadoEm': criadoEm ?? FieldValue.serverTimestamp(),
-      // 🔹 ADICIONADO
       'alunosIds': alunosIds ?? [],
+      'vanId': vanId, 
     };
   }
 
@@ -76,12 +72,9 @@ class Motorista {
       endereco: data['endereco'] ?? '',
       avaliacao: (data['avaliacao'] as num?)?.toDouble() ?? 0.0,
       status: StatusMotorista.fromString(data['status']),
-      fotoUrl: data['fotoUrl'],
-      veiculo: data['veiculo'],
       criadoEm: data['criadoEm'],
-      // 🔹 ADICIONADO: Converte o campo do Firestore para uma lista de Strings
       alunosIds: List<String>.from(data['alunosIds'] ?? []),
+      vanId: data['vanId'], 
     );
   }
 }
-

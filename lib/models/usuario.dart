@@ -21,12 +21,14 @@ class Usuario {
   final String id;        // UID do Firebase Auth
   final String email;
   final UserRole role;
+  final String? fotoUrl; // 🔹 ADICIONADO
   final Timestamp? criadoEm;
 
   const Usuario({
     required this.id,
     required this.email,
     required this.role,
+    this.fotoUrl, // 🔹 ADICIONADO
     this.criadoEm,
   });
 
@@ -35,6 +37,7 @@ class Usuario {
     return {
       'email': email,
       'role': role.name,
+      'fotoUrl': fotoUrl, // 🔹 ADICIONADO
       'criadoEm': criadoEm ?? FieldValue.serverTimestamp(),
     };
   }
@@ -50,6 +53,7 @@ class Usuario {
       id: snapshot.id,
       email: data['email'] ?? '',
       role: UserRole.fromString(data['role']),
+      fotoUrl: data['fotoUrl'], 
       criadoEm: data['criadoEm'],
     );
   }
