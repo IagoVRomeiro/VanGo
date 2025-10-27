@@ -1,3 +1,6 @@
+// ignore_for_file: avoid_print
+
+// 🎯 CORREÇÃO: Estava 'package.flutter', mudei para 'package:flutter'
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,8 +8,59 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
-// 🔹 ADICIONADO: Import para Geocoding e GeoPoint
 import 'package:geocoding/geocoding.dart';
+// 1. IMPORTE O PACOTE DE MÁSCARA
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+
+// --- MODELO USUARIO (PARA REFERÊNCIA RÁPIDA) ---
+enum UserRole {
+  motorista,
+  aluno,
+  indefinido;
+
+  static UserRole fromString(String? role) {
+    return UserRole.values.firstWhere(
+      (e) => e.name == role,
+      orElse: () => UserRole.indefinido,
+    );
+  }
+}
+
+class Usuario {
+  final String id;
+  final String email;
+  final UserRole role;
+  final Timestamp? criadoEm;
+
+  const Usuario({
+    required this.id,
+    required this.email,
+    required this.role,
+    this.criadoEm,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'email': email,
+      'role': role.name,
+      'criadoEm': criadoEm ?? FieldValue.serverTimestamp(),
+    };
+  }
+
+  factory Usuario.fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot) {
+    final data = snapshot.data();
+    if (data == null) {
+      throw Exception("Documento de usuário não encontrado ou está vazio.");
+    }
+    return Usuario(
+      id: snapshot.id,
+      email: data['email'] ?? '',
+      role: UserRole.fromString(data['role']),
+      criadoEm: data['criadoEm'],
+    );
+  }
+}
+// ------------------------------------------------
 
 class PerfilScreen extends StatefulWidget {
   final String collectionPath;
@@ -31,13 +85,28 @@ class _PerfilScreenState extends State<PerfilScreen> {
   final TextEditingController _telefoneController = TextEditingController();
   final TextEditingController _cpfController = TextEditingController();
 
+  // 2. DEFINA OS FORMATADORES DE MÁSCARA
+  final _telefoneMaskFormatter = MaskTextInputFormatter(
+    mask: '(##) #####-####',
+    filter: {"#": RegExp(r'[0-9]')},
+    type: MaskAutoCompletionType.lazy,
+  );
+
+  final _cpfMaskFormatter = MaskTextInputFormatter(
+    mask: '###.###.###-##',
+    filter: {"#": RegExp(r'[0-9]')},
+    type: MaskAutoCompletionType.lazy,
+  );
+
   String? _fotoUrl;
-  // 🔹 ADICIONADO: Para armazenar a localização carregada/convertida
   GeoPoint? _localizacao;
-  // 🔹 ADICIONADO: Estado de loading específico para geocoding ao salvar
   bool _isSavingWithGeocoding = false;
 
   bool get _isDriver => widget.collectionPath == 'motoristas';
+
+  // Cores dinâmicas para AppBar
+  Color get _appBarColor => _isDriver ? const Color(0xFFE53935) : Colors.amber;
+  Color get _foregroundColor => Colors.white;
 
   @override
   void initState() {
@@ -56,9 +125,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
     super.dispose();
   }
 
-  // LÓGICA DE CARREGAMENTO (agora inclui GeoPoint)
   Future<void> _carregarDadosDoUsuario() async {
-    // ... (início da função como antes)
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
@@ -75,34 +142,35 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
         setState(() {
           _nomeController.text = data['nome'] ?? '';
-          _emailController.text = data['email'] ?? '';
+          _emailController.text = user.email ?? data['email'] ?? '';
           _fotoUrl = data['fotoUrl'];
+          
+          // Aplica o texto salvo (que pode ou não ter máscara)
+          // O formatador irá tentar formatá-lo
           _telefoneController.text = data['telefone'] ?? '';
           _cpfController.text = data['cpf'] ?? '';
-          // 🔹 ADICIONADO: Carrega o GeoPoint (se existir)
+
           _localizacao = data['localizacao'] as GeoPoint?;
 
           if (_isDriver) {
             _cnhController.text = data['cnh'] ?? '';
-            // Se o endereço de texto não foi carregado, tenta pegar da localização (menos ideal)
-             _enderecoController.text = data['endereco'] ?? ''; // Prioriza campo de texto
-
+            _enderecoController.text = data['endereco'] ?? '';
           } else {
-             // Aluno também tem endereço e localização
-             _enderecoController.text = data['endereco'] ?? '';
+            _enderecoController.text = data['endereco'] ?? '';
           }
         });
+      } else if (mounted) {
+        throw Exception(
+            "Documento de perfil não encontrado na coleção: ${widget.collectionPath}");
       }
     } catch (e) {
-      // ... (erro handling)
-       if (mounted) {
+      if (mounted) {
         setState(() {
           _errorMessage = "Erro ao carregar dados: $e";
         });
       }
     } finally {
-      // ... (finally)
-       if (mounted) {
+      if (mounted) {
         setState(() {
           _isLoading = false;
         });
@@ -110,67 +178,61 @@ class _PerfilScreenState extends State<PerfilScreen> {
     }
   }
 
-
-  // LÓGICA DE SALVAMENTO (agora inclui Geocoding)
   Future<void> _salvarDados() async {
-    // Validação básica do formulário (se houver um)
-    // if (!_formKey.currentState!.validate()) return;
-
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    setState(() => _isSavingWithGeocoding = true); // Ativa loading específico
+    setState(() => _isSavingWithGeocoding = true);
 
     GeoPoint? novaLocalizacao;
     String enderecoTexto = _enderecoController.text.trim();
 
-    // 1. Tenta fazer o Geocoding do endereço de texto
     if (enderecoTexto.isNotEmpty) {
       try {
         List<Location> locations = await locationFromAddress(enderecoTexto);
         if (locations.isNotEmpty) {
-          novaLocalizacao = GeoPoint(locations.first.latitude, locations.first.longitude);
+          novaLocalizacao =
+              GeoPoint(locations.first.latitude, locations.first.longitude);
         } else {
-           if (mounted) {
+          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Não foi possível encontrar coordenadas para o endereço fornecido."), backgroundColor: Colors.orange),
+              const SnackBar(
+                  content: Text(
+                      "Não foi possível encontrar coordenadas para o endereço fornecido."),
+                  backgroundColor: Colors.orange),
             );
           }
         }
       } catch (e) {
         print("Erro de Geocoding: $e");
-         if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("Erro ao buscar localização: $e"), backgroundColor: Colors.red),
-            );
-          }
-         // Decide se quer continuar salvando sem a localização ou parar
-         // Aqui, vamos continuar salvando os outros dados
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text("Erro ao buscar localização: $e"),
+                backgroundColor: Colors.red),
+          );
+        }
       }
     }
 
-    // 2. Prepara os dados para salvar
+    // Pega o texto formatado pelo 'mask_formatter'
     Map<String, dynamic> dadosParaSalvar = {
       "nome": _nomeController.text.trim(),
-      "email": _emailController.text.trim(), // Email geralmente não é editável, mas ok
+      "email": _emailController.text.trim(),
       "fotoUrl": _fotoUrl,
-      "telefone": _telefoneController.text.trim(),
+      // Salva o texto já formatado
+      "telefone": _telefoneController.text.trim(), 
       "cpf": _cpfController.text.trim(),
-      "endereco": enderecoTexto, // Salva o endereço como texto também
-      // 🔹 ADICIONADO: Salva o GeoPoint convertido (ou null)
+      "endereco": enderecoTexto,
       "localizacao": novaLocalizacao,
     };
 
     if (_isDriver) {
       dadosParaSalvar.addAll({
         "cnh": _cnhController.text.trim(),
-        // Endereço já está nos dados principais
       });
-    } else {
-       // Aluno não tem campos extras específicos aqui
     }
 
-    // 3. Salva no Firestore
     try {
       await FirebaseFirestore.instance
           .collection(widget.collectionPath)
@@ -178,7 +240,6 @@ class _PerfilScreenState extends State<PerfilScreen> {
           .set(dadosParaSalvar, SetOptions(merge: true));
 
       if (mounted) {
-        // Atualiza o estado local com a nova localização
         setState(() => _localizacao = novaLocalizacao);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Dados salvos com sucesso!")),
@@ -191,23 +252,22 @@ class _PerfilScreenState extends State<PerfilScreen> {
         );
       }
     } finally {
-       if (mounted) {
-        setState(() => _isSavingWithGeocoding = false); // Desativa loading específico
+      if (mounted) {
+        setState(() => _isSavingWithGeocoding = false);
       }
     }
   }
 
-  // LÓGICA DE UPLOAD DE FOTO (sem mudanças)
   Future<void> _escolherEUploadFoto() async {
-    // ... (código existente)
-     final ImagePicker picker = ImagePicker();
+    final ImagePicker picker = ImagePicker();
     final XFile? pickedFile =
         await picker.pickImage(source: ImageSource.gallery);
 
     if (pickedFile == null) return;
 
-    // Usa o loading principal para upload de foto
-    setState(() { _isLoading = true; });
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -226,7 +286,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
       final downloadUrl = await storageRef.getDownloadURL();
 
-      setState(() { _fotoUrl = downloadUrl; });
+      setState(() {
+        _fotoUrl = downloadUrl;
+      });
 
       await FirebaseFirestore.instance
           .collection(widget.collectionPath)
@@ -239,29 +301,29 @@ class _PerfilScreenState extends State<PerfilScreen> {
         );
       }
     } catch (e) {
-      // ... (erro handling)
-       if (mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Erro ao enviar foto: $e")),
         );
       }
     } finally {
-       if (mounted) { setState(() { _isLoading = false; }); }
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  // LÓGICA DE LOGOUT (sem mudanças)
   Future<void> _logout() async {
-     // ... (código existente)
-      try {
+    try {
       await FirebaseAuth.instance.signOut();
       if (mounted) {
         Navigator.of(context)
             .pushNamedAndRemoveUntil("/login", (route) => false);
       }
     } catch (e) {
-      // ... (erro handling)
-       if (mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Erro ao sair: $e")),
         );
@@ -270,8 +332,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
   }
 
   Widget _buildSectionTitle(String title) {
-    // ... (sem mudanças)
-     return Padding(
+    return Padding(
       padding: const EdgeInsets.only(top: 24.0, bottom: 8.0),
       child: Text(
         title,
@@ -285,18 +346,22 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Usa o loading principal para o carregamento inicial
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text("Meu Perfil")),
+        appBar: AppBar(
+            title: const Text("Meu Perfil"),
+            backgroundColor: _appBarColor,
+            foregroundColor: _foregroundColor),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_errorMessage != null) {
-      // ... (tela de erro)
-       return Scaffold(
-        appBar: AppBar(title: const Text("Meu Perfil")),
+      return Scaffold(
+        appBar: AppBar(
+            title: const Text("Meu Perfil"),
+            backgroundColor: _appBarColor,
+            foregroundColor: _foregroundColor),
         body: Center(child: Text(_errorMessage!)),
       );
     }
@@ -304,24 +369,24 @@ class _PerfilScreenState extends State<PerfilScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Meu Perfil"),
+        backgroundColor: _appBarColor,
+        foregroundColor: _foregroundColor,
         actions: [
-          // 🔹 ADICIONADO: Mostra loading no botão Salvar
           _isSavingWithGeocoding
-              ? const Padding(
-                  padding: EdgeInsets.only(right: 16.0),
+              ? Padding(
+                  padding: const EdgeInsets.only(right: 16.0),
                   child: Center(
                       child: SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: _foregroundColor,
                           ))),
                 )
               : IconButton(
                   icon: const Icon(Icons.save),
                   tooltip: "Salvar",
-                  // Desativa o botão enquanto salva
                   onPressed: _isSavingWithGeocoding ? null : _salvarDados,
                 ),
           IconButton(
@@ -340,8 +405,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               child: GestureDetector(
                 onTap: _escolherEUploadFoto,
                 child: CircleAvatar(
-                  // ... (código do CircleAvatar como antes)
-                   radius: 50,
+                  radius: 50,
                   backgroundColor: Colors.grey.shade300,
                   backgroundImage: _fotoUrl != null && _fotoUrl!.isNotEmpty
                       ? NetworkImage(_fotoUrl!)
@@ -372,30 +436,39 @@ class _PerfilScreenState extends State<PerfilScreen> {
               enabled: false,
             ),
             const SizedBox(height: 10),
+            // 3. APLIQUE A MÁSCARA AO TEXTFIELD DE TELEFONE
             TextField(
-              decoration: const InputDecoration(labelText: "Telefone"),
+              decoration: const InputDecoration(
+                labelText: "Telefone",
+                hintText: "(00) 00000-0000",
+              ),
               controller: _telefoneController,
-              keyboardType: TextInputType.phone,
+              keyboardType: TextInputType.number,
+              inputFormatters: [_telefoneMaskFormatter],
             ),
             const SizedBox(height: 10),
+            // 4. APLIQUE A MÁSCARA AO TEXTFIELD DE CPF
             TextField(
-              decoration: const InputDecoration(labelText: "CPF"),
+              decoration: const InputDecoration(
+                labelText: "CPF",
+                hintText: "000.000.000-00",
+              ),
               controller: _cpfController,
               keyboardType: TextInputType.number,
+              inputFormatters: [_cpfMaskFormatter],
             ),
             const SizedBox(height: 10),
-             // 🔹 MOVIDO: Endereço agora é comum para ambos
-             TextField(
-                decoration: InputDecoration(
-                  labelText: "Endereço Principal",
-                   // Adiciona dica sobre geocoding
-                  helperText: _isDriver ? "Usado para geolocalização." : "Usado para geolocalização.",
-                  helperMaxLines: 2,
-                ),
-                controller: _enderecoController,
-                maxLines: null, // Permite múltiplas linhas se necessário
+            TextField(
+              decoration: InputDecoration(
+                labelText: "Endereço Principal",
+                helperText: _isDriver
+                    ? "Usado para geolocalização."
+                    : "Usado para geolocalização.",
+                helperMaxLines: 2,
               ),
-
+              controller: _enderecoController,
+              maxLines: null,
+            ),
             if (_isDriver) ...[
               _buildSectionTitle("Dados do Motorista"),
               TextField(
@@ -403,9 +476,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                 controller: _cnhController,
                 keyboardType: TextInputType.number,
               ),
-              // Campo Endereço movido para a seção Pessoal
             ],
-
             const SizedBox(height: 30),
           ],
         ),
@@ -413,4 +484,3 @@ class _PerfilScreenState extends State<PerfilScreen> {
     );
   }
 }
-

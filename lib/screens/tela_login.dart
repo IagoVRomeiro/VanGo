@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'tela_aluno.dart'; 
 import 'tela_cadastro.dart';
 import 'tela_motorista.dart'; 
+import 'tela_recuperar_senha.dart'; // ⬅️ NOVO IMPORT
 
 class TelaLogin extends StatefulWidget {
   const TelaLogin({super.key});
@@ -132,6 +133,27 @@ class _TelaLoginState extends State<TelaLogin> {
                     icone: Icons.lock_outline,
                     isPassword: true,
                   ),
+                  
+                  // ⬅️ Link Esqueceu a Senha
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: GestureDetector(
+                        onTap: () {
+                           Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const TelaRecuperarSenha()),
+                          );
+                        },
+                        child: const Text(
+                          'Esqueceu a senha?',
+                          style: TextStyle(color: amareloBotao, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ),
+                  
                   const SizedBox(height: 30),
                   SizedBox(
                     width: double.infinity,

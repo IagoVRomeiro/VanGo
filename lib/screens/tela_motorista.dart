@@ -3,17 +3,16 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 // Imports relativos
+import 'tela_login.dart';
 import 'tela_cadastro.dart';
 import 'tela_lista_chats.dart';
 import 'tela_perfil.dart';
 import 'tela_viagem.dart';
 import 'tela_gerenciar_alunos.dart';
-// 🔹 ADICIONADO: Import da tela de notificações
 import 'tela_notificacoes.dart';
 
 class TelaMotorista extends StatefulWidget {
-  // 🔹 CORRIGIDO: Removido 'const'
-   TelaMotorista({super.key});
+  TelaMotorista({super.key});
 
   @override
   State<TelaMotorista> createState() => _TelaMotoristaState();
@@ -47,7 +46,11 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     try {
       await FirebaseAuth.instance.signOut();
       if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        // Redireciona para a TelaLogin, removendo todas as rotas anteriores
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const TelaLogin()),
+          (route) => false,
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -61,12 +64,13 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     mapController = controller;
   }
 
+  // 🎯 CORREÇÃO: Fluxo revertido para navegação simples sem footer
   void _onItemTapped(int index) {
     final user = FirebaseAuth.instance.currentUser;
-    // Checa 'Viagem'(1), 'Alunos'(2), 'Chat'(3) ou 'Perfil'(4)
+    // Checa se está deslogado e tenta acessar abas protegidas
     if (user == null && (index >= 1 && index <= 4)) {
       Navigator.push(
-          context, MaterialPageRoute(builder: (_) => const TelaCadastro()));
+          context, MaterialPageRoute(builder: (_) => const TelaLogin()));
       return;
     }
 
@@ -75,10 +79,15 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => const PerfilScreen(collectionPath: 'motoristas'),
+          builder: (_) => const PerfilScreen( // ⬅️ 'const' adicionado
+            collectionPath: 'motoristas',
+            // ⬅️ 'onNavigate' REMOVIDO
+          ),
         ),
       );
-    } else { // Muda a aba
+      return; // Importante retornar aqui
+    } else {
+      // Muda a aba se não for o Perfil
       if (_selectedIndex == index) return;
       setState(() => _selectedIndex = index);
     }
@@ -93,11 +102,19 @@ class _TelaMotoristaState extends State<TelaMotorista> {
 
   String _getAppBarTitle(int index) {
     switch (index) {
-      case 0: return 'Mapa do Motorista';
-      case 1: return 'Gerenciar Viagem';
-      case 2: return 'Gerenciar Alunos';
-      case 3: return 'Minhas Conversas';
-      default: return _getAppBarTitle(_selectedIndex); // Caso 4 (Perfil) navega
+      case 0:
+        return 'Mapa do Motorista';
+      case 1:
+        return 'Gerenciar Viagem';
+      case 2:
+        return 'Gerenciar Alunos';
+      case 3:
+        return 'Minhas Conversas';
+      case 4:
+        return 'Meu Perfil'; // Título antes de navegar
+      default:
+        // Se _selectedIndex for inválido (raro), volta para o Mapa
+        return 'Mapa do Motorista';
     }
   }
 
@@ -130,12 +147,11 @@ class _TelaMotoristaState extends State<TelaMotorista> {
                 tooltip: 'Sair',
                 onPressed: _logout,
               )
-            : IconButton(
+            : IconButton( // Fallback se não estiver logado
                 icon: const Icon(Icons.arrow_back),
                 tooltip: 'Voltar',
                 onPressed: () => Navigator.of(context).pop(),
               ),
-        // 🔹 ADICIONADO: Botão de notificações
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_none),
@@ -143,7 +159,6 @@ class _TelaMotoristaState extends State<TelaMotorista> {
             onPressed: () {
               Navigator.push(
                 context,
-                // 🔹 CORRIGIDO: Removido 'const'
                 MaterialPageRoute(builder: (context) => TelaNotificacoes()),
               );
             },
@@ -157,18 +172,22 @@ class _TelaMotoristaState extends State<TelaMotorista> {
           const TelaViagem(), // Índice 1
           const TelaGerenciarAlunos(), // Índice 2
           const TelaListaChats(), // Índice 3
+          // Índice 4 (Perfil) não fica aqui, é navegado
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed, // Essencial para 5+ itens
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'), // 0
-          BottomNavigationBarItem(icon: Icon(Icons.edit_road_outlined), label: 'Viagem'), // 1
-          BottomNavigationBarItem(icon: Icon(Icons.people_alt_outlined), label: 'Alunos'), // 2
+          BottomNavigationBarItem(
+              icon: Icon(Icons.edit_road_outlined), label: 'Viagem'), // 1
+          BottomNavigationBarItem(
+              icon: Icon(Icons.people_alt_outlined), label: 'Alunos'), // 2
           BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'), // 3
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'), // 4
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person), label: 'Perfil'), // 4
         ],
         selectedItemColor: Colors.red,
         unselectedItemColor: Colors.grey,

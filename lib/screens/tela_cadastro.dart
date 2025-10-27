@@ -9,6 +9,10 @@ import '../models/motorista.dart';
 import '../models/usuario.dart';
 import 'tela_login.dart';
 
+import 'tela_motorista.dart'; // ⬅️ IMPORT CORRIGIDO: Tela do Motorista
+import 'tela_aluno.dart';    // ⬅️ IMPORT CORRIGIDO: Tela do Aluno
+
+
 enum TipoUsuario { motorista, aluno }
 
 class TelaCadastro extends StatefulWidget {
@@ -37,55 +41,76 @@ class _TelaCadastroState extends State<TelaCadastro> {
   }
 
   Future<void> _criarConta() async {
-    if (!_formKey.currentState!.validate()) return;
+  if (!_formKey.currentState!.validate()) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => const Center(child: CircularProgressIndicator()),
+  );
+
+  try {
+    final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      email: _emailController.text.trim(),
+      password: _senhaController.text.trim(),
     );
+    final user = cred.user;
 
-    try {
-      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _senhaController.text.trim(),
-      );
-      final user = cred.user;
+    if (user != null) {
+      final batch = FirebaseFirestore.instance.batch();
+      _criarRegistroUsuario(batch, user);
 
-      if (user != null) {
-        final batch = FirebaseFirestore.instance.batch();
-        _criarRegistroUsuario(batch, user);
-
-        if (_tipoUsuarioSelecionado == TipoUsuario.motorista) {
-          _salvarMotorista(batch, user);
-        } else {
-          _salvarAluno(batch, user);
-        }
-
-        await batch.commit();
+      if (_tipoUsuarioSelecionado == TipoUsuario.motorista) {
+        _salvarMotorista(batch, user);
+      } else {
+        _salvarAluno(batch, user);
       }
 
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Conta criada com sucesso! Faça o login.'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      await batch.commit();
+    }
+
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Conta criada com sucesso!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // 💥 LÓGICA DE REDIRECIONAMENTO CONDICIONAL E SEM 'CONST'
+      if (_tipoUsuarioSelecionado == TipoUsuario.motorista) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const TelaLogin()),
+          // Agora o construtor é chamado corretamente, sem 'const'
+          MaterialPageRoute(builder: (_) =>  TelaMotorista()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          // Agora o construtor é chamado corretamente, sem 'const'
+          MaterialPageRoute(builder: (_) =>  TelaAluno()),
         );
       }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) Navigator.pop(context);
-      _mostrarErro(e.message ?? 'Ocorreu um erro de autenticação.');
-    } catch (e) {
-      if (mounted) Navigator.pop(context);
-      _mostrarErro('Ocorreu um erro ao salvar os dados: $e');
     }
+  } on FirebaseAuthException catch (e) {
+    if (mounted) Navigator.pop(context);
+    
+    String errorMessage;
+    if (e.code == 'email-already-in-use') {
+      errorMessage =
+          'Este e-mail já está em uso. Tente fazer o login.';
+    } else {
+      errorMessage = e.message ?? 'Ocorreu um erro de autenticação inesperado.';
+    }
+
+    _mostrarErro(errorMessage);
+
+  } catch (e) {
+    if (mounted) Navigator.pop(context);
+    _mostrarErro('Ocorreu um erro ao salvar os dados: $e');
   }
+}
 
   void _criarRegistroUsuario(WriteBatch batch, User user) {
     final userDocRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
@@ -116,19 +141,14 @@ class _TelaCadastroState extends State<TelaCadastro> {
     batch.set(motoristaDocRef, novoMotorista.toMap());
   }
 
-  // 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹
-  // AS CORREÇÕES ESTÃO AQUI
-  // 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹
   void _salvarAluno(WriteBatch batch, User user) {
     final alunoDocRef = FirebaseFirestore.instance.collection('alunos').doc(user.uid);
     final novoAluno = Aluno(
       id: user.uid,
       nome: _nomeController.text.trim(),
-      motoristaId: null, // Corrigido para nulo
-      // 'idade: 0,' FOI REMOVIDO
-      // 'serie: '',' FOI REMOVIDO
+      motoristaId: null,
       endereco: '',
-      localizacao: GeoPoint(0, 0), // 'const' FOI REMOVIDO
+      localizacao: GeoPoint(0, 0),
       faculdade: '',
       horarioEntrada: '',
       horarioSaida: '',
@@ -136,9 +156,6 @@ class _TelaCadastroState extends State<TelaCadastro> {
     );
     batch.set(alunoDocRef, novoAluno.toMap());
   }
-  // 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹
-  // FIM DAS CORREÇÕES
-  // 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹 🔹
 
   void _mostrarErro(String mensagem) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -167,9 +184,10 @@ class _TelaCadastroState extends State<TelaCadastro> {
               child: Column(
                 children: [
                   const SizedBox(height: 40),
+                  // 🎯 CORREÇÃO: Restaurando o uso de Image.asset com o caminho confirmado
                   SizedBox(
                     height: 100,
-                    child: Image.asset('assets/images/vgo_logo.png'),
+                    child: Image.asset('assets/images/vgo_logo.png'), 
                   ),
                   const SizedBox(height: 40),
                   const Text('Criar Conta', style: TextStyle(color: branco, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 1)),
@@ -309,4 +327,3 @@ class _TelaCadastroState extends State<TelaCadastro> {
     );
   }
 }
-

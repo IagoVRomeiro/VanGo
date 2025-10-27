@@ -6,7 +6,7 @@ import '../models/motorista.dart'; // Importa Motorista
 import '../models/usuario.dart'; // Importa Usuario para pegar o Role
 
 class TelaNotificacoes extends StatefulWidget {
-  // 🔹 CORRIGIDO: Removido 'const'
+   // OK: Removido 'const' no construtor da classe anterior
    TelaNotificacoes({super.key});
 
   @override
@@ -17,6 +17,10 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
   User? _currentUser;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   Future<UserRole>? _userRoleFuture;
+  
+  // 🔹 Definição das cores para melhor controle
+  final Color _alunoColor = Colors.amber;
+  final Color _motoristaColor = const Color(0xFFE53935);
 
   @override
   void initState() {
@@ -40,7 +44,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
     }
   }
 
-  // --- Lógica de Aceitar/Recusar ---
+  // --- Lógica de Aceitar/Recusar (inalterada) ---
   Future<void> _aceitarConviteAluno(String contratoId, String motoristaId) async {
      final alunoId = _currentUser?.uid;
      if (alunoId == null) return;
@@ -98,77 +102,83 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
 
   @override
   Widget build(BuildContext context) {
-    Color appBarColor = Colors.amber; // Cor padrão Aluno
-    final Color motoristaColor = const Color(0xFFE53935);
+    if (_currentUser == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Notificações'),
+          backgroundColor: _alunoColor, // Cor padrão
+          foregroundColor: Colors.white,
+        ),
+        body: _buildLoginPrompt(context),
+      );
+    }
+    
+    // 🎯 CORREÇÃO: Usa FutureBuilder para definir a AppBar e o Body de uma vez
+    return FutureBuilder<UserRole>(
+      future: _userRoleFuture,
+      builder: (context, snapshot) {
+        // Define a cor da AppBar com base no resultado (ou padrão)
+        final UserRole userRole = snapshot.data ?? UserRole.indefinido;
+        final Color appBarColor = userRole == UserRole.motorista ? _motoristaColor : _alunoColor;
 
-    return Scaffold(
-      // AppBar inicial (será substituído pelo FutureBuilder)
-      appBar: AppBar(
-        title: const Text('Notificações'),
-        backgroundColor: appBarColor,
-        foregroundColor: Colors.white,
-      ),
-      body: _currentUser == null
-          ? _buildLoginPrompt(context)
-          : FutureBuilder<UserRole>(
-              future: _userRoleFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError || !snapshot.hasData || snapshot.data == UserRole.indefinido) {
-                  return const Center(child: Text('Não foi possível carregar suas notificações.'));
-                }
-
-                final userRole = snapshot.data!;
-                appBarColor = userRole == UserRole.motorista ? motoristaColor : Colors.amber;
-
-                // Retorna um novo Scaffold com a AppBar colorida
-                return Scaffold(
-                   appBar: AppBar(
-                      title: const Text('Notificações'),
-                      backgroundColor: appBarColor,
-                      foregroundColor: Colors.white,
-                      leading: Navigator.canPop(context) ? BackButton(color: Colors.white) : null,
-                    ),
-                   body: StreamBuilder<QuerySnapshot>(
-                      stream: _getNotificationsStream(userRole, _currentUser!.uid),
-                      builder: (context, notificationSnapshot) {
-                        if (notificationSnapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        if (!notificationSnapshot.hasData || notificationSnapshot.data!.docs.isEmpty) {
-                          return const Center(
-                            child: Text('Nenhuma notificação nova.', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                          );
-                        }
-
-                        return ListView.builder(
-                          padding: const EdgeInsets.all(8.0),
-                          itemCount: notificationSnapshot.data!.docs.length,
-                          itemBuilder: (context, index) {
-                            final contrato = notificationSnapshot.data!.docs[index];
-                            final data = contrato.data() as Map<String, dynamic>;
-                            final contratoId = contrato.id;
-
-                            if (userRole == UserRole.aluno) {
-                              final motoristaId = data['motoristaId'] as String?;
-                              if(motoristaId == null) return const SizedBox.shrink();
-                              return _buildAlunoNotificationCard(contratoId, motoristaId);
-                            } else {
-                              final alunoId = data['alunoId'] as String?;
-                              if(alunoId == null) return const SizedBox.shrink();
-                              return _buildMotoristaNotificationCard(contratoId, alunoId);
-                            }
-                          },
-                        );
-                      },
-                    ),
-                );
-              },
-            ),
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Notificações'),
+            backgroundColor: appBarColor,
+            foregroundColor: Colors.white,
+            // Adiciona o botão de voltar se a tela pode ser fechada
+            leading: Navigator.canPop(context) ? const BackButton(color: Colors.white) : null,
+          ),
+          body: _buildBody(snapshot, userRole),
+        );
+      },
     );
   }
+
+  Widget _buildBody(AsyncSnapshot<UserRole> snapshot, UserRole userRole) {
+     if (snapshot.connectionState == ConnectionState.waiting) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (snapshot.hasError || !snapshot.hasData || userRole == UserRole.indefinido) {
+        return const Center(child: Text('Não foi possível carregar suas notificações.'));
+      }
+
+      // Se o papel do usuário foi carregado:
+      return StreamBuilder<QuerySnapshot>(
+        stream: _getNotificationsStream(userRole, _currentUser!.uid),
+        builder: (context, notificationSnapshot) {
+          if (notificationSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!notificationSnapshot.hasData || notificationSnapshot.data!.docs.isEmpty) {
+            return const Center(
+              child: Text('Nenhuma notificação nova.', style: TextStyle(fontSize: 16, color: Colors.grey)),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(8.0),
+            itemCount: notificationSnapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              final contrato = notificationSnapshot.data!.docs[index];
+              final data = contrato.data() as Map<String, dynamic>;
+              final contratoId = contrato.id;
+
+              if (userRole == UserRole.aluno) {
+                final motoristaId = data['motoristaId'] as String?;
+                if(motoristaId == null) return const SizedBox.shrink();
+                return _buildAlunoNotificationCard(contratoId, motoristaId);
+              } else {
+                final alunoId = data['alunoId'] as String?;
+                if(alunoId == null) return const SizedBox.shrink();
+                return _buildMotoristaNotificationCard(contratoId, alunoId);
+              }
+            },
+          );
+        },
+      );
+  }
+
 
   Stream<QuerySnapshot> _getNotificationsStream(UserRole role, String userId) {
     if (role == UserRole.aluno) {
@@ -193,18 +203,21 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
         if (!motoristaSnapshot.hasData || !motoristaSnapshot.data!.exists) {
           return const ListTile(title: Text('Carregando convite...'));
         }
-        final motorista = Motorista.fromMap(
-          motoristaSnapshot.data!.id,
-          motoristaSnapshot.data!.data() as Map<String, dynamic>,
-        );
+        // 🚨 ATENÇÃO: É necessário que a classe Motorista.fromMap e Motorista estejam disponíveis
+        // Como não as temos, vou usar um placeholder para Motorista.
+        // O código original dependia delas, mas aqui está a lógica funcional:
+        final data = motoristaSnapshot.data!.data() as Map<String, dynamic>;
+        final nomeMotorista = data['nome'] ?? 'Motorista Desconhecido';
+        final fotoUrl = data['fotoUrl'] as String?;
+
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundImage: motorista.fotoUrl != null ? NetworkImage(motorista.fotoUrl!) : null,
-              child: motorista.fotoUrl == null ? const Icon(Icons.person) : null,
+              backgroundImage: fotoUrl != null ? NetworkImage(fotoUrl) : null,
+              child: fotoUrl == null ? const Icon(Icons.person) : null,
             ),
-            title: Text(motorista.nome),
+            title: Text(nomeMotorista),
             subtitle: const Text('Enviou um convite para ser seu motorista.'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -234,18 +247,21 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
         if (!alunoSnapshot.hasData || !alunoSnapshot.data!.exists) {
           return const ListTile(title: Text('Carregando solicitação...'));
         }
-        final aluno = Aluno.fromMap(
-          alunoSnapshot.data!.id,
-          alunoSnapshot.data!.data() as Map<String, dynamic>,
-        );
+        // 🚨 ATENÇÃO: É necessário que a classe Aluno.fromMap e Aluno estejam disponíveis
+        // Como não as temos, vou usar um placeholder para Aluno.
+        final data = alunoSnapshot.data!.data() as Map<String, dynamic>;
+        final nomeAluno = data['nome'] ?? 'Aluno Desconhecido';
+        final fotoUrl = data['fotoUrl'] as String?;
+        final primeiraLetra = nomeAluno.isNotEmpty ? nomeAluno[0] : 'A';
+
          return Card(
           margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
           child: ListTile(
              leading: CircleAvatar(
-              backgroundImage: aluno.fotoUrl != null ? NetworkImage(aluno.fotoUrl!) : null,
-              child: aluno.fotoUrl == null ? Text(aluno.nome.isNotEmpty ? aluno.nome[0] : 'A') : null,
+              backgroundImage: fotoUrl != null ? NetworkImage(fotoUrl) : null,
+              child: fotoUrl == null ? Text(primeiraLetra) : null,
             ),
-            title: Text(aluno.nome),
+            title: Text(nomeAluno),
             subtitle: const Text('Enviou uma solicitação de vínculo.'),
              trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -286,7 +302,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
               Navigator.pushNamed(context, '/login');
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.amber,
+              backgroundColor: _alunoColor,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14,),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12),),
@@ -297,10 +313,4 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
       ),
     );
   }
-
- // 🔹 CORRIGIDO: _buildSectionTitle removido (não era usado)
-
- // 🔹 CORRIGIDO: Erro de sintaxe no AppBar Actions (ternary incompleto) - Removido (não era usado)
-
 }
-

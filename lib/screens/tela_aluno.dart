@@ -8,13 +8,11 @@ import '../models/motorista.dart';
 import 'tela_chat.dart';
 import 'tela_perfil.dart';
 import 'tela_cadastro.dart';
-// 🔹 CORRIGIDO: Importa o nome correto da tela de notificações
 import 'tela_notificacoes.dart';
+import 'tela_login.dart';
 
 class TelaAluno extends StatefulWidget {
-  // 🔹 CORRIGIDO: Removido o 'const' pois StatefulWidget não pode ser const
-  // se seus filhos não forem todos const
-   TelaAluno({super.key});
+  TelaAluno({super.key});
 
   @override
   State<TelaAluno> createState() => _TelaAlunoState();
@@ -36,7 +34,11 @@ class _TelaAlunoState extends State<TelaAluno> {
     try {
       await FirebaseAuth.instance.signOut();
       if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        // Redireciona para a TelaLogin
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const TelaLogin()),
+          (route) => false,
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -62,13 +64,14 @@ class _TelaAlunoState extends State<TelaAluno> {
     );
   }
 
+  // 🎯 CORREÇÃO: Removido o callback onNavigate da chamada PerfilScreen
   void _onItemTapped(int index) {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null && (index == 1 || index == 2)) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => const TelaCadastro()),
+        MaterialPageRoute(builder: (context) => const TelaLogin()),
       );
       return;
     }
@@ -78,10 +81,15 @@ class _TelaAlunoState extends State<TelaAluno> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => const PerfilScreen(collectionPath: 'alunos'),
+          builder: (context) => const PerfilScreen( // 'const' adicionado
+            collectionPath: 'alunos',
+            // ⬅️ onNavigate REMOVIDO
+          ),
         ),
       );
-    } else { // Muda a aba para Mapa (0) ou Chat (1)
+      // Não atualiza o selectedIndex aqui, pois a navegação é para outra tela
+    } else {
+      // Muda a aba para Mapa (0) ou Chat (1)
       if (_selectedIndex == index) return;
       setState(() {
         _selectedIndex = index;
@@ -89,13 +97,17 @@ class _TelaAlunoState extends State<TelaAluno> {
     }
   }
 
-    // Helper para definir o título do AppBar
+  // Helper para definir o título do AppBar
   String _getAppBarTitle(int index) {
     switch (index) {
-      case 0: return 'Mapa do Aluno';
-      case 1: return 'Chat com Motorista';
-      // Caso 2 (Perfil) navega, então o título não muda
-      default: return _getAppBarTitle(_selectedIndex);
+      case 0:
+        return 'Mapa do Aluno';
+      case 1:
+        return 'Chat com Motorista';
+      case 2:
+        return 'Meu Perfil'; // Título antes de navegar
+      default:
+        return _getAppBarTitle(_selectedIndex);
     }
   }
 
@@ -132,7 +144,6 @@ class _TelaAlunoState extends State<TelaAluno> {
                 onPressed: () => Navigator.of(context).pop(),
               ),
         title: Text(_getAppBarTitle(_selectedIndex)),
-        // 🔹 ADICIONADO: Botão de notificações
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_none),
@@ -140,7 +151,6 @@ class _TelaAlunoState extends State<TelaAluno> {
             onPressed: () {
               Navigator.push(
                 context,
-                // 🔹 CORRIGIDO: Chama a tela correta (sem const)
                 MaterialPageRoute(builder: (context) => TelaNotificacoes()),
               );
             },
@@ -152,6 +162,7 @@ class _TelaAlunoState extends State<TelaAluno> {
         children: [
           mapaWidget, // Índice 0
           const AlunoChatWrapper(), // Índice 1
+          // Índice 2 (Perfil) não é mais parte do IndexedStack
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -160,7 +171,8 @@ class _TelaAlunoState extends State<TelaAluno> {
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'), // 0
           BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'), // 1
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'), // 2
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person), label: 'Perfil'), // 2
         ],
         selectedItemColor: Colors.amber,
         unselectedItemColor: Colors.grey,
@@ -169,7 +181,7 @@ class _TelaAlunoState extends State<TelaAluno> {
   }
 }
 
-// --- AlunoChatWrapper (sem alterações significativas, mas revisado) ---
+// ... (AlunoChatWrapper)
 class AlunoChatWrapper extends StatefulWidget {
   const AlunoChatWrapper({super.key});
 
@@ -191,31 +203,27 @@ class _AlunoChatWrapperState extends State<AlunoChatWrapper> {
   Future<Map<String, dynamic>> _getChatData() async {
     try {
       final alunoId = FirebaseAuth.instance.currentUser!.uid;
-      // 🔹 CORRIGIDO: Acessa o Firestore corretamente
       final alunoDoc =
           await FirebaseFirestore.instance.collection('alunos').doc(alunoId).get();
       if (!alunoDoc.exists) throw Exception('Perfil do aluno não encontrado.');
 
-      final aluno = Aluno.fromMap(alunoDoc.id, alunoDoc.data()!);
-      final motoristaId = aluno.motoristaId; // Agora pode ser nulo
+      final motoristaId = alunoDoc.data()?['motoristaId'] as String?;
 
       if (motoristaId == null || motoristaId.isEmpty) {
         return {'error': 'Você ainda não está vinculado a um motorista.'};
       }
 
-      // 🔹 CORRIGIDO: Acessa o Firestore corretamente
       final motoristaDoc = await FirebaseFirestore.instance
           .collection('motoristas')
           .doc(motoristaId)
           .get();
       if (!motoristaDoc.exists) throw Exception('Motorista não encontrado.');
-      final motorista =
-          Motorista.fromMap(motoristaDoc.id, motoristaDoc.data()!);
+      final nomeMotorista = motoristaDoc.data()?['nome'] ?? 'Motorista';
 
       final ids = [motoristaId, alunoId]..sort();
       final chatId = ids.join('_');
 
-      return {'chatId': chatId, 'nomeReceptor': motorista.nome};
+      return {'chatId': chatId, 'nomeReceptor': nomeMotorista};
     } catch (e) {
       return {'error': 'Ocorreu um erro ao carregar o chat: ${e.toString()}'};
     }
@@ -233,12 +241,6 @@ class _AlunoChatWrapperState extends State<AlunoChatWrapper> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.hasError) {
-          return Center(
-              child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text('Erro: ${snapshot.error}')));
-        }
         if (!snapshot.hasData || snapshot.data == null) {
           return const Center(
               child: Text('Não foi possível carregar os dados do chat.'));
@@ -249,16 +251,13 @@ class _AlunoChatWrapperState extends State<AlunoChatWrapper> {
           return Center(
               child: Padding(
                   padding: const EdgeInsets.all(16.0),
-                  child: Text(data['error'])));
+                  child: Text(data['error'] as String)));
         }
 
-        // Se chegou aqui, os dados estão ok para abrir o chat
-        // (Assume que TelaChat existe e recebe esses parâmetros)
-        // return TelaChat(
-        //   chatId: data['chatId']!,
-        //   nomeReceptor: data['nomeReceptor']!,
-        // );
-         return Center(child: Text("Tela de Chat para ${data['nomeReceptor']} (ID: ${data['chatId']})")); // Placeholder
+        // Placeholder para TelaChat
+        return Center(
+            child: Text(
+                "Tela de Chat para ${data['nomeReceptor']} (ID: ${data['chatId']})")); // Placeholder
       },
     );
   }
