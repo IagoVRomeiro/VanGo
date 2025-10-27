@@ -10,6 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
 
+
+  mask_text_input_formatter: ^2.9.0
+
+
   # Mapas
   flutter_map: ^4.0.0
   latlong2: ^0.8.1
