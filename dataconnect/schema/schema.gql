@@ -1,0 +1,59 @@
+type User @table {
+  displayName: String!
+  createdAt: Timestamp!
+  email: String
+  photoUrl: String
+}
+
+type Van @table {
+  make: String!
+  model: String!
+  year: Int!
+  licensePlate: String!
+  createdAt: Timestamp!
+  color: String
+  VIN: String
+  capacity: Int
+  owner: User
+}
+
+type Expense @table {
+  description: String!
+  amount: Float!
+  date: Date!
+  category: String!
+  receiptUrl: String
+  notes: String
+  van: Van
+}
+
+type MaintenanceTask @table {
+  description: String!
+  dueDate: Date!
+  status: String!
+  completionDate: Date
+  cost: Float
+  notes: String
+  van: Van
+}
+
+type Trip @table {
+  startDate: Timestamp!
+  endDate: Timestamp!
+  startLocation: String!
+  endLocation: String!
+  distance: Float!
+  purpose: String!
+  duration: Int
+  notes: String
+  van: Van
+}
+
+type Cargo @table {
+  itemName: String!
+  quantity: Int!
+  weight: Float!
+  description: String
+  deliveryStatus: String
+  trip: Trip
+}
