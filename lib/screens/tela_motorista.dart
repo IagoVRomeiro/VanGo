@@ -401,8 +401,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     final user = FirebaseAuth.instance.currentUser;
     final motoristaTheme = Theme.of(context).copyWith(
       colorScheme: Theme.of(context).colorScheme.copyWith(
-            primary: Colors.red,
-            onPrimary: Colors.white,
+            primary: Colors.red, // Cor primária vermelha para motoristas
+            onPrimary: Colors.black,
           ),
     );
 

@@ -114,7 +114,7 @@ class _TelaLoginState extends State<TelaLogin> {
                   const SizedBox(height: 40),
                   SizedBox(
                     height: 100,
-                    child: Image.asset('assets/images/vgo_logo.png'),
+                    child: Image.asset('assets/vgo_logo.png'),
                   ),
                   const SizedBox(height: 40),
                   Text(

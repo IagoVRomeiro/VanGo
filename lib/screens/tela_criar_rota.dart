@@ -430,7 +430,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                             items: _listaFaculdades
                                 .map((faculdade) => DropdownMenuItem(
                                       value: faculdade,
-                                      child: Text(faculdade),
+                                      child: Flexible(child: Text(faculdade)),
                                     ))
                                 .toList(),
                             onChanged: (value) =>
@@ -454,8 +454,10 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                       items: _vansDisponiveis
                           .map((van) => DropdownMenuItem(
                                 value: van,
-                                child: Text(
-                                    '${van.marca} ${van.modelo} - ${van.placa}'),
+                                child: Flexible(
+                                  child: Text(
+                                      '${van.marca} ${van.modelo} - ${van.placa}'),
+                                ),
                               ))
                           .toList(),
                       onChanged: (value) =>
