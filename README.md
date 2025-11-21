@@ -52,13 +52,3 @@ Para que as funcionalidades de mapa e rota funcionem, você precisa fornecer sua
         ```
         maps.apiKey=SUA_CHAVE_AQUI
         ```
-
-**IMPORTANTE:** O arquivo `.env` e o `local.properties` estão no `.gitignore` e não devem ser enviados para o GitHub.
-
-## 🛠️ Contribuição e Desenvolvimento
-
-Este projeto está em constante evolução. Contribuições e sugestões são bem-vindas para aprimorar o VanGo.
-
----
-
-_Este README foi gerado automaticamente por uma IA para o projeto VanGo._
