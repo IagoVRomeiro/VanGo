@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:vango/models/motorista.dart';
 import 'package:vango/models/van.dart'; // 🔹 IMPORTAR O MODELO VAN
 
+import 'package:vango/screens/tela_chat.dart';
+
 // 🔹 1. MUDAR PARA STATEFULWIDGET
 class TelaDetalheMotorista extends StatefulWidget {
   final Motorista motorista;
@@ -33,11 +35,10 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
     _carregarDadosDaVan();
   }
 
-  // 🔹 3. FUNÇÃO PARA BUSCAR A VAN ASSOCIADA
   Future<void> _carregarDadosDaVan() async {
     if (widget.motorista.vanId == null || widget.motorista.vanId!.isEmpty) {
       if (mounted) setState(() => _isLoadingVan = false);
-      return; // Motorista não tem van
+      return;
     }
     
     try {
@@ -76,7 +77,7 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
 
     try {
       await FirebaseFirestore.instance.collection('contratos').add({
-        'motoristaId': widget.motorista.id, // ⬅️ Usar widget.motorista
+        'motoristaId': widget.motorista.id,
         'alunoId': currentUser.uid,
         'idResponsavel': currentUser.uid,
         'status': 'pendente',
@@ -98,6 +99,73 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
     }
   }
 
+  Future<void> _iniciarChatDeInquerito() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Você precisa estar logado para enviar uma mensagem.')),
+      );
+      return;
+    }
+
+    final motoristaId = widget.motorista.id;
+    final alunoId = currentUser.uid;
+
+    try {
+      // Procura por um chat existente (de qualquer tipo)
+      final query = await FirebaseFirestore.instance
+          .collection('chats')
+          .where('participants', arrayContains: alunoId)
+          .get();
+      
+      String? existingChatId;
+      for (var doc in query.docs) {
+        final participants = List<String>.from(doc.data()['participants']);
+        if (participants.contains(motoristaId)) {
+          existingChatId = doc.id;
+          break;
+        }
+      }
+
+      String chatId;
+      if (existingChatId != null) {
+        chatId = existingChatId;
+      } else {
+        // Cria um novo chat com status 'inquiry'
+        final newChatDoc = await FirebaseFirestore.instance.collection('chats').add({
+          'participants': [alunoId, motoristaId],
+          'status': 'inquiry',
+          'lastMessage': {
+            'text': '...',
+            'senderId': '',
+            'timestamp': FieldValue.serverTimestamp(),
+          }
+        });
+        chatId = newChatDoc.id;
+      }
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TelaChat(
+              chatId: chatId,
+              recipientId: motoristaId,
+            ),
+          ),
+        );
+      }
+
+    } catch (e) {
+        if(mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Erro ao iniciar chat: $e'), backgroundColor: Colors.red),
+            );
+        }
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -109,7 +177,6 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // 🔹 4. FOTO DA VAN (NÃO DO MOTORISTA)
             Container(
               height: 250,
               width: double.infinity,
@@ -130,7 +197,6 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  // 🔹 5. FOTO DO MOTORISTA (EM CÍRCULO)
                   CircleAvatar(
                     radius: 40,
                     backgroundImage: widget.fotoUrl != null
@@ -154,7 +220,6 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
                   ),
                   const Divider(height: 40),
                   
-                  // 🔹 6. DADOS DA VAN (EM VEZ DE 'motorista.veiculo')
                   _buildInfoRow(Icons.directions_car, 'Veículo',
                       _isLoadingVan ? 'Carregando...' : '${_van?.marca ?? ''} ${_van?.modelo ?? 'Não informado'}'),
                   _buildInfoRow(Icons.pin_outlined, 'Placa',
@@ -162,7 +227,6 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
                   _buildInfoRow(Icons.group, 'Capacidade',
                       _isLoadingVan ? '...' : '${_van?.capacidade.toString() ?? '?'} passageiros'),
                       
-                  // Telefone (idealmente, só mostrar após aceite do contrato)
                   _buildInfoRow(Icons.phone, 'Telefone', widget.motorista.telefone.isNotEmpty ? widget.motorista.telefone : 'Não informado'),
                   
                 ],
@@ -172,19 +236,32 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
         ),
       ),
       persistentFooterButtons: [
-        SizedBox(
-          width: double.infinity, // Faz o botão ocupar toda a largura disponível
-          child: ElevatedButton.icon(
-            onPressed: () => _solicitarVinculo(context),
-            icon: const Icon(Icons.person_add),
-            label: const Text('Solicitar Contato'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.amber,
-              foregroundColor: const Color(0xFF2d2d2d),
-              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-              textStyle: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _iniciarChatDeInquerito,
+                  icon: const Icon(Icons.message_outlined),
+                  label: const Text('Mensagem'),
+                  style: OutlinedButton.styleFrom(
+                     padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _solicitarVinculo(context),
+                  icon: const Icon(Icons.person_add),
+                  label: const Text('Solicitar Vínculo'),
+                   style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],

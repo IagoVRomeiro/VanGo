@@ -67,10 +67,45 @@ class _TelaListaChatsState extends State<TelaListaChats> {
   }
 
   Widget _buildMotoristaChatList(String motoristaId) {
-    return StreamBuilder<QuerySnapshot>(
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Seção de Solicitações
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text("Solicitações de Contato", style: Theme.of(context).textTheme.titleLarge),
+          ),
+          _buildChatList(
+            motoristaId: motoristaId,
+            status: 'inquiry',
+            emptyMessage: 'Nenhuma nova solicitação de contato.',
+          ),
+
+          const Divider(height: 30),
+
+          // Seção de Conversas Ativas
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Text("Conversas", style: Theme.of(context).textTheme.titleLarge),
+          ),
+          _buildChatList(
+            motoristaId: motoristaId,
+            status: 'active', // ou 'aprovado', dependendo da sua convenção
+            emptyMessage: 'Nenhuma conversa ativa.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget reutilizável para construir cada lista de chat
+  Widget _buildChatList({required String motoristaId, required String status, required String emptyMessage}) {
+     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
           .collection('chats')
           .where('participants', arrayContains: motoristaId)
+          .where('status', isEqualTo: status)
           .orderBy('lastMessage.timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -78,31 +113,37 @@ class _TelaListaChatsState extends State<TelaListaChats> {
           return const Center(child: CircularProgressIndicator());
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('Nenhuma conversa encontrada.'));
+          return Center(child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(emptyMessage),
+          ));
         }
 
         final chats = snapshot.data!.docs;
         return ListView.builder(
-          padding: const EdgeInsets.all(8.0),
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
           itemCount: chats.length,
           itemBuilder: (context, index) {
             final chat = chats[index];
             final participants = List<String>.from(chat['participants']);
-            final alunoId = participants.firstWhere((id) => id != motoristaId);
+            final otherUserId = participants.firstWhere((id) => id != motoristaId);
             final lastMessage = chat['lastMessage'] as Map<String, dynamic>? ?? {};
 
             return FutureBuilder<DocumentSnapshot>(
-              future: _firestore.collection('users').doc(alunoId).get(),
+              future: _firestore.collection('users').doc(otherUserId).get(),
               builder: (context, userSnapshot) {
                 if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
-                  return const SizedBox.shrink(); // Don't show anything if user data is loading/missing
+                  return const SizedBox.shrink();
                 }
                 final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-                final nomeAluno = userData['nome'] ?? 'Aluno Desconhecido';
+                final nome = userData['nome'] ?? 'Usuário Desconhecido';
                 final fotoUrl = userData['fotoUrl'] as String?;
                 final timestamp = lastMessage['timestamp'] as Timestamp?;
 
                 return Card.filled(
+                  color: status == 'inquiry' ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5) : null,
                   margin: const EdgeInsets.symmetric(vertical: 4.0),
                   child: ListTile(
                     leading: CircleAvatar(
@@ -110,18 +151,17 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                           ? NetworkImage(fotoUrl)
                           : null,
                       child: fotoUrl == null || fotoUrl.isEmpty
-                          ? Text(nomeAluno.isNotEmpty ? nomeAluno[0].toUpperCase() : '?')
+                          ? Text(nome.isNotEmpty ? nome[0].toUpperCase() : '?')
                           : null,
                     ),
                     title: Text(
-                      nomeAluno,
+                      nome,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
-                      lastMessage['texto'] ?? 'Nenhuma mensagem ainda.',
+                      lastMessage['text'] ?? 'Toque para responder.',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     trailing: Text(
                       timestamp != null ? DateFormat('HH:mm').format(timestamp.toDate()) : '',
@@ -133,8 +173,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                         MaterialPageRoute(
                           builder: (context) => TelaChat(
                             chatId: chat.id,
-                            nomeReceptor: nomeAluno,
-                            receptorId: alunoId,
+                            recipientId: otherUserId,
                           ),
                         ),
                       );
@@ -150,46 +189,43 @@ class _TelaListaChatsState extends State<TelaListaChats> {
   }
 
   Widget _buildAlunoChatView(String alunoId) {
-    return FutureBuilder<DocumentSnapshot>(
-      future: _firestore.collection('alunos').doc(alunoId).get(),
-      builder: (context, alunoSnapshot) {
-        if (alunoSnapshot.connectionState == ConnectionState.waiting) {
+    // A view do aluno agora também busca na coleção de chats
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('chats')
+          .where('participants', arrayContains: alunoId)
+          .orderBy('lastMessage.timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (!alunoSnapshot.hasData || !alunoSnapshot.data!.exists) {
-          return const Center(child: Text('Perfil de aluno não encontrado.'));
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('Nenhuma conversa encontrada. Inicie uma conversa na tela de busca de motoristas!'));
         }
 
-        final alunoData = alunoSnapshot.data!.data() as Map<String, dynamic>;
-        final motoristaId = alunoData['motoristaId'] as String?;
+        final chats = snapshot.data!.docs;
+        return ListView.builder(
+          padding: const EdgeInsets.all(8.0),
+          itemCount: chats.length,
+          itemBuilder: (context, index) {
+            final chat = chats[index];
+            final participants = List<String>.from(chat['participants']);
+            final motoristaId = participants.firstWhere((id) => id != alunoId);
+            final lastMessage = chat['lastMessage'] as Map<String, dynamic>? ?? {};
 
-        if (motoristaId == null || motoristaId.isEmpty) {
-          return const Center(child: Text('Você ainda não está vinculado a um motorista.'));
-        }
+            return FutureBuilder<DocumentSnapshot>(
+              future: _firestore.collection('users').doc(motoristaId).get(),
+              builder: (context, userSnapshot) {
+                if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
+                  return const SizedBox.shrink();
+                }
+                final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+                final nomeMotorista = userData['nome'] ?? 'Motorista Desconhecido';
+                final fotoUrl = userData['fotoUrl'] as String?;
+                final timestamp = lastMessage['timestamp'] as Timestamp?;
 
-        // Se tem motorista, busca os dados dele
-        return FutureBuilder<DocumentSnapshot>(
-          future: _firestore.collection('users').doc(motoristaId).get(),
-          builder: (context, motoristaSnapshot) {
-            if (motoristaSnapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (!motoristaSnapshot.hasData || !motoristaSnapshot.data!.exists) {
-              return const Center(child: Text('Não foi possível encontrar seu motorista.'));
-            }
-
-            final motoristaData = motoristaSnapshot.data!.data() as Map<String, dynamic>;
-            final nomeMotorista = motoristaData['nome'] ?? 'Motorista';
-            final fotoUrl = motoristaData['fotoUrl'] as String?;
-
-            final ids = [motoristaId, alunoId]..sort();
-            final chatId = ids.join('_');
-
-            // Exibe a conversa com o motorista
-            return ListView(
-              padding: const EdgeInsets.all(8.0),
-              children: [
-                Card.filled(
+                return Card.filled(
                   margin: const EdgeInsets.symmetric(vertical: 4.0),
                   child: ListTile(
                     leading: CircleAvatar(
@@ -197,32 +233,36 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                           ? NetworkImage(fotoUrl)
                           : null,
                       child: fotoUrl == null || fotoUrl.isEmpty
-                          ? const Icon(Icons.person)
+                          ? const Icon(Icons.drive_eta)
                           : null,
                     ),
                     title: Text(
-                      nomeMotorista, 
+                      nomeMotorista,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
-                      'Toque para iniciar a conversa',
-                       style: Theme.of(context).textTheme.bodyMedium,
+                      lastMessage['text'] ?? 'Toque para responder.',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: Text(
+                      timestamp != null ? DateFormat('HH:mm').format(timestamp.toDate()) : '',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => TelaChat(
-                            chatId: chatId,
-                            nomeReceptor: nomeMotorista,
-                            receptorId: motoristaId,
+                            chatId: chat.id,
+                            recipientId: motoristaId,
                           ),
                         ),
                       );
                     },
                   ),
-                ),
-              ],
+                );
+              },
             );
           },
         );
