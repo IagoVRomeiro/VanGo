@@ -15,9 +15,9 @@ class TelaSelecao extends StatelessWidget {
     
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: SingleChildScrollView(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -101,6 +101,18 @@ class TelaSelecao extends StatelessWidget {
                       ],
                     ),
                   ),
+                ),
+                const SizedBox(height: 24),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const TelaSobreCarrossel(),
+                      ),
+                    );
+                  },
+                  child: const Text('Sobre o App'),
                 ),
               ],
             ),

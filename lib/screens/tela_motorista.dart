@@ -156,7 +156,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         _addMarker(LatLng(loc.latitude, loc.longitude), doc.data()['nome'], "Parada do Aluno", BitmapDescriptor.hueGreen);
       }
       
-      final LatLng destinoFinal = LatLng((rota.localDestino as GeoPoint).latitude, (rota.localDestino as GeoPoint).longitude);
+      final LatLng destinoFinal = LatLng(rota.localDestino.latitude, rota.localDestino.longitude);
       _addMarker(destinoFinal, "Destino Final", rota.nome, BitmapDescriptor.hueRed);
 
       final directionsInfo = await directionsService.getDirections(
@@ -313,7 +313,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         MaterialPageRoute(
           builder: (_) => const PerfilScreen(
             collectionPath: 'motoristas',
-            showAppBar: false,
+            showAppBar: true,
+            themeColor: Colors.red,
           ),
         ),
       );
@@ -425,6 +426,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(_getAppBarTitle(_selectedIndex)),
+          backgroundColor: Colors.red,
+          foregroundColor: Colors.black,
           leading: user != null
               ? IconButton(
                   icon: const Icon(Icons.exit_to_app),
@@ -461,7 +464,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
           children: [
             mapaWidget,
             user != null ? const TelaViagem() : _buildLoginPromptWidget(context),
-            user != null ? const TelaGerenciarAlunos() : _buildLoginPromptWidget(context),
+            user != null ? const TelaGerenciarAlunos(showAppBar: false) : _buildLoginPromptWidget(context),
             user != null ? const TelaListaChats() : _buildLoginPromptWidget(context),
             _buildLoginPromptWidget(context),
           ],

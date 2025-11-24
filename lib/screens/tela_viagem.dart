@@ -112,7 +112,7 @@ class _TelaViagemState extends State<TelaViagem> {
                 .where((e) => e.value == true)
                 .map((e) => e.key)
                 .join(', ');
-            final subtitulo = '${rota.localDestino}${diasAtivos.isNotEmpty ? " ($diasAtivos)" : ""}';
+            final subtitulo = '${rota.localDestinoNome}${diasAtivos.isNotEmpty ? " ($diasAtivos)" : ""}';
 
             Widget? trailingWidget;
             if (rota.status == StatusRota.planejada) {
@@ -239,7 +239,7 @@ class _TelaViagemState extends State<TelaViagem> {
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const TelaGerenciarAlunos()),
+              MaterialPageRoute(builder: (_) => const TelaGerenciarAlunos(showAppBar: true)),
             );
           },
         ),

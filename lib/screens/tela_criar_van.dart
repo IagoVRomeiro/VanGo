@@ -183,56 +183,68 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cadastrar Nova Van'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
+    return Theme(
+      data: Theme.of(context).copyWith(
+        colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: Colors.red,
+              onPrimary: Colors.white,
+            ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Widget de upload de imagem
-                    _buildImagePicker(),
-                    const SizedBox(height: 16),
-                    _buildTextField(_placaController, 'Placa (ex: ABC1D23)'),
-                    _buildTextField(
-                        _marcaController, 'Marca (ex: Mercedes-Benz)'),
-                    _buildTextField(_modeloController, 'Modelo (ex: Sprinter)'),
-                    _buildTextField(_corController, 'Cor'),
-                    Row(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Cadastrar Nova Van'),
+          backgroundColor: Colors.red,
+          foregroundColor: Colors.white,
+        ),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : SafeArea(
+                bottom: true,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                            child: _buildTextField(_anoController, 'Ano',
-                                keyboardType: TextInputType.number)),
-                        const SizedBox(width: 16),
-                        Expanded(
-                            child: _buildTextField(
-                                _capacidadeController, 'Capacidade',
-                                keyboardType: TextInputType.number)),
+                        // Widget de upload de imagem
+                        _buildImagePicker(),
+                        const SizedBox(height: 16),
+                        _buildTextField(_placaController, 'Placa (ex: ABC1D23)'),
+                        _buildTextField(
+                            _marcaController, 'Marca (ex: Mercedes-Benz)'),
+                        _buildTextField(_modeloController, 'Modelo (ex: Sprinter)'),
+                        _buildTextField(_corController, 'Cor'),
+                        Row(
+                          children: [
+                            Expanded(
+                                child: _buildTextField(_anoController, 'Ano',
+                                    keyboardType: TextInputType.number)),
+                            const SizedBox(width: 16),
+                            Expanded(
+                                child: _buildTextField(
+                                    _capacidadeController, 'Capacidade',
+                                    keyboardType: TextInputType.number)),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        ElevatedButton.icon(
+                          onPressed: _salvarVan,
+                          icon: const Icon(Icons.save),
+                          label: const Text('SALVAR VAN'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                Theme.of(context).colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: _salvarVan,
-                      icon: const Icon(Icons.save),
-                      label: const Text('SALVAR VAN'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+      ),
     );
   }
 

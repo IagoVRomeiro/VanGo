@@ -15,8 +15,6 @@ dependencies:
 
 
   # Mapas
-  flutter_map: ^8.2.2
-  latlong2: ^0.9.1
   google_maps_flutter: ^2.14.0
   geolocator: ^14.0.2
   geocoding: ^4.0.0
@@ -34,12 +32,7 @@ dependencies:
   # Imagens
   image_picker: ^1.2.1
 
-  # Gerenciamento de Estado
-  provider: ^6.1.2
-
   # Utilitários e ícones
-  cupertino_icons: ^1.0.8
-  font_awesome_flutter: ^10.12.0
   flutter_dotenv: ^6.0.0
   intl: ^0.20.2
   http: ^1.2.1

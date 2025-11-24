@@ -168,11 +168,11 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.motorista.nome),
-        backgroundColor: Colors.amber,
-        foregroundColor: const Color(0xFF2d2d2d), // Texto escuro
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -188,8 +188,8 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
                           _van!.vanFotoUrl!,
                           fit: BoxFit.cover,
                         )
-                      : Image.asset( // Placeholder da VAN
-                          'assets/images/van_placeholder.png', 
+                      : Image.asset(
+                          'assets/van.png',
                           fit: BoxFit.cover,
                         ),
             ),
@@ -199,10 +199,21 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
                 children: [
                   CircleAvatar(
                     radius: 40,
-                    backgroundImage: widget.fotoUrl != null
-                        ? NetworkImage(widget.fotoUrl!)
-                        : const AssetImage('assets/images/user_placeholder.png')
-                            as ImageProvider,
+                    child: ClipOval(
+                      child: widget.fotoUrl != null && widget.fotoUrl!.isNotEmpty
+                          ? Image.network(
+                              widget.fotoUrl!,
+                              fit: BoxFit.cover,
+                              width: 80,
+                              height: 80,
+                            )
+                          : Image.asset(
+                              'assets/vgo_logo.png',
+                              fit: BoxFit.cover,
+                              width: 80,
+                              height: 80,
+                            ),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -216,7 +227,7 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
                       'Avaliação: ${widget.motorista.avaliacao.toStringAsFixed(1)} ★',
                       style: const TextStyle(color: Colors.black87),
                     ),
-                    backgroundColor: Colors.amber.shade200,
+                    backgroundColor: theme.colorScheme.primaryContainer,
                   ),
                   const Divider(height: 40),
                   

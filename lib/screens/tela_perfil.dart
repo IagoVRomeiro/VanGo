@@ -18,11 +18,13 @@ import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
 class PerfilScreen extends StatefulWidget {
   final String collectionPath;
   final bool showAppBar;
+  final Color? themeColor;
 
   const PerfilScreen({
     super.key,
     required this.collectionPath,
     this.showAppBar = true,
+    this.themeColor,
   });
 
   @override
@@ -202,13 +204,15 @@ class _PerfilScreenState extends State<PerfilScreen> {
           .child('profile_pictures')
           .child('$uid.jpg');
 
+      UploadTask uploadTask;
       if (kIsWeb) {
-        await storageRef.putData(await pickedFile.readAsBytes());
+        uploadTask = storageRef.putData(await pickedFile.readAsBytes());
       } else {
-        await storageRef.putFile(File(pickedFile.path));
+        uploadTask = storageRef.putFile(File(pickedFile.path));
       }
 
-      final downloadUrl = await storageRef.getDownloadURL();
+      final TaskSnapshot snapshot = await uploadTask;
+      final downloadUrl = await storageRef.getDownloadURL(); // 🔹 Tenta obter a URL da ref original
 
       await FirebaseFirestore.instance
           .collection('users') 
@@ -278,106 +282,123 @@ class _PerfilScreenState extends State<PerfilScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final Color appBarColor = theme.colorScheme.primary; // Always primary color
+    final Color appBarColor = widget.themeColor ?? theme.colorScheme.primary;
 
     final Widget bodyContent = _isLoading
         ? const Center(child: CircularProgressIndicator())
         : _errorMessage != null
             ? Center(child: Text(_errorMessage!))
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: GestureDetector(
-                        onTap: _escolherEUploadFoto,
-                        child: CircleAvatar(
-                          radius: 50,
-                          backgroundColor: Colors.grey.shade300,
-                          backgroundImage: _fotoUrl != null && _fotoUrl!.isNotEmpty
-                              ? NetworkImage(_fotoUrl!)
-                              : null,
-                          child: _fotoUrl == null || _fotoUrl!.isEmpty
-                              ? const Icon(Icons.person, size: 50)
-                              : null,
+            : SafeArea( // Adiciona SafeArea para respeitar a barra de navegação
+                bottom: true,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 24), // Espaçamento no topo
+                      Center(
+                        child: GestureDetector(
+                          onTap: _escolherEUploadFoto,
+                          child: CircleAvatar(
+                            radius: 50,
+                            backgroundColor: Colors.grey.shade300,
+                            child: _fotoUrl == null || _fotoUrl!.isEmpty
+                                ? const Icon(Icons.person, size: 50)
+                                : ClipRRect(
+                                    borderRadius: BorderRadius.circular(50),
+                                    child: Image.network(
+                                      _fotoUrl!,
+                                      key: ValueKey(_fotoUrl!), // Força o recarregamento
+                                      width: 100,
+                                      height: 100,
+                                      fit: BoxFit.cover,
+                                      loadingBuilder: (context, child, progress) {
+                                        if (progress == null) return child;
+                                        return const Center(child: CircularProgressIndicator());
+                                      },
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return const Icon(Icons.error, size: 50);
+                                      },
+                                    ),
+                                  ),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildSectionTitle("Dados Pessoais"),
-                    TextFormField(
-                      controller: _nomeController,
-                      decoration: const InputDecoration(labelText: "Nome"),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(labelText: "Email"),
-                      enabled: false,
-                    ),
-                    const SizedBox(height: 16),
-                    GooglePlaceAutoCompleteTextField(
-                      textEditingController: _enderecoController,
-                      googleAPIKey: _apiKey,
-                      inputDecoration: const InputDecoration(labelText: "Endereço"),
-                      debounceTime: 400,
-                      countries: const ["br"],
-                      isLatLngRequired: true,
-                      getPlaceDetailWithLatLng: (Prediction prediction) {
-                        if (prediction.lat != null && prediction.lng != null) {
-                           setState(() {
-                            _localizacao = GeoPoint(double.parse(prediction.lat!), double.parse(prediction.lng!));
-                          });
-                        }
-                      },
-                      itemClick: (Prediction prediction) {
-                        _enderecoController.text = prediction.description ?? '';
-                        _enderecoController.selection = TextSelection.fromPosition(
-                          TextPosition(offset: prediction.description?.length ?? 0),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _telefoneController,
-                      decoration: const InputDecoration(labelText: "Telefone"),
-                      inputFormatters: [_telefoneMaskFormatter],
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _cpfController,
-                      decoration: const InputDecoration(labelText: "CPF"),
-                      inputFormatters: [_cpfMaskFormatter],
-                    ),
-                    if (_isDriver) ...[
-                      _buildSectionTitle("Dados do Motorista"),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle("Dados Pessoais"),
                       TextFormField(
-                        controller: _cnhController,
-                        decoration: const InputDecoration(labelText: "CNH"),
+                        controller: _nomeController,
+                        decoration: const InputDecoration(labelText: "Nome"),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: const InputDecoration(labelText: "Email"),
+                        enabled: false,
+                      ),
+                      const SizedBox(height: 16),
+                      GooglePlaceAutoCompleteTextField(
+                        textEditingController: _enderecoController,
+                        googleAPIKey: _apiKey,
+                        inputDecoration: const InputDecoration(labelText: "Endereço"),
+                        debounceTime: 400,
+                        countries: const ["br"],
+                        isLatLngRequired: true,
+                        getPlaceDetailWithLatLng: (Prediction prediction) {
+                          if (prediction.lat != null && prediction.lng != null) {
+                             setState(() {
+                              _localizacao = GeoPoint(double.parse(prediction.lat!), double.parse(prediction.lng!));
+                            });
+                          }
+                        },
+                        itemClick: (Prediction prediction) {
+                          _enderecoController.text = prediction.description ?? '';
+                          _enderecoController.selection = TextSelection.fromPosition(
+                            TextPosition(offset: prediction.description?.length ?? 0),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _telefoneController,
+                        decoration: const InputDecoration(labelText: "Telefone"),
+                        inputFormatters: [_telefoneMaskFormatter],
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _cpfController,
+                        decoration: const InputDecoration(labelText: "CPF"),
+                        inputFormatters: [_cpfMaskFormatter],
+                      ),
+                      if (_isDriver) ...[
+                        _buildSectionTitle("Dados do Motorista"),
+                        TextFormField(
+                          controller: _cnhController,
+                          decoration: const InputDecoration(labelText: "CNH"),
+                        ),
+                      ],
+                      const SizedBox(height: 32),
+                      ElevatedButton.icon(
+                        onPressed: _isSavingWithGeocoding ? null : _salvarDados,
+                        icon: _isSavingWithGeocoding
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.save),
+                        label: const Text('SALVAR ALTERAÇÕES'),
+                      ),
+                      const SizedBox(height: 16),
+                      TextButton.icon(
+                        onPressed: _showDeleteConfirmationDialog,
+                        icon: const Icon(Icons.delete_forever),
+                        label: const Text('Deletar Conta'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
                       ),
                     ],
-                    const SizedBox(height: 32),
-                    ElevatedButton.icon(
-                      onPressed: _isSavingWithGeocoding ? null : _salvarDados,
-                      icon: _isSavingWithGeocoding
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.save),
-                      label: const Text('SALVAR ALTERAÇÕES'),
-                    ),
-                    const SizedBox(height: 16),
-                    TextButton.icon(
-                      onPressed: _showDeleteConfirmationDialog,
-                      icon: const Icon(Icons.delete_forever),
-                      label: const Text('Deletar Conta'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.red,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               );
 
@@ -389,11 +410,16 @@ class _PerfilScreenState extends State<PerfilScreen> {
       appBar: AppBar(
         title: const Text("Meu Perfil"),
         backgroundColor: appBarColor,
-        leading: IconButton(
-          icon: const Icon(Icons.exit_to_app),
-          tooltip: "Sair",
-          onPressed: _logout,
-        ),
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : IconButton(
+                icon: const Icon(Icons.exit_to_app),
+                tooltip: "Sair",
+                onPressed: _logout,
+              ),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications),

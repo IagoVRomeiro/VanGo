@@ -20,11 +20,12 @@ class Rota {
   final String nome;
   final String vanId;
   final String motoristaId;
-  final String localDestino; // ⬅️ CAMPO NOVO
+  final GeoPoint localDestino;
+  final String localDestinoNome;
   final List<String> listaAlunosIds;
-  final Map<String, bool> diasSemana; // ⬅️ CAMPO NOVO
-  final String horarioInicioPrevisto; // ⬅️ TIPO MUDADO
-  final String horarioFimPrevisto;  // ⬅️ TIPO MUDADO
+  final Map<String, bool> diasSemana;
+  final String horarioInicioPrevisto;
+  final String horarioFimPrevisto;
   final StatusRota status;
   final Timestamp? criadoEm;
 
@@ -33,11 +34,12 @@ class Rota {
     required this.nome,
     required this.vanId,
     required this.motoristaId,
-    required this.localDestino, // ⬅️ NOVO
+    required this.localDestino,
+    required this.localDestinoNome,
     required this.listaAlunosIds,
-    required this.diasSemana, // ⬅️ NOVO
-    required this.horarioInicioPrevisto, // ⬅️ MUDADO
-    required this.horarioFimPrevisto, // ⬅️ MUDADO
+    required this.diasSemana,
+    required this.horarioInicioPrevisto,
+    required this.horarioFimPrevisto,
     required this.status,
     this.criadoEm,
   });
@@ -48,31 +50,28 @@ class Rota {
       'vanId': vanId,
       'motoristaId': motoristaId,
       'localDestino': localDestino,
+      'localDestinoNome': localDestinoNome,
       'listaAlunosIds': listaAlunosIds,
       'diasSemana': diasSemana,
       'horarioInicioPrevisto': horarioInicioPrevisto,
       'horarioFimPrevisto': horarioFimPrevisto,
       'status': status.name,
-      // Se 'criadoEm' for nulo, NÃO o adicione (para updates)
-      // Se não for nulo (modo de edição), adicione
-      // Se for nulo E não for modo de edição (novo), use serverTimestamp
       'criadoEm': criadoEm ?? FieldValue.serverTimestamp(),
     };
   }
   
-  // Um toMap seguro para Updates (que não mexe no 'criadoEm')
   Map<String, dynamic> toUpdateMap() {
     return {
       'nome': nome,
       'vanId': vanId,
       'motoristaId': motoristaId,
       'localDestino': localDestino,
+      'localDestinoNome': localDestinoNome,
       'listaAlunosIds': listaAlunosIds,
       'diasSemana': diasSemana,
       'horarioInicioPrevisto': horarioInicioPrevisto,
       'horarioFimPrevisto': horarioFimPrevisto,
       'status': status.name,
-      // NÃO inclui 'criadoEm' para não sobrescrevê-lo
     };
   }
 
@@ -81,16 +80,30 @@ class Rota {
     final data = snapshot.data();
     if (data == null) throw Exception("Documento da rota não encontrado.");
 
+    GeoPoint localDestinoPoint;
+    String localDestinoNomeString = data['localDestinoNome'] ?? '';
+
+    if (data['localDestino'] is String) {
+      localDestinoPoint = const GeoPoint(0, 0); // Padrão, já que não podemos converter
+      localDestinoNomeString = data['localDestino'];
+    } else if (data['localDestino'] is GeoPoint) {
+      localDestinoPoint = data['localDestino'];
+    } else {
+      localDestinoPoint = const GeoPoint(0, 0);
+    }
+
+
     return Rota(
       id: snapshot.id,
       nome: data['nome'] ?? 'Rota sem nome',
       vanId: data['vanId'] ?? '',
       motoristaId: data['motoristaId'] ?? '',
-      localDestino: data['localDestino'] ?? '', // ⬅️ NOVO
+      localDestino: localDestinoPoint,
+      localDestinoNome: localDestinoNomeString,
       listaAlunosIds: List<String>.from(data['listaAlunosIds'] ?? []),
-      diasSemana: (data['diasSemana'] as Map?)?.cast<String, bool>() ?? {}, // ⬅️ NOVO
-      horarioInicioPrevisto: data['horarioInicioPrevisto'] ?? '00:00', // ⬅️ MUDADO
-      horarioFimPrevisto: data['horarioFimPrevisto'] ?? '00:00', // ⬅️ MUDADO
+      diasSemana: (data['diasSemana'] as Map?)?.cast<String, bool>() ?? {},
+      horarioInicioPrevisto: data['horarioInicioPrevisto'] ?? '00:00',
+      horarioFimPrevisto: data['horarioFimPrevisto'] ?? '00:00',
       status: StatusRota.fromString(data['status']),
       criadoEm: data['criadoEm'],
     );

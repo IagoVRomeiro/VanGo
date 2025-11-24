@@ -35,7 +35,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
       }
       return UserRole.indefinido;
     } catch (e) {
-      // Log the error
+      debugPrint('Erro ao buscar role do usuário: $e');
       return UserRole.indefinido;
     }
   }

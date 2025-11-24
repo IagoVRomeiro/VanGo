@@ -100,6 +100,22 @@ class _TelaChatState extends State<TelaChat> {
     }
   }
 
+  Future<void> _recusarConversa() async {
+    try {
+      // Exclui o documento do chat
+      await FirebaseFirestore.instance.collection('chats').doc(widget.chatId).delete();
+      
+      // Retorna para a tela anterior
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao recusar conversa: $e')));
+      }
+    }
+  }
+
 
   Future<void> _enviarMensagem() async {
     final texto = _controller.text.trim();
@@ -243,51 +259,72 @@ class _TelaChatState extends State<TelaChat> {
             ),
             
             // Área de input de mensagem
-            Container(
-              padding: const EdgeInsets.all(8.0),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    spreadRadius: 1,
-                    blurRadius: 10,
-                    offset: const Offset(0, -1),
+            _buildChatInputArea(theme),
+          ],
+        ),
+    );
+  }
+
+  Widget _buildChatInputArea(ThemeData theme) {
+    // Se o chat ainda está pendente e o usuário atual não é o motorista
+    if (_chatStatus == 'inquiry' && !_isCurrentUserDriver) {
+      return Container(
+        padding: const EdgeInsets.all(16.0),
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+        child: const Center(
+          child: Text(
+            'Aguardando aprovação do motorista para iniciar a conversa.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    // Input de texto normal para chats ativos ou para o motorista no chat pendente
+    return Container(
+      padding: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            spreadRadius: 1,
+            blurRadius: 10,
+            offset: const Offset(0, -1),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                decoration: InputDecoration(
+                  hintText: 'Digite uma mensagem...',
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                    borderSide: BorderSide.none,
                   ),
-                ],
-              ),
-              child: SafeArea(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        decoration: InputDecoration(
-                          hintText: 'Digite uma mensagem...',
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(30),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        ),
-                        onSubmitted: (_) => _enviarMensagem(),
-                        enabled: _meuId != null && _chatStatus == 'active',
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(
-                      onPressed: _meuId != null && _chatStatus == 'active' ? _enviarMensagem : null,
-                      icon: const Icon(Icons.send),
-                    ),
-                  ],
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
+                onSubmitted: (_) => _enviarMensagem(),
+                // Habilita o input apenas para chats ativos
+                enabled: _chatStatus == 'active',
               ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              // Habilita o botão apenas para chats ativos
+              onPressed: _chatStatus == 'active' ? _enviarMensagem : null,
+              icon: const Icon(Icons.send),
             ),
           ],
         ),
+      ),
     );
   }
 
@@ -298,10 +335,19 @@ class _TelaChatState extends State<TelaChat> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Expanded(child: Text("Este é um primeiro contato. Aceitar conversa?")),
-          ElevatedButton(
-            onPressed: _aceitarConversa,
-            child: const Text("Aceitar"),
+          const Expanded(child: Text("Aceitar esta conversa?")),
+          Row(
+            children: [
+              TextButton(
+                onPressed: _recusarConversa,
+                child: const Text("Recusar"),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _aceitarConversa,
+                child: const Text("Aceitar"),
+              ),
+            ],
           )
         ],
       ),

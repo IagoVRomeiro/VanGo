@@ -7,7 +7,8 @@ import '../models/aluno.dart'; // Importa o modelo Aluno
 
 /// Tela para o motorista gerenciar alunos vinculados, convites e solicitações.
 class TelaGerenciarAlunos extends StatefulWidget {
-  const TelaGerenciarAlunos({super.key});
+  final bool showAppBar;
+  const TelaGerenciarAlunos({super.key, this.showAppBar = true});
 
   @override
   State<TelaGerenciarAlunos> createState() => _TelaGerenciarAlunosState();
@@ -155,82 +156,82 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
 
   @override
   Widget build(BuildContext context) {
-    if (_motoristaId == null) {
-      return const Center(child: Text('Erro: Motorista não está logado.'));
+    final bodyContent = _motoristaId == null
+        ? const Center(child: Text('Erro: Motorista não está logado.'))
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Lista de Alunos Vinculados',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                _buildListaAlunosVinculados(),
+                const Divider(height: 40),
+                Text(
+                  'Convidar Aluno',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(
+                    labelText: 'Email do Aluno',
+                    hintText: 'Digite o email para convidar',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: _isConvidando ? null : _enviarConvite,
+                  icon: _isConvidando
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.send),
+                  label: Text(_isConvidando ? 'ENVIANDO...' : 'ENVIAR CONVITE'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                ),
+                const Divider(height: 40),
+                Text(
+                  'Convites Enviados',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                _buildListaConvitesEnviados(),
+              ],
+            ),
+          );
+
+    if (!widget.showAppBar) {
+      return bodyContent;
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // -------------------------------------------
-          // 🔹 ATUALIZADO: Seção 1: Lista de Alunos Vinculados
-          // -------------------------------------------
-          Text(
-            'Lista de Alunos Vinculados', // 🔹 TÍTULO ALTERADO
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          _buildListaAlunosVinculados(), // 🔹 FUNÇÃO ALTERADA
-          const Divider(height: 40),
-
-          // -------------------------------------------
-          // Seção 2: Enviar Convite
-          // -------------------------------------------
-          Text(
-            'Convidar Aluno',
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _emailController,
-            decoration: const InputDecoration(
-              labelText: 'Email do Aluno',
-              hintText: 'Digite o email para convidar',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: _isConvidando ? null : _enviarConvite,
-            icon: _isConvidando
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.send),
-            label: Text(_isConvidando ? 'ENVIANDO...' : 'ENVIAR CONVITE'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 48),
-            ),
-          ),
-          const Divider(height: 40),
-
-          // -------------------------------------------
-          // Seção 3: Convites Enviados
-          // -------------------------------------------
-          Text(
-            'Convites Enviados',
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          _buildListaConvitesEnviados(),
-        ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Gerenciar Alunos'),
+        backgroundColor: Colors.red,
+        foregroundColor: Colors.white,
       ),
+      body: bodyContent,
     );
   }
 

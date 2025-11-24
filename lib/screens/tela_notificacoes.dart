@@ -17,7 +17,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
   Future<UserRole>? _userRoleFuture;
   
   // 🔹 Definição das cores para melhor controle
-  final Color _alunoColor = Colors.amber;
+  final Color _alunoColor = Colors.yellow;
   final Color _motoristaColor = const Color(0xFFE53935);
 
   @override
@@ -105,7 +105,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
         appBar: AppBar(
           title: const Text('Notificações'),
           backgroundColor: _alunoColor, // Cor padrão
-          foregroundColor: Colors.white,
+          foregroundColor: Colors.black,
         ),
         body: _buildLoginPrompt(context),
       );
@@ -118,14 +118,15 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
         // Define a cor da AppBar com base no resultado (ou padrão)
         final UserRole userRole = snapshot.data ?? UserRole.indefinido;
         final Color appBarColor = userRole == UserRole.motorista ? _motoristaColor : _alunoColor;
+        final Color foregroundColor = userRole == UserRole.motorista ? Colors.white : Colors.black;
 
         return Scaffold(
           appBar: AppBar(
             title: const Text('Notificações'),
             backgroundColor: appBarColor,
-            foregroundColor: Colors.white,
+            foregroundColor: foregroundColor,
             // Adiciona o botão de voltar se a tela pode ser fechada
-            leading: Navigator.canPop(context) ? const BackButton(color: Colors.white) : null,
+            leading: Navigator.canPop(context) ? BackButton(color: foregroundColor) : null,
           ),
           body: _buildBody(snapshot, userRole),
         );

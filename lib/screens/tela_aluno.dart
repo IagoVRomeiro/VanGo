@@ -76,7 +76,15 @@ class _TelaAlunoState extends State<TelaAluno> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => const TelaBuscaMotorista(),
+          builder: (context) => Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: Theme.of(context).colorScheme.copyWith(
+                    primary: Colors.yellow,
+                    onPrimary: Colors.black,
+                  ),
+            ),
+            child: const TelaBuscaMotorista(),
+          ),
         ),
       );
     }
@@ -86,7 +94,8 @@ class _TelaAlunoState extends State<TelaAluno> {
         MaterialPageRoute(
           builder: (context) => const PerfilScreen(
             collectionPath: 'alunos',
-            showAppBar: false,
+            showAppBar: true,
+            themeColor: Colors.yellow,
           ),
         ),
       );
@@ -132,55 +141,65 @@ class _TelaAlunoState extends State<TelaAluno> {
       ],
     );
 
-    return Scaffold(
-      appBar: AppBar(
-        // Removido backgroundColor e foregroundColor para usar o tema
-        leading: user != null
-            ? IconButton(
-                icon: const Icon(Icons.exit_to_app),
-                tooltip: 'Sair',
-                onPressed: _logout,
-              )
-            : IconButton(
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Voltar',
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-        title: Text(_getAppBarTitle(_selectedIndex)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            tooltip: 'Notificações',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => TelaNotificacoes()),
-              );
-            },
-          ),
-        ],
+    return Theme(
+      data: Theme.of(context).copyWith(
+        colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: Colors.yellow, // Cor primária amarela para alunos
+              onPrimary: Colors.black, // Texto/ícones pretos para contraste
+            ),
       ),
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: [
-          mapaWidget, // Índice 0
-          const Text('Tela de Chat Vazia'), // Índice 1: Substituído por placeholder
-          // As telas de busca e perfil serão navegadas diretamente
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.search), label: 'Procurar'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.person), label: 'Perfil'),
-        ],
-        // Removido selectedItemColor e unselectedItemColor para usar o tema
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.yellow, // Fundo amarelo
+          foregroundColor: Colors.black, // Ícones e texto pretos
+          leading: user != null
+              ? IconButton(
+                  icon: const Icon(Icons.exit_to_app),
+                  tooltip: 'Sair',
+                  onPressed: _logout,
+                )
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Voltar',
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+          title: Text(_getAppBarTitle(_selectedIndex)),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.notifications),
+              tooltip: 'Notificações',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => TelaNotificacoes()),
+                );
+              },
+            ),
+          ],
+        ),
+        body: IndexedStack(
+          index: _selectedIndex,
+          children: [
+            mapaWidget, // Índice 0
+            const TelaListaChats(), // Índice 1
+            // As telas de busca e perfil serão navegadas diretamente
+          ],
+        ),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          type: BottomNavigationBarType.fixed,
+          items: const <BottomNavigationBarItem>[
+            BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
+            BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.search), label: 'Procurar'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.person), label: 'Perfil'),
+          ],
+          selectedItemColor: Colors.black, // Ícones selecionados em preto
+          unselectedItemColor: Colors.grey, // Ícones não selecionados em cinza
+        ),
       ),
     );
   }

@@ -218,3 +218,71 @@ export const notificarAlunosRotaIniciada = functions.firestore
 
         return null;
     });
+
+/**
+ * Cloud Function para notificar um motorista sobre um novo chat de um aluno.
+ */
+export const notificarNovoChat = functions.firestore
+    .document("chats/{chatId}")
+    .onCreate(async (snapshot, context) => {
+        const chatData = snapshot.data();
+
+        if (!chatData) {
+            console.log("No data associated with the event");
+            return;
+        }
+
+        // 1. Verifica se o chat é uma nova solicitação ('inquiry')
+        if (chatData.status !== "inquiry") {
+            console.log(`Chat ${context.params.chatId} não é uma nova solicitação. Status: ${chatData.status}`);
+            return;
+        }
+
+        const participants = chatData.participants as string[];
+        if (participants.length !== 2) {
+            console.error(`Chat ${context.params.chatId} não tem 2 participantes.`);
+            return;
+        }
+
+        const alunoId = chatData.lastMessage.senderId;
+        const motoristaId = participants.find(id => id !== alunoId);
+
+        if (!motoristaId || !alunoId) {
+            console.error(`Não foi possível identificar motorista ou aluno no chat ${context.params.chatId}.`);
+            return;
+        }
+        
+        // 2. Busca os dados do aluno e do motorista
+        const motoristaUserDoc = await db.collection("users").doc(motoristaId).get();
+        const alunoUserDoc = await db.collection("users").doc(alunoId).get();
+
+        const motoristaToken = motoristaUserDoc.data()?.fcmToken as string;
+        const nomeAluno = alunoUserDoc.data()?.nome || "Um aluno";
+
+        if (!motoristaToken) {
+            console.log(`Motorista ${motoristaId} não possui um token FCM.`);
+            return;
+        }
+
+        // 3. Monta a mensagem da notificação
+        const payload = {
+            notification: {
+                title: "Nova solicitação de conversa",
+                body: `${nomeAluno} quer iniciar uma conversa com você.`,
+                sound: "default",
+            },
+            data: {
+                screen: "tela_lista_chats", // Para abrir a tela de chats no app
+                chatId: context.params.chatId,
+            }
+        };
+
+        // 4. Envia a notificação
+        try {
+            console.log(`Enviando notificação para o motorista ${motoristaId}...`);
+            await admin.messaging().sendToDevice([motoristaToken], payload);
+            console.log("Notificação enviada com sucesso.");
+        } catch (error) {
+            console.error("Erro ao enviar notificação para o motorista:", error);
+        }
+    });
