@@ -5,5 +5,16 @@ service firebase.storage {
       allow read: if true;
       allow write: if request.auth != null && imageFileName == request.auth.uid + '.jpg';
     }
+
+    match /vans_pictures/{motoristaId}/{imageName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == motoristaId;
+    }
+
+    match /vans_pictures/{motoristaId}/{imageFileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+                    && request.auth.uid == motoristaId;
+    }
   }
 }
