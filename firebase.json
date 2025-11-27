@@ -5,6 +5,9 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "flutter": {
     "platforms": {
       "android": {
@@ -27,5 +30,9 @@
         }
       }
     }
+  },
+  "extensions": {
+    "firestore-bigquery-export": "invertase/firestore-bigquery-export@1.4.1",
+    "storage-resize-images": "firebase/storage-resize-images@1.2.3"
   }
 }
