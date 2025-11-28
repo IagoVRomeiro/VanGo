@@ -513,7 +513,6 @@ class _PerfilScreenState extends State<PerfilScreen> {
       body: bodyContent,
       drawer: widget.showAppBar
           ? NeonDrawer(
-              items: _buildDrawerItems(context),
               onSettings: _openSettingsFromDrawer,
               onLogout: _logout,
             )
@@ -567,49 +566,6 @@ class _PerfilScreenState extends State<PerfilScreen> {
         BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
       ],
     );
-  }
-
-  List<NeonDrawerItem> _buildDrawerItems(BuildContext context) {
-    if (_isDriver) {
-      return [
-        NeonDrawerItem(
-          icon: Icons.map,
-          label: 'Mapa do Motorista',
-          onTap: () async {
-            Navigator.pushReplacementNamed(context, '/motorista');
-          },
-        ),
-        NeonDrawerItem(
-          icon: Icons.people_alt_outlined,
-          label: 'Gerenciar Alunos',
-          onTap: () async {
-            Navigator.pushReplacementNamed(context, '/motorista');
-          },
-        ),
-      ];
-    } else {
-      return [
-        NeonDrawerItem(
-          icon: Icons.map,
-          label: 'Mapa do Aluno',
-          onTap: () async {
-            Navigator.pushReplacementNamed(context, '/aluno');
-          },
-        ),
-        NeonDrawerItem(
-          icon: Icons.search,
-          label: 'Buscar Motorista',
-          onTap: () async {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const TelaBuscaMotorista(),
-              ),
-            );
-          },
-        ),
-      ];
-    }
   }
 
   Future<void> _openSettingsFromDrawer() async {

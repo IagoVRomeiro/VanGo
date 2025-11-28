@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:vango/services/chat_service.dart';
 import '../models/usuario.dart'; // Importa Usuario para pegar o Role
 import 'package:vango/widgets/neon_app_bar.dart';
@@ -192,24 +193,39 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(8.0),
-          itemCount: notificationSnapshot.data!.docs.length,
-          itemBuilder: (context, index) {
-            final contrato = notificationSnapshot.data!.docs[index];
-            final data = contrato.data() as Map<String, dynamic>;
-            final contratoId = contrato.id;
+        return AnimationLimiter(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(8.0),
+            itemCount: notificationSnapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              final contrato = notificationSnapshot.data!.docs[index];
+              final data = contrato.data() as Map<String, dynamic>;
+              final contratoId = contrato.id;
 
-            if (userRole == UserRole.aluno) {
-              final motoristaId = data['motoristaId'] as String?;
-              if (motoristaId == null) return const SizedBox.shrink();
-              return _buildAlunoNotificationCard(contratoId, motoristaId);
-            } else {
-              final alunoId = data['alunoId'] as String?;
-              if (alunoId == null) return const SizedBox.shrink();
-              return _buildMotoristaNotificationCard(contratoId, alunoId);
-            }
-          },
+              return AnimationConfiguration.staggeredList(
+                position: index,
+                duration: const Duration(milliseconds: 375),
+                child: SlideAnimation(
+                  verticalOffset: 50.0,
+                  child: FadeInAnimation(
+                    child: Builder(
+                      builder: (context) {
+                        if (userRole == UserRole.aluno) {
+                          final motoristaId = data['motoristaId'] as String?;
+                          if (motoristaId == null) return const SizedBox.shrink();
+                          return _buildAlunoNotificationCard(contratoId, motoristaId);
+                        } else {
+                          final alunoId = data['alunoId'] as String?;
+                          if (alunoId == null) return const SizedBox.shrink();
+                          return _buildMotoristaNotificationCard(contratoId, alunoId);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         );
       },
     );

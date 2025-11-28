@@ -275,6 +275,9 @@ class _TelaCadastroState extends State<TelaCadastro> {
     TextInputType? keyboardType,
   }) {
     final theme = Theme.of(context);
+    final borderRadius = BorderRadius.circular(10);
+    final baseBorderColor =
+        theme.colorScheme.onSurface.withOpacity(0.2); // visível em fundos claros/escuros
     return TextFormField(
       controller: controller,
       obscureText: isPassword ? !_senhaVisivel : false,
@@ -298,7 +301,17 @@ class _TelaCadastroState extends State<TelaCadastro> {
               )
             : null,
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+          borderRadius: borderRadius,
+          borderSide: BorderSide(color: baseBorderColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: borderRadius,
+          borderSide: BorderSide(color: baseBorderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: borderRadius,
+          borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+        ),
         contentPadding:
             const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
       ),

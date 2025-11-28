@@ -255,7 +255,6 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
           onNotificationsPressed: _openNotifications,
         ),
         drawer: NeonDrawer(
-          items: _buildDrawerItems(context),
           onSettings: _openSettingsFromDrawer,
           onLogout: _logout,
         ),
@@ -298,40 +297,6 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
             const PerfilScreen(collectionPath: 'alunos', showAppBar: true),
       ),
     );
-  }
-
-  List<NeonDrawerItem> _buildDrawerItems(BuildContext context) {
-    return [
-      NeonDrawerItem(
-        icon: Icons.map,
-        label: 'Mapa',
-        onTap: () async {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => TelaAluno()));
-        },
-      ),
-      NeonDrawerItem(
-        icon: Icons.chat,
-        label: 'Conversas',
-        onTap: () async {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const TelaListaChats(showAppBar: true)),
-          );
-        },
-      ),
-      NeonDrawerItem(
-        icon: Icons.search,
-        label: 'Procurar Motorista',
-        onTap: () async {},
-      ),
-      NeonDrawerItem(
-        icon: Icons.person,
-        label: 'Meu Perfil',
-        onTap: () async {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const PerfilScreen(collectionPath: 'alunos', showAppBar: true)));
-        },
-      ),
-    ];
   }
 
   Widget _buildFiltros(ThemeData theme) {

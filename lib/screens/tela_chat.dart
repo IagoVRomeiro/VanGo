@@ -115,39 +115,13 @@ class _TelaChatState extends State<TelaChat> {
     });
   }
 
-  Future<void> _aceitarConversa() async {
-    try {
-        await FirebaseFirestore.instance.collection('chats').doc(widget.chatId).update({
-            'status': 'active',
-            'updatedAt': FieldValue.serverTimestamp(),
-        });
-    } catch(e) {
-        if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao aceitar conversa: $e')));
-        }
-    }
-  }
 
-  Future<void> _recusarConversa() async {
-    try {
-      // Exclui o documento do chat
-      await FirebaseFirestore.instance.collection('chats').doc(widget.chatId).delete();
-      
-      // Retorna para a tela anterior
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao recusar conversa: $e')));
-      }
-    }
-  }
-
+  bool get _chatLiberadoParaEnvio =>
+      _chatStatus == 'active' || _chatStatus == 'inquiry';
 
   Future<void> _enviarMensagem() async {
     final texto = _controller.text.trim();
-    if (texto.isEmpty || _meuId == null || _chatStatus != 'active') {
+    if (texto.isEmpty || _meuId == null || !_chatLiberadoParaEnvio) {
       return;
     }
 
@@ -233,9 +207,8 @@ class _TelaChatState extends State<TelaChat> {
                     )
                   : Column(
                       children: [
-                        // Barra para aceitar a conversa
-                        if (_isCurrentUserDriver && _chatStatus == 'inquiry')
-                          _buildAcceptChatBar(), // This widget will also use Theme.of(context) internally
+                        if (_chatStatus == 'inquiry')
+                          _buildInquiryInfoBar(currentTheme),
 
                         Expanded(
                           child: StreamBuilder<List<Mensagem>>(
@@ -335,10 +308,8 @@ class _TelaChatState extends State<TelaChat> {
   }
 
   Widget _buildChatInputArea(ThemeData theme) {
-    if (_chatStatus != 'active') {
-      final text = _isCurrentUserDriver
-          ? 'Confirme o contato para liberar o envio de mensagens.'
-          : 'Aguardando aprovação do motorista para iniciar a conversa.';
+    if (!_chatLiberadoParaEnvio) {
+      final text = 'Esta conversa não está mais disponível.';
       return Container(
         padding: const EdgeInsets.all(16.0),
         color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
@@ -373,6 +344,9 @@ class _TelaChatState extends State<TelaChat> {
                 controller: _controller,
                 decoration: InputDecoration(
                   hintText: 'Digite uma mensagem...',
+                  hintStyle: TextStyle(
+                    color: theme.colorScheme.onSurface.withOpacity(0.7),
+                  ),
                   filled: true,
                   fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
                   border: OutlineInputBorder(
@@ -382,6 +356,7 @@ class _TelaChatState extends State<TelaChat> {
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
+                style: TextStyle(color: theme.colorScheme.onSurface),
                 onSubmitted: (_) => _enviarMensagem(),
                 enabled: true,
               ),
@@ -397,27 +372,26 @@ class _TelaChatState extends State<TelaChat> {
     );
   }
 
-  Widget _buildAcceptChatBar() {
+  Widget _buildInquiryInfoBar(ThemeData theme) {
+    final text = _isCurrentUserDriver
+        ? 'Conversando com um aluno ainda não vinculado. Use o vínculo apenas quando desejar adicioná-lo à sua rota.'
+        : 'Você ainda não está vinculado a este motorista, mas pode conversar normalmente.';
     return Container(
-      color: Theme.of(context).colorScheme.tertiaryContainer,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: theme.colorScheme.tertiaryContainer,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Expanded(child: Text("Aceitar esta conversa?")),
-          Row(
-            children: [
-              TextButton(
-                onPressed: _recusarConversa,
-                child: const Text("Recusar"),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _aceitarConversa,
-                child: const Text("Aceitar"),
-              ),
-            ],
-          )
+          Icon(
+            _isCurrentUserDriver ? Icons.info_outline : Icons.chat_bubble_outline,
+            color: theme.colorScheme.onTertiaryContainer,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: theme.colorScheme.onTertiaryContainer),
+            ),
+          ),
         ],
       ),
     );

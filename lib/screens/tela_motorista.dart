@@ -594,50 +594,6 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     );
   }
 
-  List<NeonDrawerItem> _buildDrawerItems(BuildContext context) {
-    return [
-      NeonDrawerItem(
-        icon: Icons.map,
-        label: 'Mapa',
-        onTap: () async {
-          if (!mounted) return;
-          setState(() => _selectedIndex = 0);
-        },
-      ),
-      NeonDrawerItem(
-        icon: Icons.edit_road_outlined,
-        label: 'Gerenciar Viagem',
-        onTap: () async {
-          if (!mounted) return;
-          setState(() => _selectedIndex = 1);
-        },
-      ),
-      NeonDrawerItem(
-        icon: Icons.people_alt_outlined,
-        label: 'Gerenciar Alunos',
-        onTap: () async {
-          if (!mounted) return;
-          setState(() => _selectedIndex = 2);
-        },
-      ),
-      NeonDrawerItem(
-        icon: Icons.chat,
-        label: 'Conversas',
-        onTap: () async {
-          if (!mounted) return;
-          setState(() => _selectedIndex = 3);
-        },
-      ),
-      NeonDrawerItem(
-        icon: Icons.person,
-        label: 'Meu Perfil',
-        onTap: () async {
-          await _navigateToPerfil();
-        },
-      ),
-    ];
-  }
-
   String _getAppBarTitle(int index) {
     switch (index) {
       case 0:
@@ -754,7 +710,6 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       drawer: isLoggedIn
           ? NeonDrawer(
               title: 'Menu do Motorista',
-              items: _buildDrawerItems(context),
               onSettings: _navigateToPerfil,
               onLogout: _logout,
             )

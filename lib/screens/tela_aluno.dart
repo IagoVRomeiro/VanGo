@@ -155,45 +155,6 @@ class _TelaAlunoState extends State<TelaAluno> {
     );
   }
 
-  List<NeonDrawerItem> _buildDrawerItems(BuildContext context) {
-    return [
-      NeonDrawerItem(
-        icon: Icons.map,
-        label: 'Mapa',
-        onTap: () async {
-          if (!mounted) return;
-          if (_selectedIndex != 0) {
-            setState(() => _selectedIndex = 0);
-          }
-        },
-      ),
-      NeonDrawerItem(
-        icon: Icons.chat,
-        label: 'Conversas',
-        onTap: () async {
-          if (!mounted) return;
-          if (_selectedIndex != 1) {
-            setState(() => _selectedIndex = 1);
-          }
-        },
-      ),
-      NeonDrawerItem(
-        icon: Icons.search,
-        label: 'Buscar Motorista',
-        onTap: () async {
-          await _navigateToBuscaMotorista();
-        },
-      ),
-      NeonDrawerItem(
-        icon: Icons.person,
-        label: 'Meu Perfil',
-        onTap: () async {
-          await _navigateToPerfil();
-        },
-      ),
-    ];
-  }
-
   String _getAppBarTitle(int index) {
     switch (index) {
       case 0:
@@ -287,7 +248,6 @@ class _TelaAlunoState extends State<TelaAluno> {
           : null,
       drawer: isLoggedIn
           ? NeonDrawer(
-              items: _buildDrawerItems(context),
               onSettings: _navigateToPerfil,
               onLogout: _logout,
             )

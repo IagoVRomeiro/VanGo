@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:intl/intl.dart';
 import 'package:vango/models/usuario.dart';
 import 'package:vango/services/chat_service.dart';
@@ -140,7 +141,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: Text(
-              "Solicitações de alunos não vinculados",
+              "Conversas com alunos não vinculados",
               style: theme.textTheme.titleLarge,
             ),
           ),
@@ -178,72 +179,83 @@ class _TelaListaChatsState extends State<TelaListaChats> {
         }
 
         final chats = snapshot.data!.docs;
-        return ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          itemCount: chats.length,
-          itemBuilder: (context, index) {
-            final chat = chats[index];
-            final participants = List<String>.from(chat['participants']);
-            final otherUserId = participants.firstWhere((id) => id != motoristaId);
-            final lastMessage = chat['lastMessage'] as Map<String, dynamic>? ?? {};
-            final status = chat['status'] as String? ?? 'active';
+        return AnimationLimiter(
+          child: ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            itemCount: chats.length,
+            itemBuilder: (context, index) {
+              final chat = chats[index];
+              final participants = List<String>.from(chat['participants']);
+              final otherUserId = participants.firstWhere((id) => id != motoristaId);
+              final lastMessage = chat['lastMessage'] as Map<String, dynamic>? ?? {};
+              final status = chat['status'] as String? ?? 'active';
 
-            return FutureBuilder<DocumentSnapshot>(
-              future: _firestore.collection('users').doc(otherUserId).get(),
-              builder: (context, userSnapshot) {
-                if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
-                  return const SizedBox.shrink();
-                }
-                final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-                final nome = userData['nome'] ?? 'Usuário Desconhecido';
-                final fotoUrl = userData['fotoUrl'] as String?;
-                final timestamp = lastMessage['timestamp'] as Timestamp?;
+              return AnimationConfiguration.staggeredList(
+                position: index,
+                duration: const Duration(milliseconds: 375),
+                child: SlideAnimation(
+                  verticalOffset: 50.0,
+                  child: FadeInAnimation(
+                    child: FutureBuilder<DocumentSnapshot>(
+                      future: _firestore.collection('users').doc(otherUserId).get(),
+                      builder: (context, userSnapshot) {
+                        if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
+                          return const SizedBox.shrink();
+                        }
+                        final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+                        final nome = userData['nome'] ?? 'Usuário Desconhecido';
+                        final fotoUrl = userData['fotoUrl'] as String?;
+                        final timestamp = lastMessage['timestamp'] as Timestamp?;
 
-                return Card.filled(
-                  color: status == 'inquiry' ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5) : null,
-                  margin: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: fotoUrl != null && fotoUrl.isNotEmpty
-                          ? NetworkImage(fotoUrl)
-                          : null,
-                      child: fotoUrl == null || fotoUrl.isEmpty
-                          ? Text(nome.isNotEmpty ? nome[0].toUpperCase() : '?')
-                          : null,
-                    ),
-                    title: Text(
-                      nome,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      status == 'inquiry'
-                          ? 'Solicitação pendente'
-                          : (lastMessage['text'] ?? 'Toque para responder.'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: Text(
-                      timestamp != null ? DateFormat('HH:mm').format(timestamp.toDate()) : '',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => TelaChat(
-                            chatId: chat.id,
-                            recipientId: otherUserId,
+                        return Card.filled(
+                          color: status == 'inquiry' ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5) : null,
+                          margin: const EdgeInsets.symmetric(vertical: 4.0),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundImage: fotoUrl != null && fotoUrl.isNotEmpty
+                                  ? NetworkImage(fotoUrl)
+                                  : null,
+                              child: fotoUrl == null || fotoUrl.isEmpty
+                                  ? Text(nome.isNotEmpty ? nome[0].toUpperCase() : '?')
+                                  : null,
+                            ),
+                            title: Text(
+                              nome,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                              status == 'inquiry'
+                                  ? 'Aluno ainda não vinculado'
+                                  : (lastMessage['text'] ?? 'Toque para responder.'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: Text(
+                              timestamp != null ? DateFormat('HH:mm').format(timestamp.toDate()) : '',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => TelaChat(
+                                    chatId: chat.id,
+                                    recipientId: otherUserId,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
-                );
-              },
-            );
-          },
+                ),
+              );
+            },
+          ),
         );
       },
     );
@@ -395,10 +407,10 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                             .titleMedium
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
-                      subtitle: Text(
-                        status == 'inquiry'
-                            ? 'Aguardando aprovação do motorista'
-                            : (lastMessage['text'] ?? 'Toque para responder.'),
+                    subtitle: Text(
+                      status == 'inquiry'
+                          ? 'Você ainda não está vinculado a este motorista'
+                          : (lastMessage['text'] ?? 'Toque para responder.'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -412,9 +424,9 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                                 : '',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
-                          if (status == 'inquiry')
-                            Text(
-                              'Pendente',
+                        if (status == 'inquiry')
+                          Text(
+                            'Não vinculado',
                               style: Theme.of(context).textTheme.labelSmall,
                             ),
                         ],
@@ -438,9 +450,23 @@ class _TelaListaChatsState extends State<TelaListaChats> {
           }
         }
 
-        return ListView(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          children: children,
+        return AnimationLimiter(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            itemCount: children.length,
+            itemBuilder: (context, index) {
+              return AnimationConfiguration.staggeredList(
+                position: index,
+                duration: const Duration(milliseconds: 375),
+                child: SlideAnimation(
+                  verticalOffset: 50.0,
+                  child: FadeInAnimation(
+                    child: children[index],
+                  ),
+                ),
+              );
+            },
+          ),
         );
       },
     );
@@ -493,40 +519,51 @@ class _TelaListaChatsState extends State<TelaListaChats> {
               );
             }
 
-            return ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              itemCount: usuarios.length,
-              itemBuilder: (context, index) {
-                final usuario = usuarios[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: usuario.fotoUrl != null && usuario.fotoUrl!.isNotEmpty
-                          ? NetworkImage(usuario.fotoUrl!)
-                          : null,
-                      child: usuario.fotoUrl == null || usuario.fotoUrl!.isEmpty
-                          ? Text(usuario.nome.isNotEmpty ? usuario.nome[0].toUpperCase() : '?')
-                          : null,
+            return AnimationLimiter(
+              child: ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                itemCount: usuarios.length,
+                itemBuilder: (context, index) {
+                  final usuario = usuarios[index];
+                  return AnimationConfiguration.staggeredList(
+                    position: index,
+                    duration: const Duration(milliseconds: 375),
+                    child: SlideAnimation(
+                      verticalOffset: 50.0,
+                      child: FadeInAnimation(
+                        child: Card(
+                          margin: const EdgeInsets.symmetric(vertical: 4.0),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundImage: usuario.fotoUrl != null && usuario.fotoUrl!.isNotEmpty
+                                  ? NetworkImage(usuario.fotoUrl!)
+                                  : null,
+                              child: usuario.fotoUrl == null || usuario.fotoUrl!.isEmpty
+                                  ? Text(usuario.nome.isNotEmpty ? usuario.nome[0].toUpperCase() : '?')
+                                  : null,
+                            ),
+                            title: Text(usuario.nome, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                            subtitle: Text(
+                              [
+                                usuario.endereco ?? 'Endereço não informado',
+                                'Rota: ${(rotasPorAluno[usuario.id]?.join(", ") ?? 'Não vinculada')}',
+                              ].join('\n'),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.chat_bubble_outline),
+                              tooltip: 'Conversar',
+                              onPressed: () => _abrirChatComAluno(usuario.id, motoristaId),
+                            ),
+                            onTap: () => _abrirChatComAluno(usuario.id, motoristaId),
+                          ),
+                        ),
+                      ),
                     ),
-                    title: Text(usuario.nome, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                    subtitle: Text(
-                      [
-                        usuario.endereco ?? 'Endereço não informado',
-                        'Rota: ${(rotasPorAluno[usuario.id]?.join(", ") ?? 'Não vinculada')}',
-                      ].join('\n'),
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.chat_bubble_outline),
-                      tooltip: 'Conversar',
-                      onPressed: () => _abrirChatComAluno(usuario.id, motoristaId),
-                    ),
-                    onTap: () => _abrirChatComAluno(usuario.id, motoristaId),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             );
           },
         );
