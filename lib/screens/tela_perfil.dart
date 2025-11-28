@@ -2,18 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:geocoding/geocoding.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
-
-import 'tela_login.dart'; // Import para TelaLogin
-import 'tela_notificacoes.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:vango/services/storage_service.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import 'tela_login.dart';
+import 'tela_notificacoes.dart';
+import '../widgets/neon_app_bar.dart';
+import '../widgets/neon_bottom_nav_bar.dart';
+import '../widgets/neon_drawer.dart';
+import 'tela_busca_motorista.dart';
+
+class PerfilNavResult {
+  final int targetIndex;
+  final bool isDriver;
+
+  const PerfilNavResult({
+    required this.targetIndex,
+    required this.isDriver,
+  });
+}
 
 class PerfilScreen extends StatefulWidget {
   final String collectionPath;
@@ -32,7 +45,8 @@ class PerfilScreen extends StatefulWidget {
 }
 
 class _PerfilScreenState extends State<PerfilScreen> {
-  final String _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY']!;
+  final StorageService _storageService = StorageService();
+  late final String _apiKey;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -58,14 +72,16 @@ class _PerfilScreenState extends State<PerfilScreen> {
   String? _fotoUrl;
   GeoPoint? _localizacao;
   String _initialAddress = "";
-  bool _isSavingWithGeocoding = false;
+  bool _isSaving = false;
+  final FocusNode _enderecoFocusNode = FocusNode();
 
   bool get _isDriver => widget.collectionPath == 'motoristas';
 
   @override
   void initState() {
     super.initState();
-    _carregarDadosDoUsuario();
+    _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? 'YOUR_API_KEY';
+    _verificarLoginECarregar();
   }
 
   @override
@@ -73,10 +89,26 @@ class _PerfilScreenState extends State<PerfilScreen> {
     _nomeController.dispose();
     _emailController.dispose();
     _enderecoController.dispose();
+    _enderecoFocusNode.dispose();
     _cnhController.dispose();
     _telefoneController.dispose();
     _cpfController.dispose();
     super.dispose();
+  }
+
+  void _verificarLoginECarregar() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const TelaLogin()),
+          (route) => false,
+        );
+      });
+      return;
+    }
+    _carregarDadosDoUsuario();
   }
 
   Future<void> _carregarDadosDoUsuario() async {
@@ -91,10 +123,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
           .doc(user.uid)
           .get();
 
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
 
       if (profileDoc.exists && userDoc.exists && mounted) {
         final profileData = profileDoc.data()!;
@@ -104,17 +134,17 @@ class _PerfilScreenState extends State<PerfilScreen> {
           _emailController.text = user.email ?? userData['email'] ?? '';
           _fotoUrl = userData['fotoUrl'];
 
-          _nomeController.text = profileData['nome'] ?? '';
+          _nomeController.text = userData['nome'] ?? '';
           _localizacao = profileData['localizacao'] as GeoPoint?;
 
-          _telefoneController.text = profileData['telefone'] ?? '';
-          _cpfController.text = profileData['cpf'] ?? '';
+          _telefoneController.text = userData['telefone'] ?? '';
           
-          _initialAddress = profileData['endereco'] ?? '';
+          _initialAddress = userData['endereco'] ?? '';
           _enderecoController.text = _initialAddress;
 
           if (_isDriver) {
             _cnhController.text = profileData['cnh'] ?? '';
+            _cpfController.text = profileData['cpf'] ?? '';
           }
         });
       } else if (mounted) {
@@ -139,23 +169,18 @@ class _PerfilScreenState extends State<PerfilScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    setState(() => _isSavingWithGeocoding = true);
+    setState(() => _isSaving = true);
 
-    // O GeoPoint já é atualizado pelo widget de autocomplete.
-    // A geocodificação manual foi removida.
     String enderecoTexto = _enderecoController.text.trim();
 
     Map<String, dynamic> dadosParaSalvar = {
-      "nome": _nomeController.text.trim(),
-      "telefone": _telefoneMaskFormatter.getUnmaskedText(),
-      "cpf": _cpfMaskFormatter.getUnmaskedText(),
-      "endereco": enderecoTexto,
-      "localizacao": _localizacao, // Usa o GeoPoint atualizado
+      "localizacao": _localizacao,
     };
 
     if (_isDriver) {
       dadosParaSalvar.addAll({
         "cnh": _cnhController.text.trim(),
+        "cpf": _cpfMaskFormatter.getUnmaskedText(),
       });
     }
 
@@ -164,6 +189,12 @@ class _PerfilScreenState extends State<PerfilScreen> {
           .collection(widget.collectionPath)
           .doc(uid)
           .set(dadosParaSalvar, SetOptions(merge: true));
+
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'nome': _nomeController.text.trim(),
+        'endereco': enderecoTexto,
+        'telefone': _telefoneMaskFormatter.getUnmaskedText(),
+      });
 
       if (mounted) {
         setState(() {
@@ -181,15 +212,55 @@ class _PerfilScreenState extends State<PerfilScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isSavingWithGeocoding = false);
+        setState(() => _isSaving = false);
       }
     }
   }
 
+  Future<bool> _requestGalleryPermission() async {
+    if (kIsWeb) return true;
+
+    PermissionStatus status;
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      status = await Permission.photos.request();
+    } else {
+      status = await Permission.storage.request();
+      if (!status.isGranted && !status.isPermanentlyDenied) {
+        status = await Permission.photos.request();
+      }
+    }
+
+    if (status.isGranted || status.isLimited) {
+      return true;
+    }
+
+    if (status.isPermanentlyDenied) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Permissão para acessar a galeria foi negada permanentemente. Ajuste nas configurações do aparelho.',
+            ),
+          ),
+        );
+      }
+      await openAppSettings();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Permissão para acessar a galeria negada.')),
+      );
+    }
+
+    return false;
+  }
+
   Future<void> _escolherEUploadFoto() async {
+    final hasPermission = await _requestGalleryPermission();
+    if (!hasPermission) return;
+
     final ImagePicker picker = ImagePicker();
     final XFile? pickedFile =
-        await picker.pickImage(source: ImageSource.gallery);
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
 
     if (pickedFile == null) return;
 
@@ -199,23 +270,11 @@ class _PerfilScreenState extends State<PerfilScreen> {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) throw Exception("Usuário não está logado.");
 
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('profile_pictures')
-          .child('$uid.jpg');
-
-      UploadTask uploadTask;
-      if (kIsWeb) {
-        uploadTask = storageRef.putData(await pickedFile.readAsBytes());
-      } else {
-        uploadTask = storageRef.putFile(File(pickedFile.path));
-      }
-
-      final TaskSnapshot snapshot = await uploadTask;
-      final downloadUrl = await storageRef.getDownloadURL(); // 🔹 Tenta obter a URL da ref original
+      final downloadUrl =
+          await _storageService.uploadProfileImage(uid, pickedFile);
 
       await FirebaseFirestore.instance
-          .collection('users') 
+          .collection('users')
           .doc(uid)
           .update({'fotoUrl': downloadUrl});
 
@@ -259,7 +318,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
       }
     }
   }
-  
+
   void _goToNotifications() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => TelaNotificacoes()),
@@ -279,23 +338,78 @@ class _PerfilScreenState extends State<PerfilScreen> {
     );
   }
 
+  Widget _buildEnderecoField(BuildContext context) {
+    if (_apiKey.isEmpty || _apiKey == 'YOUR_API_KEY') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: _enderecoController,
+            focusNode: _enderecoFocusNode,
+            readOnly: true,
+            decoration: const InputDecoration(
+              labelText: "Endereço",
+              hintText: 'Configure GOOGLE_MAPS_API_KEY no arquivo assets/.env',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Não foi possível carregar o autocomplete sem a chave da API do Google Maps.',
+            style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+          ),
+        ],
+      );
+    }
+
+    return GooglePlaceAutoCompleteTextField(
+      textEditingController: _enderecoController,
+      focusNode: _enderecoFocusNode,
+      googleAPIKey: _apiKey,
+      inputDecoration: const InputDecoration(labelText: "Endereço"),
+      debounceTime: 400,
+      language: 'pt-BR',
+      countries: const ["br"],
+      isLatLngRequired: true,
+      textStyle: Theme.of(context).textTheme.bodyMedium ?? const TextStyle(),
+      itemClick: (Prediction prediction) {
+        _enderecoController.text = prediction.description ?? '';
+        _enderecoController.selection = TextSelection.fromPosition(
+          TextPosition(offset: prediction.description?.length ?? 0),
+        );
+      },
+      getPlaceDetailWithLatLng: (Prediction prediction) {
+        if (prediction.lat != null && prediction.lng != null) {
+          setState(() {
+            _localizacao = GeoPoint(
+              double.parse(prediction.lat!),
+              double.parse(prediction.lng!),
+            );
+          });
+        }
+      },
+      itemBuilder: (context, index, Prediction prediction) {
+        return ListTile(
+          dense: true,
+          title: Text(prediction.description ?? ''),
+        );
+      },
+    );
+  }
+  
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final Color appBarColor = widget.themeColor ?? theme.colorScheme.primary;
-
     final Widget bodyContent = _isLoading
         ? const Center(child: CircularProgressIndicator())
         : _errorMessage != null
             ? Center(child: Text(_errorMessage!))
-            : SafeArea( // Adiciona SafeArea para respeitar a barra de navegação
+            : SafeArea(
                 bottom: true,
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(height: 24), // Espaçamento no topo
+                      const SizedBox(height: 24),
                       Center(
                         child: GestureDetector(
                           onTap: _escolherEUploadFoto,
@@ -308,15 +422,18 @@ class _PerfilScreenState extends State<PerfilScreen> {
                                     borderRadius: BorderRadius.circular(50),
                                     child: Image.network(
                                       _fotoUrl!,
-                                      key: ValueKey(_fotoUrl!), // Força o recarregamento
+                                      key: ValueKey(_fotoUrl!),
                                       width: 100,
                                       height: 100,
                                       fit: BoxFit.cover,
-                                      loadingBuilder: (context, child, progress) {
+                                      loadingBuilder:
+                                          (context, child, progress) {
                                         if (progress == null) return child;
-                                        return const Center(child: CircularProgressIndicator());
+                                        return const Center(
+                                            child: CircularProgressIndicator());
                                       },
-                                      errorBuilder: (context, error, stackTrace) {
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
                                         return const Icon(Icons.error, size: 50);
                                       },
                                     ),
@@ -337,27 +454,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         enabled: false,
                       ),
                       const SizedBox(height: 16),
-                      GooglePlaceAutoCompleteTextField(
-                        textEditingController: _enderecoController,
-                        googleAPIKey: _apiKey,
-                        inputDecoration: const InputDecoration(labelText: "Endereço"),
-                        debounceTime: 400,
-                        countries: const ["br"],
-                        isLatLngRequired: true,
-                        getPlaceDetailWithLatLng: (Prediction prediction) {
-                          if (prediction.lat != null && prediction.lng != null) {
-                             setState(() {
-                              _localizacao = GeoPoint(double.parse(prediction.lat!), double.parse(prediction.lng!));
-                            });
-                          }
-                        },
-                        itemClick: (Prediction prediction) {
-                          _enderecoController.text = prediction.description ?? '';
-                          _enderecoController.selection = TextSelection.fromPosition(
-                            TextPosition(offset: prediction.description?.length ?? 0),
-                          );
-                        },
-                      ),
+                      _buildEnderecoField(context),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _telefoneController,
@@ -365,13 +462,14 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         inputFormatters: [_telefoneMaskFormatter],
                       ),
                       const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _cpfController,
-                        decoration: const InputDecoration(labelText: "CPF"),
-                        inputFormatters: [_cpfMaskFormatter],
-                      ),
                       if (_isDriver) ...[
                         _buildSectionTitle("Dados do Motorista"),
+                        TextFormField(
+                          controller: _cpfController,
+                          decoration: const InputDecoration(labelText: "CPF"),
+                          inputFormatters: [_cpfMaskFormatter],
+                        ),
+                        const SizedBox(height: 16),
                         TextFormField(
                           controller: _cnhController,
                           decoration: const InputDecoration(labelText: "CNH"),
@@ -379,12 +477,13 @@ class _PerfilScreenState extends State<PerfilScreen> {
                       ],
                       const SizedBox(height: 32),
                       ElevatedButton.icon(
-                        onPressed: _isSavingWithGeocoding ? null : _salvarDados,
-                        icon: _isSavingWithGeocoding
+                        onPressed: _isSaving ? null : _salvarDados,
+                        icon: _isSaving
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.save),
                         label: const Text('SALVAR ALTERAÇÕES'),
                       ),
@@ -407,28 +506,117 @@ class _PerfilScreenState extends State<PerfilScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Meu Perfil"),
-        backgroundColor: appBarColor,
-        leading: Navigator.canPop(context)
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => Navigator.of(context).pop(),
-              )
-            : IconButton(
-                icon: const Icon(Icons.exit_to_app),
-                tooltip: "Sair",
-                onPressed: _logout,
-              ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            tooltip: "Notificações",
-            onPressed: _goToNotifications,
-          ),
-        ],
+      appBar: NeonAppBar(
+        title: "Meu Perfil",
+        onNotificationsPressed: _goToNotifications,
       ),
       body: bodyContent,
+      drawer: widget.showAppBar
+          ? NeonDrawer(
+              items: _buildDrawerItems(context),
+              onSettings: _openSettingsFromDrawer,
+              onLogout: _logout,
+            )
+          : null,
+      bottomNavigationBar: _buildBottomNavigationBar(),
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    if (_isDriver) {
+      return NeonBottomNavBar(
+        currentIndex: 4,
+        onTap: (index) {
+          if (index == 4) return;
+          if (Navigator.canPop(context)) {
+            Navigator.of(context).pop(
+              PerfilNavResult(targetIndex: index, isDriver: true),
+            );
+          } else {
+            Navigator.pushReplacementNamed(context, '/motorista');
+          }
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.edit_road_outlined), label: 'Viagem'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.people_alt_outlined), label: 'Alunos'),
+          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+        ],
+      );
+    }
+
+    return NeonBottomNavBar(
+      currentIndex: 3,
+      onTap: (index) {
+        if (index == 3) return;
+        if (Navigator.canPop(context)) {
+          Navigator.of(context).pop(
+            PerfilNavResult(targetIndex: index, isDriver: false),
+          );
+        } else {
+          Navigator.pushReplacementNamed(context, '/aluno');
+        }
+      },
+      items: const [
+        BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
+        BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
+        BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Procurar'),
+        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+      ],
+    );
+  }
+
+  List<NeonDrawerItem> _buildDrawerItems(BuildContext context) {
+    if (_isDriver) {
+      return [
+        NeonDrawerItem(
+          icon: Icons.map,
+          label: 'Mapa do Motorista',
+          onTap: () async {
+            Navigator.pushReplacementNamed(context, '/motorista');
+          },
+        ),
+        NeonDrawerItem(
+          icon: Icons.people_alt_outlined,
+          label: 'Gerenciar Alunos',
+          onTap: () async {
+            Navigator.pushReplacementNamed(context, '/motorista');
+          },
+        ),
+      ];
+    } else {
+      return [
+        NeonDrawerItem(
+          icon: Icons.map,
+          label: 'Mapa do Aluno',
+          onTap: () async {
+            Navigator.pushReplacementNamed(context, '/aluno');
+          },
+        ),
+        NeonDrawerItem(
+          icon: Icons.search,
+          label: 'Buscar Motorista',
+          onTap: () async {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const TelaBuscaMotorista(),
+              ),
+            );
+          },
+        ),
+      ];
+    }
+  }
+
+  Future<void> _openSettingsFromDrawer() async {
+    // Já estamos na tela de configurações/perfil.
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Você já está na tela de configurações.')),
     );
   }
 
@@ -448,9 +636,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
               },
             ),
             TextButton(
-              child: const Text("Deletar", style: TextStyle(color: Colors.red)),
+              child:
+                  const Text("Deletar", style: TextStyle(color: Colors.red)),
               onPressed: () {
-                Navigator.of(context).pop(); // Fecha o dialogo
+                Navigator.of(context).pop();
                 _deleteAccount();
               },
             ),
@@ -475,38 +664,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
       _isLoading = true;
     });
 
-    final uid = user.uid;
-
     try {
-      // Inicia uma transação ou batch para garantir atomicidade
-      final WriteBatch batch = FirebaseFirestore.instance.batch();
-
-      // 1. Deleta o documento do perfil específico (motorista ou aluno)
-      final profileDocRef = FirebaseFirestore.instance.collection(widget.collectionPath).doc(uid);
-      batch.delete(profileDocRef);
-
-      // 2. Deleta o documento da coleção 'users'
-      final userDocRef = FirebaseFirestore.instance.collection('users').doc(uid);
-      batch.delete(userDocRef);
-
-      // Aplica as deleções no Firestore
-      await batch.commit();
-
-      // 3. Deleta a foto de perfil do Firebase Storage, se existir
-      try {
-        final storageRef = FirebaseStorage.instance.ref().child('profile_pictures').child('$uid.jpg');
-        await storageRef.delete();
-      } on FirebaseException catch (e) {
-        // Ignora o erro 'object-not-found', pois o usuário pode não ter uma foto
-        if (e.code != 'object-not-found') {
-          rethrow; // Propaga outros erros de storage
-        }
-      }
-
-      // 4. Deleta o usuário do Firebase Authentication
       await user.delete();
 
-      // 5. Navega para a tela de login
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Conta deletada com sucesso.")),
@@ -520,18 +680,17 @@ class _PerfilScreenState extends State<PerfilScreen> {
       String message;
       if (e.code == 'requires-recent-login') {
         message = "Por segurança, faça login novamente para deletar sua conta.";
-        // Desloga o usuário para forçar a re-autenticação
         await FirebaseAuth.instance.signOut();
-        
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), duration: const Duration(seconds: 5)),
+          SnackBar(
+              content: Text(message), duration: const Duration(seconds: 5)),
         );
-        
+
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const TelaLogin()),
           (route) => false,
         );
-        return; // Retorna para não mostrar o snackbar genérico abaixo
+        return;
       } else {
         message = "Erro ao deletar conta: ${e.message}";
       }

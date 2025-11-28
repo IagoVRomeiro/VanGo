@@ -2,12 +2,15 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:vango/models/van.dart'; // Seu modelo de Van (que espera 'vanFotoUrl')
+import 'package:vango/models/van.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io'; // Para 'File' (mobile)
-import 'package:flutter/foundation.dart' show kIsWeb; // Para 'kIsWeb'
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:vango/widgets/neon_app_bar.dart';
+import 'package:vango/services/storage_service.dart'; // Import do novo serviço
+import 'tela_notificacoes.dart';
 
 class CadastrarVanScreen extends StatefulWidget {
   const CadastrarVanScreen({super.key});
@@ -18,6 +21,7 @@ class CadastrarVanScreen extends StatefulWidget {
 
 class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _storageService = StorageService(); // Instância do serviço
 
   final _placaController = TextEditingController();
   final _modeloController = TextEditingController();
@@ -26,11 +30,8 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
   final _capacidadeController = TextEditingController();
   final _corController = TextEditingController();
 
-  // Variáveis para o upload de imagem
-  XFile? _imageFile; // Para mobile
-  Uint8List? _imageBytes; // Para web
-  bool _isUploading = false; // Para feedback de UI
-
+  XFile? _imageFile;
+  bool _isUploading = false;
   bool _isLoading = false;
 
   @override
@@ -44,66 +45,58 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     super.dispose();
   }
 
-  /// Função para escolher a imagem
+  Future<bool> _requestGalleryPermission() async {
+    if (kIsWeb) {
+      return true;
+    }
+
+    PermissionStatus status;
+    if (Platform.isIOS) {
+      status = await Permission.photos.request();
+    } else {
+      status = await Permission.storage.request();
+      if (!status.isGranted && !status.isPermanentlyDenied) {
+        status = await Permission.photos.request();
+      }
+    }
+
+    if (status.isGranted || status.isLimited) {
+      return true;
+    }
+
+    if (status.isPermanentlyDenied && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Permissão para acessar a galeria foi negada permanentemente. Ajuste nas configurações do aparelho.',
+          ),
+        ),
+      );
+      await openAppSettings();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Permissão para acessar a galeria negada.')),
+      );
+    }
+
+    return false;
+  }
+
   Future<void> _pickImage() async {
+    final hasPermission = await _requestGalleryPermission();
+    if (!hasPermission) return;
+
     final ImagePicker picker = ImagePicker();
     final XFile? pickedFile =
-        await picker.pickImage(source: ImageSource.gallery);
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
 
-    if (pickedFile == null) return;
-
-    if (kIsWeb) {
-      _imageBytes = await pickedFile.readAsBytes();
-      _imageFile = null; // Garante que apenas um seja usado
-    } else {
-      _imageFile = pickedFile;
-      _imageBytes = null; // Garante que apenas um seja usado
-    }
-    setState(() {}); // Atualiza a UI para mostrar a prévia
-  }
-
-  /// Função para fazer o upload da foto para o Storage
-  /// Retorna a URL do download ou null se nenhuma foto foi escolhida.
-  Future<String?> _uploadFoto(String motoristaId, String placa) async {
-    // Se nenhuma imagem foi escolhida, retorna nulo
-    if (_imageFile == null && _imageBytes == null) {
-      return null;
-    }
-
-    setState(() => _isUploading = true);
-
-    try {
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('vans_pictures')
-          .child('$motoristaId/$placa.jpg');
-
-      // Upload baseado na plataforma
-      if (kIsWeb) {
-        await storageRef.putData(_imageBytes!);
-      } else {
-        await storageRef.putFile(File(_imageFile!.path));
-      }
-
-      final downloadUrl = await storageRef.getDownloadURL();
-      return downloadUrl;
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Erro ao enviar foto: $e'),
-              backgroundColor: Colors.red),
-        );
-      }
-      return null;
-    } finally {
-      if (mounted) {
-        setState(() => _isUploading = false);
-      }
+    if (pickedFile != null) {
+      setState(() {
+        _imageFile = pickedFile;
+      });
     }
   }
 
-  /// 🔹 FUNÇÃO _salvarVan ATUALIZADA 🔹
   Future<void> _salvarVan() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -119,44 +112,46 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _isUploading = _imageFile != null;
+    });
 
-    // 1. Faz o upload da foto ANTES de salvar no Firestore
-    final String? fotoUrl = await _uploadFoto(
-      motoristaId,
-      _placaController.text.trim(),
-    );
-
-    // 2. Cria o objeto Van com os dados
-    final van = Van(
-      id: '', // O Firestore irá gerar um ID se usarmos .add()
-      placa: _placaController.text.trim(),
-      marca: _marcaController.text.trim(),
-      modelo: _modeloController.text.trim(),
-      ano: int.parse(_anoController.text),
-      capacidade: int.parse(_capacidadeController.text),
-      cor: _corController.text.trim(),
-      status: StatusVan.disponivel, // Padrão 'disponivel'
-      motoristaId: motoristaId,
-      
-      // 🔹 CORRIGIDO: Usa o parâmetro 'vanFotoUrl' do modelo Van
-      vanFotoUrl: fotoUrl,
-    );
-
+    String? fotoUrl;
     try {
-      // Salva a van na coleção principal 'vans'
-      final vanDoc =
-          await FirebaseFirestore.instance.collection('vans').add(van.toMap());
+      // 1. Faz o upload da foto, se uma foi escolhida
+      if (_imageFile != null) {
+        fotoUrl = await _storageService.uploadVanImage(
+          motoristaId,
+          _placaController.text.trim(),
+          _imageFile!,
+        );
+      }
 
-      // 🔹 CORRIGIDO: Atualiza o motorista APENAS com o ID da van.
-      // Isso evita a duplicação de dados (placa, veiculo, etc.)
-      // que foi o motivo da nossa primeira refatoração.
+      // 2. Cria o objeto Van com os dados
+      final van = Van(
+        id: '', // Firestore irá gerar
+        placa: _placaController.text.trim(),
+        marca: _marcaController.text.trim(),
+        modelo: _modeloController.text.trim(),
+        ano: int.parse(_anoController.text),
+        capacidade: int.parse(_capacidadeController.text),
+        cor: _corController.text.trim(),
+        status: StatusVan.disponivel,
+        motoristaId: motoristaId,
+        vanFotoUrl: fotoUrl,
+      );
+
+      // 3. Salva a van no Firestore
+      final vanDoc = await FirebaseFirestore.instance.collection('vans').add(van.toMap());
+
+      // 4. Atualiza (ou cria, se necessário) o documento do motorista com o ID da nova van
       await FirebaseFirestore.instance
           .collection('motoristas')
           .doc(motoristaId)
-          .update({
-        'vanId': vanDoc.id, // Salva a referência da van
-      });
+          .set({
+            'vansIds': FieldValue.arrayUnion([vanDoc.id]),
+          }, SetOptions(merge: true));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -176,25 +171,27 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _isUploading = false;
+        });
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: Colors.red,
-              onPrimary: Colors.white,
-            ),
-      ),
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Cadastrar Nova Van'),
-          backgroundColor: Colors.red,
-          foregroundColor: Colors.white,
+    return Scaffold(
+        appBar: NeonAppBar(
+          title: 'Cadastrar Nova Van',
+          showMenuButton: false,
+          showBackButton: true,
+          onNotificationsPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => TelaNotificacoes()),
+            );
+          },
         ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -207,7 +204,6 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Widget de upload de imagem
                         _buildImagePicker(),
                         const SizedBox(height: 16),
                         _buildTextField(_placaController, 'Placa (ex: ABC1D23)'),
@@ -233,9 +229,8 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
                           icon: const Icon(Icons.save),
                           label: const Text('SALVAR VAN'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                Theme.of(context).colorScheme.primary,
-                            foregroundColor: Colors.white,
+                            backgroundColor: Theme.of(context).colorScheme.primary,
+                            foregroundColor: Theme.of(context).colorScheme.onPrimary,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
                         ),
@@ -244,11 +239,9 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
                   ),
                 ),
               ),
-      ),
     );
   }
 
-  /// Widget para o seletor de imagem
   Widget _buildImagePicker() {
     return Center(
       child: GestureDetector(
@@ -264,30 +257,25 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              if (_imageBytes != null)
-                // Prévia (Web)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.memory(
-                    _imageBytes!,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                  ),
-                )
-              else if (_imageFile != null)
-                // Prévia (Mobile)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.file(
-                    File(_imageFile!.path),
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                  ),
+              if (_imageFile != null)
+                FutureBuilder<Uint8List>(
+                  future: _imageFile!.readAsBytes(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(
+                          snapshot.data!,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                        ),
+                      );
+                    }
+                    return const Center(child: CircularProgressIndicator());
+                  },
                 )
               else
-                // Placeholder
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -313,7 +301,6 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     );
   }
 
-  /// Helper para construir os TextFields
   Widget _buildTextField(TextEditingController controller, String label,
       {TextInputType keyboardType = TextInputType.text,
       bool isRequired = true}) {

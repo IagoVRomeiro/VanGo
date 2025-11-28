@@ -2,8 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import '../models/aluno.dart'; // Importa o modelo Aluno
-// import '../models/motorista.dart'; // Importa Motorista para desvincular
+import '../models/usuario.dart';
+import '../widgets/neon_app_bar.dart';
+import 'tela_notificacoes.dart';
 
 /// Tela para o motorista gerenciar alunos vinculados, convites e solicitações.
 class TelaGerenciarAlunos extends StatefulWidget {
@@ -226,70 +227,65 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Gerenciar Alunos'),
-        backgroundColor: Colors.red,
-        foregroundColor: Colors.white,
+      appBar: NeonAppBar(
+        title: 'Gerenciar Alunos',
+        onNotificationsPressed: _openNotifications,
       ),
       body: bodyContent,
     );
   }
 
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => TelaNotificacoes()),
+    );
+  }
+
   // 🔹 ATUALIZADO: Constrói a lista de alunos VINCULADOS (aprovados)
   Widget _buildListaAlunosVinculados() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('contratos')
-          .where('motoristaId', isEqualTo: _motoristaId)
-          .where('status', isEqualTo: 'aprovado') // 🔹 QUERY ALTERADA
-          .snapshots(),
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _firestore.collection('motoristas').doc(_motoristaId).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                  'Nenhum aluno vinculado no momento.'), // 🔹 TEXTO ALTERADO
-            ),
-          );
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const Center(child: Text('Não foi possível carregar sua lista de alunos.'));
+        }
+
+        final data = snapshot.data!.data();
+        final alunosIds = List<String>.from(data?['alunosIds'] ?? []);
+        if (alunosIds.isEmpty) {
+          return const Center(child: Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text('Nenhum aluno vinculado no momento.'),
+          ));
         }
 
         return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: snapshot.data!.docs.length,
+          itemCount: alunosIds.length,
           itemBuilder: (context, index) {
-            final contrato = snapshot.data!.docs[index];
-            final data = contrato.data() as Map<String, dynamic>;
-            final alunoId = data['alunoId'] as String?;
-            // final contratoId = contrato.id; // Não precisamos mais do contratoId aqui
-
-            if (alunoId == null) return const SizedBox.shrink();
-
-            return FutureBuilder<DocumentSnapshot>(
-              future: _firestore.collection('alunos').doc(alunoId).get(),
-              builder: (context, alunoSnapshot) {
-                if (!alunoSnapshot.hasData || !alunoSnapshot.data!.exists) {
-                  return const ListTile(
-                      title: Text('Carregando dados do aluno...'));
+            final alunoId = alunosIds[index];
+            return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              future: _firestore.collection('users').doc(alunoId).get(),
+              builder: (context, usuarioSnapshot) {
+                if (!usuarioSnapshot.hasData || !usuarioSnapshot.data!.exists) {
+                  return const ListTile(title: Text('Carregando dados do aluno...'));
                 }
 
-                final aluno = Aluno.fromMap(alunoSnapshot.data!.id,
-                    alunoSnapshot.data!.data() as Map<String, dynamic>);
-
+                final usuario = Usuario.fromSnapshot(usuarioSnapshot.data!);
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 4.0),
                   child: ListTile(
-                    title: Text(aluno.nome), // 🔹 CORRIGIDO
-                    subtitle: Text(aluno.endereco), // 🔹 CORRIGIDO
-                    // 🔹 BOTÕES ALTERADOS: Agora mostra botão de desvincular
+                    title: Text(usuario.nome),
+                    subtitle: Text(usuario.endereco ?? 'Endereço não informado'),
                     trailing: IconButton(
                       icon: const Icon(Icons.link_off, color: Colors.grey),
                       tooltip: 'Desvincular Aluno',
-                      onPressed: () => _desvincularAluno(alunoId),
+                      onPressed: () => _desvincularAluno(usuario.id),
                     ),
                   ),
                 );
@@ -335,22 +331,22 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
 
             if (alunoId == null) return const SizedBox.shrink();
 
-            return FutureBuilder<DocumentSnapshot>(
-              future: _firestore.collection('alunos').doc(alunoId).get(),
-              builder: (context, alunoSnapshot) {
-                if (!alunoSnapshot.hasData || !alunoSnapshot.data!.exists) {
+            return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              future: _firestore.collection('users').doc(alunoId).get(),
+              builder: (context, usuarioSnapshot) {
+                if (!usuarioSnapshot.hasData || !usuarioSnapshot.data!.exists) {
                   return const ListTile(
                       title: Text('Carregando dados do aluno...'));
                 }
 
-                final aluno = Aluno.fromMap(alunoSnapshot.data!.id,
-                    alunoSnapshot.data!.data() as Map<String, dynamic>);
+                final usuario =
+                    Usuario.fromSnapshot(usuarioSnapshot.data!);
 
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 4.0),
                   child: ListTile(
-                    title: Text(aluno.nome), // 🔹 CORRIGIDO
-                    subtitle: Text(aluno.endereco), // 🔹 CORRIGIDO
+                    title: Text(usuario.nome),
+                    subtitle: Text(usuario.endereco ?? 'Endereço não informado'),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -359,7 +355,6 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
                           icon: const Icon(Icons.delete_outline,
                               color: Colors.grey),
                           tooltip: 'Cancelar Convite',
-                          // Usa a mesma lógica de recusar solicitação para cancelar
                           onPressed: () => _recusarSolicitacao(contratoId),
                         ),
                       ],

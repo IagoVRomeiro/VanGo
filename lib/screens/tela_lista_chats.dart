@@ -7,9 +7,12 @@ import 'package:vango/services/chat_service.dart';
 
 import 'tela_busca_motorista.dart';
 import 'tela_chat.dart';
+import 'tela_notificacoes.dart';
+import '../widgets/neon_app_bar.dart';
 
 class TelaListaChats extends StatefulWidget {
-  const TelaListaChats({super.key});
+  final bool showAppBar;
+  const TelaListaChats({super.key, this.showAppBar = false});
 
   @override
   State<TelaListaChats> createState() => _TelaListaChatsState();
@@ -81,8 +84,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildContent() {
     if (_currentUser == null) {
       return const Center(child: Text('Faça login para ver suas conversas.'));
     }
@@ -107,40 +109,48 @@ class _TelaListaChatsState extends State<TelaListaChats> {
     );
   }
 
+  @override
+  Widget build(BuildContext context) {
+    final content = _buildContent();
+    if (!widget.showAppBar) return content;
+
+    return Scaffold(
+      appBar: NeonAppBar(
+        title: 'Conversas',
+        onNotificationsPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => TelaNotificacoes()),
+          );
+        },
+      ),
+      body: content,
+    );
+  }
+
   Widget _buildMotoristaChatList(String motoristaId) {
+    final theme = Theme.of(context);
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Seção de Solicitações
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text("Solicitações de Contato", style: Theme.of(context).textTheme.titleLarge),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Text(
+              "Solicitações de alunos não vinculados",
+              style: theme.textTheme.titleLarge,
+            ),
           ),
           _buildChatList(
             motoristaId: motoristaId,
             status: 'inquiry',
             emptyMessage: 'Nenhuma nova solicitação de contato.',
           ),
-
           const Divider(height: 30),
-
-          // Seção de Conversas Ativas
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Text("Conversas", style: Theme.of(context).textTheme.titleLarge),
-          ),
-          _buildChatList(
-            motoristaId: motoristaId,
-            status: 'active', // ou 'aprovado', dependendo da sua convenção
-            emptyMessage: 'Nenhuma conversa ativa.',
-          ),
-
-          const Divider(height: 30),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text("Alunos Vinculados", style: Theme.of(context).textTheme.titleLarge),
+            child: Text("Alunos Vinculados", style: theme.textTheme.titleLarge),
           ),
           _buildAlunosVinculadosSection(motoristaId),
         ],
@@ -370,16 +380,18 @@ class _TelaListaChatsState extends State<TelaListaChats> {
           );
         }
 
-        return FutureBuilder<List<Usuario>>(
-          future: _buscarUsuariosPorIds(alunosIds),
-          builder: (context, alunoUsuariosSnapshot) {
-            if (alunoUsuariosSnapshot.connectionState == ConnectionState.waiting) {
+        return FutureBuilder<_AlunosRotasData>(
+          future: _buscarUsuariosERotas(alunosIds, motoristaId),
+          builder: (context, snapshotDados) {
+            if (snapshotDados.connectionState == ConnectionState.waiting) {
               return const Center(child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: CircularProgressIndicator(),
               ));
             }
-            final usuarios = alunoUsuariosSnapshot.data ?? [];
+            final dados = snapshotDados.data;
+            final usuarios = dados?.usuarios ?? [];
+            final rotasPorAluno = dados?.rotasPorAluno ?? {};
             if (usuarios.isEmpty) {
               return const Padding(
                 padding: EdgeInsets.all(16.0),
@@ -406,7 +418,12 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                           : null,
                     ),
                     title: Text(usuario.nome, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                    subtitle: Text(usuario.endereco ?? 'Endereço não informado'),
+                    subtitle: Text(
+                      [
+                        usuario.endereco ?? 'Endereço não informado',
+                        'Rota: ${(rotasPorAluno[usuario.id]?.join(", ") ?? 'Não vinculada')}',
+                      ].join('\n'),
+                    ),
                     trailing: IconButton(
                       icon: const Icon(Icons.chat_bubble_outline),
                       tooltip: 'Conversar',
@@ -447,6 +464,32 @@ class _TelaListaChatsState extends State<TelaListaChats> {
     return usuarios;
   }
 
+  Future<_AlunosRotasData> _buscarUsuariosERotas(
+      List<String> ids, String motoristaId) async {
+    final usuarios = await _buscarUsuariosPorIds(ids);
+    final rotas = await _buscarRotasPorMotorista(motoristaId);
+    return _AlunosRotasData(usuarios: usuarios, rotasPorAluno: rotas);
+  }
+
+  Future<Map<String, List<String>>> _buscarRotasPorMotorista(
+      String motoristaId) async {
+    final snapshot = await _firestore
+        .collection('rotas')
+        .where('motoristaId', isEqualTo: motoristaId)
+        .get();
+
+    final Map<String, List<String>> mapa = {};
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final nome = data['nome'] as String? ?? 'Rota sem nome';
+      final alunos = List<String>.from(data['listaAlunosIds'] ?? []);
+      for (final alunoId in alunos) {
+        mapa.putIfAbsent(alunoId, () => []).add(nome);
+      }
+    }
+    return mapa;
+  }
+
   Future<void> _abrirChatComAluno(String alunoId, String motoristaId) async {
     try {
       final chatId = await ChatService.ensureChat(
@@ -472,4 +515,14 @@ class _TelaListaChatsState extends State<TelaListaChats> {
       }
     }
   }
+}
+
+class _AlunosRotasData {
+  final List<Usuario> usuarios;
+  final Map<String, List<String>> rotasPorAluno;
+
+  const _AlunosRotasData({
+    required this.usuarios,
+    required this.rotasPorAluno,
+  });
 }

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:vango/services/email_service.dart'; // Import do novo serviço
 
 // Imports relativos
 import '../models/aluno.dart';
@@ -25,6 +26,7 @@ class TelaCadastro extends StatefulWidget {
 class _TelaCadastroState extends State<TelaCadastro> {
   TipoUsuario _tipoUsuarioSelecionado = TipoUsuario.motorista;
   final _formKey = GlobalKey<FormState>();
+  final EmailService _emailService = EmailService(); // Instância do serviço
 
   final _nomeController = TextEditingController();
   final _emailController = TextEditingController();
@@ -60,7 +62,9 @@ class _TelaCadastroState extends State<TelaCadastro> {
         await user.updateDisplayName(_nomeController.text.trim());
 
         final batch = FirebaseFirestore.instance.batch();
-        _criarRegistroUsuario(batch, user);
+        
+        // Passa o nome para ser salvo no documento 'users'
+        _criarRegistroUsuario(batch, user, _nomeController.text.trim());
 
         if (_tipoUsuarioSelecionado == TipoUsuario.motorista) {
           _salvarMotorista(batch, user);
@@ -68,6 +72,9 @@ class _TelaCadastroState extends State<TelaCadastro> {
           _salvarAluno(batch, user);
         }
         await batch.commit();
+
+        // Envia o email de boas-vindas após o cadastro ser concluído
+        _emailService.sendWelcomeEmail(user.email!, _nomeController.text.trim());
       }
 
       if (mounted) {
@@ -107,16 +114,16 @@ class _TelaCadastroState extends State<TelaCadastro> {
     }
   }
 
-  void _criarRegistroUsuario(WriteBatch batch, User user) {
+  void _criarRegistroUsuario(WriteBatch batch, User user, String nome) {
     final userDocRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
     final novoUsuario = Usuario(
       id: user.uid,
+      nome: nome, // Salva o nome no documento principal do usuário
       email: user.email!,
       role: _tipoUsuarioSelecionado == TipoUsuario.motorista
           ? UserRole.motorista
           : UserRole.aluno,
       criadoEm: Timestamp.now(),
-      // fotoUrl: null, // fotoUrl é opcional e será nula por padrão
     );
     batch.set(userDocRef, novoUsuario.toMap());
   }
@@ -124,32 +131,25 @@ class _TelaCadastroState extends State<TelaCadastro> {
   void _salvarMotorista(WriteBatch batch, User user) {
     final motoristaDocRef =
         FirebaseFirestore.instance.collection('motoristas').doc(user.uid);
+    // Cria apenas com os campos específicos do motorista
     final novoMotorista = Motorista(
       id: user.uid,
-      nome: _nomeController.text.trim(),
-      email: user.email!,
       cpf: '',
       cnh: '',
-      telefone: '',
-      endereco: '',
       avaliacao: 0.0,
-      // 🔹 CORREÇÃO AQUI 🔹
-      // Trocamos 'indisponivel' por 'indefinido'
       status: StatusMotorista.indefinido,
-      // fotoUrl, vanId, alunosIds são nulos por padrão
     );
     batch.set(motoristaDocRef, novoMotorista.toMap());
   }
 
   void _salvarAluno(WriteBatch batch, User user) {
     final alunoDocRef = FirebaseFirestore.instance.collection('alunos').doc(user.uid);
+    // Cria apenas com os campos específicos do aluno
     final novoAluno = Aluno(
       id: user.uid,
-      nome: _nomeController.text.trim(),
       motoristaId: null,
-      endereco: '',
       localizacao: const GeoPoint(0, 0),
-    statusPresenca: StatusPresenca.ausente,
+      statusPresenca: StatusPresenca.ausente,
     );
     batch.set(alunoDocRef, novoAluno.toMap());
   }

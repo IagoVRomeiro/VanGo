@@ -29,11 +29,14 @@ dependencies:
   firebase_messaging: ^16.0.4
   cloud_functions: ^6.0.4
 
+  # Search
+
   # Imagens
   image_picker: ^1.2.1
+  permission_handler: ^11.0.1
 
   # Utilitários e ícones
-  flutter_dotenv: ^6.0.0
+  flutter_dotenv: ^5.1.0
   intl: ^0.20.2
   http: ^1.2.1
   flutter_polyline_points: ^2.0.0

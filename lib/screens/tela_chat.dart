@@ -1,11 +1,15 @@
 // lib/screens/tela_chat.dart
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:vango/models/mensagem.dart';
 import 'package:vango/models/usuario.dart';
+import '../widgets/neon_app_bar.dart';
+import 'tela_notificacoes.dart';
 
 class TelaChat extends StatefulWidget {
   final String chatId;
@@ -25,6 +29,7 @@ class _TelaChatState extends State<TelaChat> {
   final _controller = TextEditingController();
   final String? _meuId = FirebaseAuth.instance.currentUser?.uid;
   late final Stream<List<Mensagem>> _messagesStream;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _chatSubscription;
 
   // State for inquiry chat logic
   bool _isLoadingDetails = true;
@@ -36,6 +41,7 @@ class _TelaChatState extends State<TelaChat> {
   void initState() {
     super.initState();
     _loadChatDetails();
+    _startChatStatusListener();
 
     _messagesStream = FirebaseFirestore.instance
         .collection('chats')
@@ -45,6 +51,13 @@ class _TelaChatState extends State<TelaChat> {
         .snapshots()
         .map((snapshot) =>
             snapshot.docs.map((doc) => Mensagem.fromSnapshot(doc)).toList());
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _chatSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadChatDetails() async {
@@ -85,13 +98,28 @@ class _TelaChatState extends State<TelaChat> {
     }
   }
 
+  void _startChatStatusListener() {
+    _chatSubscription = FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.chatId)
+        .snapshots()
+        .listen((doc) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _chatStatus = doc.data()?['status'];
+      });
+    }, onError: (error) {
+      debugPrint('Erro ao ouvir status do chat: $error');
+    });
+  }
+
   Future<void> _aceitarConversa() async {
     try {
         await FirebaseFirestore.instance.collection('chats').doc(widget.chatId).update({
             'status': 'active',
-        });
-        setState(() {
-            _chatStatus = 'active';
+            'updatedAt': FieldValue.serverTimestamp(),
         });
     } catch(e) {
         if (mounted) {
@@ -119,7 +147,7 @@ class _TelaChatState extends State<TelaChat> {
 
   Future<void> _enviarMensagem() async {
     final texto = _controller.text.trim();
-    if (texto.isEmpty || _meuId == null) {
+    if (texto.isEmpty || _meuId == null || _chatStatus != 'active') {
       return;
     }
 
@@ -138,6 +166,7 @@ class _TelaChatState extends State<TelaChat> {
           'senderId': meuId,
           'timestamp': FieldValue.serverTimestamp(),
         },
+        'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
       // Adiciona a nova mensagem
@@ -160,127 +189,169 @@ class _TelaChatState extends State<TelaChat> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_recipientName),
+    final parentTheme = Theme.of(context);
+
+    final Color primaryColor = _isCurrentUserDriver
+        ? Theme.of(context).colorScheme.secondary
+        : Theme.of(context).colorScheme.primary;
+    final Color onPrimaryColor = _isCurrentUserDriver ? Colors.white : Colors.black;
+    final Color surfaceVariantColor = Theme.of(context).colorScheme.surfaceVariant;
+    final Color onSurfaceVariantColor = Colors.black; // Keep black for contrast on light variants
+
+    return Theme(
+      data: parentTheme.copyWith(
+        colorScheme: parentTheme.colorScheme.copyWith(
+          primary: primaryColor,
+          onPrimary: onPrimaryColor,
+          surfaceVariant: surfaceVariantColor,
+          onSurfaceVariant: onSurfaceVariantColor,
+          tertiaryContainer: primaryColor.withOpacity(0.2),
+          onTertiaryContainer: onPrimaryColor,
+        ),
       ),
-      body: _isLoadingDetails 
-        ? const Center(child: CircularProgressIndicator())
-        : Column(
-          children: [
-            // Barra para aceitar a conversa
-            if (_isCurrentUserDriver && _chatStatus == 'inquiry')
-              _buildAcceptChatBar(),
+      child: Builder( // Use Builder to get a new BuildContext
+        builder: (context) {
+          final currentTheme = Theme.of(context); // Access the new theme here
+          return Scaffold(
+            appBar: NeonAppBar(
+              title: _recipientName,
+              onNotificationsPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => TelaNotificacoes()),
+                );
+              },
+            ),
+            body: _isLoadingDetails
+              ? const Center(child: CircularProgressIndicator())
+              : _chatStatus == null
+                  ? Center(
+                      child: Text(
+                        'Esta conversa não está mais disponível.',
+                        style: TextStyle(color: currentTheme.colorScheme.onSurfaceVariant), // Use new theme
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        // Barra para aceitar a conversa
+                        if (_isCurrentUserDriver && _chatStatus == 'inquiry')
+                          _buildAcceptChatBar(), // This widget will also use Theme.of(context) internally
 
-            Expanded(
-              child: StreamBuilder<List<Mensagem>>(
-                stream: _messagesStream,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Erro: ${snapshot.error}'));
-                  }
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(child: Text('Comece a conversa!'));
-                  }
+                        Expanded(
+                          child: StreamBuilder<List<Mensagem>>(
+                            stream: _messagesStream,
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                return const Center(child: CircularProgressIndicator());
+                              }
+                              if (snapshot.hasError) {
+                                return Center(child: Text('Erro: ${snapshot.error}'));
+                              }
+                              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                                return const Center(child: Text('Comece a conversa!'));
+                              }
 
-                  final mensagens = snapshot.data!;
+                              final mensagens = snapshot.data!;
 
-                  return ListView.builder(
-                    reverse: true,
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    itemCount: mensagens.length,
-                    itemBuilder: (context, index) {
-                      final mensagem = mensagens[index];
-                      final eMinhaMensagem = mensagem.senderId == _meuId;
+                              return ListView.builder(
+                                reverse: true,
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                itemCount: mensagens.length,
+                                itemBuilder: (context, index) {
+                                  final mensagem = mensagens[index];
+                                  final eMinhaMensagem = mensagem.senderId == _meuId;
 
-                      return Align(
-                        alignment: eMinhaMensagem
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 10, horizontal: 16),
-                          margin: const EdgeInsets.symmetric(
-                              vertical: 4, horizontal: 8),
-                          decoration: BoxDecoration(
-                            color: eMinhaMensagem
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.surfaceVariant,
-                            borderRadius: BorderRadius.only(
-                              topLeft: const Radius.circular(16),
-                              topRight: const Radius.circular(16),
-                              bottomLeft: eMinhaMensagem
-                                  ? const Radius.circular(16)
-                                  : const Radius.circular(0),
-                              bottomRight: eMinhaMensagem
-                                  ? const Radius.circular(0)
-                                  : const Radius.circular(16),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: eMinhaMensagem
-                                ? CrossAxisAlignment.end
-                                : CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                mensagem.texto,
-                                style: TextStyle(
-                                  color: eMinhaMensagem
-                                      ? theme.colorScheme.onPrimary
-                                      : theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              if (mensagem.timestamp != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4.0),
-                                  child: Text(
-                                    DateFormat('HH:mm')
-                                        .format(mensagem.timestamp!.toDate()),
-                                    style: TextStyle(
-                                      color: eMinhaMensagem
-                                          ? theme.colorScheme.onPrimary.withOpacity(0.7)
-                                          : theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
-                                      fontSize: 10,
+                                  return Align(
+                                    alignment: eMinhaMensagem
+                                        ? Alignment.centerRight
+                                        : Alignment.centerLeft,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 10, horizontal: 16),
+                                      margin: const EdgeInsets.symmetric(
+                                          vertical: 4, horizontal: 8),
+                                      decoration: BoxDecoration(
+                                        color: eMinhaMensagem
+                                            ? currentTheme.colorScheme.primary // Use new theme
+                                            : currentTheme.colorScheme.surfaceVariant, // Use new theme
+                                        borderRadius: BorderRadius.only(
+                                          topLeft: const Radius.circular(16),
+                                          topRight: const Radius.circular(16),
+                                          bottomLeft: eMinhaMensagem
+                                              ? const Radius.circular(16)
+                                              : const Radius.circular(0),
+                                          bottomRight: eMinhaMensagem
+                                              ? const Radius.circular(0)
+                                              : const Radius.circular(16),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: eMinhaMensagem
+                                            ? CrossAxisAlignment.end
+                                            : CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            mensagem.texto,
+                                            style: TextStyle(
+                                              color: eMinhaMensagem
+                                                  ? currentTheme.colorScheme.onPrimary // Use new theme
+                                                  : currentTheme.colorScheme.onSurfaceVariant, // Use new theme
+                                            ),
+                                          ),
+                                          if (mensagem.timestamp != null)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 4.0),
+                                              child: Text(
+                                                DateFormat('HH:mm')
+                                                    .format(mensagem.timestamp!.toDate()),
+                                                style: TextStyle(
+                                                  color: eMinhaMensagem
+                                                      ? currentTheme.colorScheme.onPrimary // Use new theme
+                                                          .withOpacity(0.7)
+                                                      : currentTheme.colorScheme.onSurfaceVariant // Use new theme
+                                                          .withOpacity(0.7),
+                                                  fontSize: 10,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ),
-                            ],
+                                  );
+                                },
+                              );
+                            },
                           ),
                         ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-            
-            // Área de input de mensagem
-            _buildChatInputArea(theme),
-          ],
-        ),
+
+                        // Área de input de mensagem
+                        _buildChatInputArea(currentTheme), // Pass new theme
+                      ],
+                    ),
+          );
+        },
+      ),
     );
   }
 
   Widget _buildChatInputArea(ThemeData theme) {
-    // Se o chat ainda está pendente e o usuário atual não é o motorista
-    if (_chatStatus == 'inquiry' && !_isCurrentUserDriver) {
+    if (_chatStatus != 'active') {
+      final text = _isCurrentUserDriver
+          ? 'Confirme o contato para liberar o envio de mensagens.'
+          : 'Aguardando aprovação do motorista para iniciar a conversa.';
       return Container(
         padding: const EdgeInsets.all(16.0),
         color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
-        child: const Center(
+        child: Center(
           child: Text(
-            'Aguardando aprovação do motorista para iniciar a conversa.',
+            text,
             textAlign: TextAlign.center,
           ),
         ),
       );
     }
 
-    // Input de texto normal para chats ativos ou para o motorista no chat pendente
+    // Input de texto normal para chats ativos
     return Container(
       padding: const EdgeInsets.all(8.0),
       decoration: BoxDecoration(
@@ -312,14 +383,12 @@ class _TelaChatState extends State<TelaChat> {
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
                 onSubmitted: (_) => _enviarMensagem(),
-                // Habilita o input apenas para chats ativos
-                enabled: _chatStatus == 'active',
+                enabled: true,
               ),
             ),
             const SizedBox(width: 8),
             IconButton.filled(
-              // Habilita o botão apenas para chats ativos
-              onPressed: _chatStatus == 'active' ? _enviarMensagem : null,
+              onPressed: _enviarMensagem,
               icon: const Icon(Icons.send),
             ),
           ],

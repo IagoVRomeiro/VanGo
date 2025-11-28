@@ -22,46 +22,69 @@ class VanGoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const neonGreen = Color(0xFFB5FF2A);
+    const deepBlack = Color(0xFF0F0F0F);
+    const darkGrey = Color(0xFF1D1D1D);
+
+    final baseTextTheme = ThemeData(brightness: Brightness.dark).textTheme.apply(
+          bodyColor: Colors.white,
+          displayColor: Colors.white,
+        );
+
     return MaterialApp(
       title: 'VanGo',
       theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.amber,
-          brightness: Brightness.light,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: deepBlack,
+        colorScheme: const ColorScheme.dark(
+          primary: neonGreen,
+          secondary: Color(0xFF7462FF),
+          surface: darkGrey,
+          background: deepBlack,
         ),
-        scaffoldBackgroundColor: const Color(0xFFF7F7F7),
+        textTheme: baseTextTheme,
         cardTheme: CardThemeData(
-          elevation: 0,
+          color: darkGrey,
+          elevation: 4,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.grey.shade200),
+            borderRadius: BorderRadius.circular(18),
           ),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: darkGrey,
+          foregroundColor: Colors.white,
+          centerTitle: true,
+          elevation: 0,
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
+            backgroundColor: neonGreen,
+            foregroundColor: Colors.black,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(30),
             ),
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
+            textStyle: const TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(18),
             borderSide: BorderSide.none,
           ),
           filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          fillColor: Colors.white.withOpacity(0.08),
+          contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
         ),
-        appBarTheme: const AppBarTheme(
-          elevation: 0,
-          centerTitle: true,
-          titleTextStyle: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: darkGrey,
+          selectedItemColor: neonGreen,
+          unselectedItemColor: Colors.white70,
+          showUnselectedLabels: false,
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: neonGreen,
+          foregroundColor: Colors.black,
         ),
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),

@@ -1,19 +1,35 @@
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-// Modelo para guardar as informações da rota
+class RouteLegInfo {
+  final String? distance;
+  final String? duration;
+  final String? startAddress;
+  final String? endAddress;
+  final List<String>? instructions;
+
+  RouteLegInfo({
+    this.distance,
+    this.duration,
+    this.startAddress,
+    this.endAddress,
+    this.instructions,
+  });
+}
+
 class DirectionsInfo {
   final List<LatLng> polylinePoints;
   final String? totalDistance;
   final String? totalDuration;
+  final List<RouteLegInfo> legs;
+  final List<int>? waypointOrder;
 
   DirectionsInfo({
     required this.polylinePoints,
     this.totalDistance,
     this.totalDuration,
+    required this.legs,
+    this.waypointOrder,
   });
 }
 
-// O resto do seu arquivo directions_service.dart
-// (incluindo a classe DirectionsService e seu método getDirections)
-// ...

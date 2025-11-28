@@ -1,23 +1,32 @@
 // lib/screens/tela_detalhe_motorista.dart
 
+// ❗️ Lembrete: A exibição de imagens nesta tela depende da extensão
+// "Resize Images" do Firebase estar instalada e configurada para
+// gerar imagens com o sufixo "_400x400".
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:vango/models/motorista.dart';
-import 'package:vango/models/van.dart'; // 🔹 IMPORTAR O MODELO VAN
-
+import 'package:vango/models/rota.dart';
 import 'package:vango/screens/tela_chat.dart';
+import 'package:vango/services/chat_service.dart';
+import 'package:vango/services/image_service.dart'; // ✨ IMPORTADO
+import '../widgets/neon_app_bar.dart';
+import 'tela_notificacoes.dart';
 
-// 🔹 1. MUDAR PARA STATEFULWIDGET
 class TelaDetalheMotorista extends StatefulWidget {
   final Motorista motorista;
-  // 🔹 2. RECEBER A FOTO DO MOTORISTA PELO CONSTRUTOR
   final String? fotoUrl; 
+  final String nome;
+  final String? telefone;
 
   const TelaDetalheMotorista({
     super.key, 
     required this.motorista, 
-    this.fotoUrl, // ⬅️ Vindo da tela de busca
+    this.fotoUrl,
+    required this.nome,
+    this.telefone,
   });
 
   @override
@@ -25,51 +34,64 @@ class TelaDetalheMotorista extends StatefulWidget {
 }
 
 class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
-  
-  Van? _van;
-  bool _isLoadingVan = true;
+  List<Rota> _rotas = [];
+  bool _isLoadingRotas = true;
+  double _avaliacaoAtual = 0;
+  int _avaliacoesQtd = 0;
 
   @override
   void initState() {
     super.initState();
-    _carregarDadosDaVan();
+    _avaliacaoAtual = widget.motorista.avaliacao;
+    _carregarRotas();
+    _carregarResumoAvaliacoes();
   }
 
-  Future<void> _carregarDadosDaVan() async {
-    if (widget.motorista.vanId == null || widget.motorista.vanId!.isEmpty) {
-      if (mounted) setState(() => _isLoadingVan = false);
-      return;
-    }
-    
+  Future<void> _carregarRotas() async {
     try {
-      final vanDoc = await FirebaseFirestore.instance
-          .collection('vans')
-          .doc(widget.motorista.vanId)
+      final rotasSnapshot = await FirebaseFirestore.instance
+          .collection('rotas')
+          .where('motoristaId', isEqualTo: widget.motorista.id)
           .get();
-          
-      if (vanDoc.exists && mounted) {
+
+      if (mounted) {
         setState(() {
-          _van = Van.fromSnapshot(vanDoc);
-          _isLoadingVan = false;
+          _rotas =
+              rotasSnapshot.docs.map((doc) => Rota.fromSnapshot(doc)).toList();
+          _isLoadingRotas = false;
         });
-      } else {
-         if (mounted) setState(() => _isLoadingVan = false);
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoadingVan = false);
+      if (mounted) setState(() => _isLoadingRotas = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao carregar dados da van: $e')),
+        SnackBar(content: Text('Erro ao carregar rotas: $e')),
       );
     }
   }
 
+  Future<void> _carregarResumoAvaliacoes() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('motoristas')
+          .doc(widget.motorista.id)
+          .collection('avaliacoes')
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _avaliacoesQtd = snapshot.docs.length;
+      });
+    } catch (_) {
+      // Ignora falhas, já que a avaliação média continua sendo mostrada.
+    }
+  }
 
   Future<void> _solicitarVinculo(BuildContext context) async {
+    final theme = Theme.of(context);
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Você precisa estar logado para solicitar.'),
+        SnackBar(
+            content: const Text('Você precisa estar logado para solicitar.'),
             backgroundColor: Colors.red),
       );
       return;
@@ -85,25 +107,26 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Solicitação enviada com sucesso!'),
-            backgroundColor: Colors.green),
+        SnackBar(
+            content: const Text('Solicitação enviada com sucesso!'),
+            backgroundColor: theme.colorScheme.primary),
       );
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text('Erro ao enviar solicitação: $e'),
-            backgroundColor: Colors.red),
+            backgroundColor: theme.colorScheme.error),
       );
     }
   }
 
   Future<void> _iniciarChatDeInquerito() async {
+    final theme = Theme.of(context);
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Você precisa estar logado para enviar uma mensagem.')),
+        SnackBar(content: const Text('Você precisa estar logado para enviar uma mensagem.')),
       );
       return;
     }
@@ -112,37 +135,11 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
     final alunoId = currentUser.uid;
 
     try {
-      // Procura por um chat existente (de qualquer tipo)
-      final query = await FirebaseFirestore.instance
-          .collection('chats')
-          .where('participants', arrayContains: alunoId)
-          .get();
-      
-      String? existingChatId;
-      for (var doc in query.docs) {
-        final participants = List<String>.from(doc.data()['participants']);
-        if (participants.contains(motoristaId)) {
-          existingChatId = doc.id;
-          break;
-        }
-      }
-
-      String chatId;
-      if (existingChatId != null) {
-        chatId = existingChatId;
-      } else {
-        // Cria um novo chat com status 'inquiry'
-        final newChatDoc = await FirebaseFirestore.instance.collection('chats').add({
-          'participants': [alunoId, motoristaId],
-          'status': 'inquiry',
-          'lastMessage': {
-            'text': '...',
-            'senderId': '',
-            'timestamp': FieldValue.serverTimestamp(),
-          }
-        });
-        chatId = newChatDoc.id;
-      }
+      final chatId = await ChatService.ensureChat(
+        alunoId: alunoId,
+        motoristaId: motoristaId,
+        activate: true,
+      );
 
       if (mounted) {
         Navigator.push(
@@ -155,13 +152,147 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
           ),
         );
       }
-
     } catch (e) {
-        if(mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Erro ao iniciar chat: $e'), backgroundColor: Colors.red),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao iniciar chat: $e'), backgroundColor: theme.colorScheme.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _avaliarMotorista() async {
+    final theme = Theme.of(context);
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: const Text('Faça login para avaliar o motorista.'),
+            backgroundColor: theme.colorScheme.error),
+      );
+      return;
+    }
+
+    if (currentUser.uid == widget.motorista.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: const Text('Você não pode avaliar a si mesmo.'),
+            backgroundColor: theme.colorScheme.secondary),
+      );
+      return;
+    }
+
+    final comentarioController = TextEditingController();
+    double notaSelecionada = 5;
+
+    final resultado = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (ctx, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Avaliar motorista'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Nota: ${notaSelecionada.toStringAsFixed(1)}'),
+                  Slider(
+                    min: 1,
+                    max: 5,
+                    divisions: 8,
+                    label: notaSelecionada.toStringAsFixed(1),
+                    value: notaSelecionada,
+                    onChanged: (value) {
+                      setStateDialog(() {
+                        notaSelecionada = value;
+                      });
+                    },
+                    activeColor: theme.colorScheme.primary, // Add this line
+                  ),
+                  TextField(
+                    controller: comentarioController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Comentário (opcional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop({
+                      'nota': notaSelecionada,
+                      'comentario': comentarioController.text.trim(),
+                    });
+                  },
+                  child: const Text('Enviar'),
+                ),
+              ],
             );
-        }
+          },
+        );
+      },
+    );
+
+    comentarioController.dispose();
+    if (resultado == null) return;
+
+    final nota = (resultado['nota'] as double?) ?? 5;
+    final comentario = resultado['comentario'] as String? ?? '';
+
+    try {
+      final motoristaRef = FirebaseFirestore.instance
+          .collection('motoristas')
+          .doc(widget.motorista.id);
+
+      await motoristaRef.collection('avaliacoes').doc(currentUser.uid).set({
+        'alunoId': currentUser.uid,
+        'nota': nota,
+        'comentario': comentario,
+        'atualizadoEm': FieldValue.serverTimestamp(),
+      });
+
+      final avaliacoesSnapshot =
+          await motoristaRef.collection('avaliacoes').get();
+      double soma = 0;
+      for (final doc in avaliacoesSnapshot.docs) {
+        soma += (doc.data()['nota'] as num?)?.toDouble() ?? 0;
+      }
+      final media = avaliacoesSnapshot.docs.isNotEmpty
+          ? soma / avaliacoesSnapshot.docs.length
+          : nota;
+
+      await motoristaRef.update({
+        'avaliacao': media,
+        'avaliacoesQtd': avaliacoesSnapshot.docs.length,
+      });
+
+      if (!mounted) return;
+      setState(() {
+        _avaliacaoAtual = media;
+        _avaliacoesQtd = avaliacoesSnapshot.docs.length;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Avaliação registrada!'),
+          backgroundColor: theme.colorScheme.primary,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao salvar avaliação: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -169,86 +300,65 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final resizedProfileUrl = ImageService.getResizedUrl(widget.fotoUrl);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.motorista.nome),
+      appBar: NeonAppBar(
+        title: widget.nome,
+        showMenuButton: false,
+        showBackButton: true,
+        onNotificationsPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => TelaNotificacoes()),
+          );
+        },
       ),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              height: 250,
-              width: double.infinity,
-              color: Colors.grey.shade200,
-              child: _isLoadingVan
-                  ? const Center(child: CircularProgressIndicator())
-                  : _van?.vanFotoUrl != null
-                      ? Image.network(
-                          _van!.vanFotoUrl!,
-                          fit: BoxFit.cover,
-                        )
-                      : Image.asset(
-                          'assets/van.png',
-                          fit: BoxFit.cover,
-                        ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 40,
-                    child: ClipOval(
-                      child: widget.fotoUrl != null && widget.fotoUrl!.isNotEmpty
-                          ? Image.network(
-                              widget.fotoUrl!,
-                              fit: BoxFit.cover,
-                              width: 80,
-                              height: 80,
-                            )
-                          : Image.asset(
-                              'assets/vgo_logo.png',
-                              fit: BoxFit.cover,
-                              width: 80,
-                              height: 80,
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    widget.motorista.nome,
-                    style: const TextStyle(
-                        fontSize: 26, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Chip(
-                    label: Text(
-                      'Avaliação: ${widget.motorista.avaliacao.toStringAsFixed(1)} ★',
-                      style: const TextStyle(color: Colors.black87),
-                    ),
-                    backgroundColor: theme.colorScheme.primaryContainer,
-                  ),
-                  const Divider(height: 40),
-                  
-                  _buildInfoRow(Icons.directions_car, 'Veículo',
-                      _isLoadingVan ? 'Carregando...' : '${_van?.marca ?? ''} ${_van?.modelo ?? 'Não informado'}'),
-                  _buildInfoRow(Icons.pin_outlined, 'Placa',
-                      _isLoadingVan ? '...' : _van?.placa ?? 'Não informada'),
-                  _buildInfoRow(Icons.group, 'Capacidade',
-                      _isLoadingVan ? '...' : '${_van?.capacidade.toString() ?? '?'} passageiros'),
-                      
-                  _buildInfoRow(Icons.phone, 'Telefone', widget.motorista.telefone.isNotEmpty ? widget.motorista.telefone : 'Não informado'),
-                  
-                ],
+            Center(
+              child: CircleAvatar(
+                radius: 50,
+                backgroundImage: resizedProfileUrl != null
+                    ? NetworkImage(resizedProfileUrl)
+                    : const AssetImage('assets/vgo_logo.png') as ImageProvider,
               ),
             ),
+            const SizedBox(height: 16),
+            Center(
+              child: Text(
+                widget.nome,
+                style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Center(
+              child: Chip(
+                label: Text(
+                  'Avaliação: ${_avaliacaoAtual.toStringAsFixed(1)} ★ ${_avaliacoesQtd > 0 ? '($_avaliacoesQtd)' : ''}',
+                ),
+                avatar: Icon(Icons.star, color: theme.colorScheme.primary),
+                backgroundColor: theme.colorScheme.surfaceVariant,
+              ),
+            ),
+            const Divider(height: 32),
+            _buildInfoCard(),
+            const SizedBox(height: 24),
+            Text(
+              'Rotas Disponíveis',
+              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            _buildRotasList(),
           ],
         ),
       ),
       persistentFooterButtons: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          padding: const EdgeInsets.all(8.0),
           child: Row(
             children: [
               Expanded(
@@ -257,7 +367,10 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
                   icon: const Icon(Icons.message_outlined),
                   label: const Text('Mensagem'),
                   style: OutlinedButton.styleFrom(
-                     padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
                 ),
               ),
@@ -265,17 +378,51 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () => _solicitarVinculo(context),
-                  icon: const Icon(Icons.person_add),
-                  label: const Text('Solicitar Vínculo'),
-                   style: ElevatedButton.styleFrom(
+                  icon: const Icon(Icons.person_add_alt_1),
+                  label: const Text('Solicitar'),
+                  style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded( 
+                child: ElevatedButton.icon(
+                  onPressed: _avaliarMotorista,
+                  icon: const Icon(Icons.star_rate_rounded),
+                  label: const Text('Avaliar'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    backgroundColor: theme.colorScheme.secondary,
+                    foregroundColor: theme.colorScheme.onSecondary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
                 ),
               ),
             ],
           ),
-        ),
+        )
       ],
+    );
+  }
+
+  Widget _buildInfoCard() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            _buildInfoRow(Icons.phone, 'Telefone', widget.telefone != null && widget.telefone!.isNotEmpty ? widget.telefone! : 'Não informado'),
+          ],
+        ),
+      ),
     );
   }
 
@@ -283,15 +430,59 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.grey.shade500),
+          Icon(icon, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 16),
-          Text('$label:', style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(width: 8),
-          Expanded(child: Text(value)),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const Spacer(),
+          Text(value),
         ],
       ),
+    );
+  }
+
+  Widget _buildRotasList() {
+    if (_isLoadingRotas) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_rotas.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 24.0),
+          child: Text('Nenhuma rota cadastrada.'),
+        ),
+      );
+    }
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _rotas.length,
+      itemBuilder: (context, index) {
+        final rota = _rotas[index];
+        final dias = rota.diasSemana.entries
+            .where((entry) => entry.value)
+            .map((entry) => entry.key.substring(0, 3))
+            .join(', ');
+        final horario = '${rota.horarioInicioPrevisto} - ${rota.horarioFimPrevisto}';
+
+        return Card(
+          elevation: 2,
+          margin: const EdgeInsets.symmetric(vertical: 6.0),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              child: const Icon(Icons.route),
+            ),
+            title: Text(rota.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('${rota.localDestinoNome}\n$dias | $horario'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () {
+              // TODO: Navegar para detalhes da rota se necessário
+            },
+          ),
+        );
+      },
     );
   }
 }

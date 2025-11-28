@@ -1,11 +1,15 @@
-import 'package:cloud_firestore/cloud_firestore.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:geocoding/geocoding.dart';
-import '../models/aluno.dart';
-import '../models/motorista.dart';
-import '../models/van.dart';
-import '../models/rota.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
+import 'package:vango/models/aluno.dart';
+import 'package:vango/models/motorista.dart';
+import 'package:vango/models/rota.dart';
+import 'package:vango/models/usuario.dart';
+import 'package:vango/models/van.dart';
+import 'package:vango/screens/tela_notificacoes.dart';
+import 'package:vango/widgets/neon_app_bar.dart';
 
 class CriarRotaScreen extends StatefulWidget {
   final String? rotaId;
@@ -19,6 +23,9 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _nomeController = TextEditingController();
+  final _enderecoDestinoController = TextEditingController();
+  final String _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY']!;
+  late final FlutterGooglePlacesSdk _places;
 
   Van? _vanSelecionada;
   TimeOfDay? _horarioInicio;
@@ -30,21 +37,26 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   Timestamp? _criadoEm;
 
   final Map<String, bool> _diasSemana = {
-    'Seg': false, 'Ter': false, 'Qua': false,
-    'Qui': false, 'Sex': false, 'Sab': false, 'Dom': false,
+    'Seg': false,
+    'Ter': false,
+    'Qua': false,
+    'Qui': false,
+    'Sex': false,
+    'Sab': false,
+    'Dom': false,
   };
 
   List<Aluno> _motoristaAlunosDisponiveis = [];
+  Map<String, Usuario> _usuariosAlunos = {};
   Set<String> _alunosSelecionadosParaRota = {};
 
-  List<String> _listaFaculdades = [];
   String? _faculdadeSelecionada;
   GeoPoint? _localDestinoGeoPoint;
-  bool _carregandoFaculdades = true;
 
   @override
   void initState() {
     super.initState();
+    _places = FlutterGooglePlacesSdk(_apiKey);
     if (widget.rotaId != null) {
       _isEditMode = true;
     }
@@ -54,13 +66,13 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   @override
   void dispose() {
     _nomeController.dispose();
+    _enderecoDestinoController.dispose();
     super.dispose();
   }
 
   Future<void> _carregarDadosIniciais() async {
     setState(() {
       _carregandoDados = true;
-      _carregandoFaculdades = true;
     });
 
     final motoristaId = FirebaseAuth.instance.currentUser?.uid;
@@ -68,7 +80,6 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       if (mounted) {
         setState(() {
           _carregandoDados = false;
-          _carregandoFaculdades = false;
         });
       }
       return;
@@ -78,7 +89,6 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       await Future.wait([
         _carregarVans(motoristaId),
         _carregarAlunosMotorista(motoristaId),
-        _carregarFaculdades(),
       ]);
 
       if (_isEditMode) {
@@ -96,7 +106,6 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       if (mounted) {
         setState(() {
           _carregandoDados = false;
-          _carregandoFaculdades = false;
         });
       }
     }
@@ -133,47 +142,67 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
               .map((doc) => Aluno.fromMap(doc.id, doc.data()!))
               .toList();
         }
+        await _carregarUsuariosAlunos(alunosIds);
+      } else {
+        if (mounted) {
+          setState(() {
+            _usuariosAlunos = {};
+          });
+        }
       }
     }
   }
 
-  Future<void> _carregarFaculdades() async {
-    await Future.delayed(const Duration(milliseconds: 500));
+  Future<void> _carregarUsuariosAlunos(List<String> alunosIds) async {
+    if (!mounted) return;
+    if (alunosIds.isEmpty) {
+      setState(() {
+        _usuariosAlunos = {};
+      });
+      return;
+    }
+
+    const chunkSize = 10;
+    final futures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
+    for (var i = 0; i < alunosIds.length; i += chunkSize) {
+      final end =
+          (i + chunkSize) > alunosIds.length ? alunosIds.length : i + chunkSize;
+      futures.add(
+        FirebaseFirestore.instance
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: alunosIds.sublist(i, end))
+            .get(),
+      );
+    }
+
+    final snapshots = await Future.wait(futures);
+    final usuarios = <String, Usuario>{};
+    for (final snapshot in snapshots) {
+      for (final doc in snapshot.docs) {
+        usuarios[doc.id] = Usuario.fromSnapshot(doc);
+      }
+    }
+
     if (mounted) {
       setState(() {
-        _listaFaculdades = [
-          'PUC Minas - Coração Eucarístico, Belo Horizonte',
-          'PUC Minas - Praça da Liberdade, Belo Horizonte',
-          'UFMG - Campus Pampulha, Belo Horizonte',
-          'UNA - Aimorés, Belo Horizonte',
-          'Newton Paiva - Unidade Silva Lobo, Belo Horizonte',
-          'Centro Universitário de Belo Horizonte - UniBH',
-        ];
-        _listaFaculdades.sort();
-        _carregandoFaculdades = false;
+        _usuariosAlunos = usuarios;
       });
     }
   }
 
   Future<void> _carregarDadosDaRota(String rotaId) async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('rotas')
-          .doc(rotaId)
-          .get();
+      final doc =
+          await FirebaseFirestore.instance.collection('rotas').doc(rotaId).get();
 
       if (doc.exists && mounted) {
         final rota = Rota.fromSnapshot(doc);
 
         _nomeController.text = rota.nome;
+        _enderecoDestinoController.text = rota.localDestinoNome;
         _faculdadeSelecionada = rota.localDestinoNome;
         _localDestinoGeoPoint = rota.localDestino;
         _criadoEm = rota.criadoEm;
-
-        if (_faculdadeSelecionada != null &&
-            !_listaFaculdades.contains(_faculdadeSelecionada)) {
-          _faculdadeSelecionada = null;
-        }
 
         _horarioInicio = _timeOfDayFromString(rota.horarioInicioPrevisto);
         _horarioFim = _timeOfDayFromString(rota.horarioFimPrevisto);
@@ -236,8 +265,8 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
     if (inicioEmMinutos >= fimEmMinutos) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content:
-                Text('O horário de chegada deve ser depois do horário de início.'),
+            content: Text(
+                'O horário de chegada deve ser depois do horário de início.'),
             backgroundColor: Colors.orange),
       );
       return;
@@ -302,6 +331,48 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       initialTime: initialTime ?? TimeOfDay.now(),
     );
     return hora;
+  }
+
+  Future<Iterable<AutocompletePrediction>> _buscaEndereco(
+      TextEditingValue textEditingValue) async {
+    final text = textEditingValue.text.trim();
+    if (text.isEmpty) {
+      return const Iterable.empty();
+    }
+
+    try {
+      final result = await _places.findAutocompletePredictions(
+        text,
+        countries: ['br'],
+      );
+      return result.predictions;
+    } catch (e) {
+      return const Iterable.empty();
+    }
+  }
+
+  Future<void> _onEnderecoSelecionado(AutocompletePrediction selection) async {
+    try {
+      final placeDetails = await _places.fetchPlace(
+        selection.placeId,
+        fields: [PlaceField.Location, PlaceField.Address, PlaceField.Name],
+      );
+
+      final location = placeDetails.place?.latLng;
+      if (location != null && mounted) {
+        final formattedAddress = placeDetails.place?.address ??
+            placeDetails.place?.name ??
+            selection.fullText;
+
+        setState(() {
+          _localDestinoGeoPoint = GeoPoint(location.lat, location.lng);
+          _faculdadeSelecionada = formattedAddress;
+          _enderecoDestinoController.text = formattedAddress;
+        });
+      }
+    } catch (e) {
+      // Handle error
+    }
   }
 
   Widget _buildDiasSemanaChips() {
@@ -374,9 +445,14 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                       final bool isSelected =
                           _alunosSelecionadosParaRota.contains(aluno.id);
 
+                      final usuario = _usuariosAlunos[aluno.id];
+                      final nome = usuario?.nome ?? 'Nome não informado';
+                      final endereco =
+                          usuario?.endereco ?? 'Endereço não informado';
+
                       return CheckboxListTile(
-                        title: Text(aluno.nome),
-                        subtitle: Text(aluno.endereco),
+                        title: Text(nome),
+                        subtitle: Text(endereco),
                         value: isSelected,
                         onChanged: (bool? value) {
                           setState(() {
@@ -404,10 +480,16 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
             ),
       ),
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(_isEditMode ? 'Editar Rota' : 'Criar Nova Rota'),
-          backgroundColor: Colors.red,
-          foregroundColor: Colors.white,
+        appBar: NeonAppBar(
+          title: _isEditMode ? 'Editar Rota' : 'Criar Nova Rota',
+          showMenuButton: false,
+          showBackButton: true,
+          onNotificationsPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => TelaNotificacoes()),
+            );
+          },
         ),
         body: _carregandoDados
             ? const Center(child: CircularProgressIndicator())
@@ -423,48 +505,40 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                         TextFormField(
                             controller: _nomeController,
                             decoration: const InputDecoration(
-                                labelText: 'Nome da Rota (ex: Manhã - PUC Coreu)',
+                                labelText:
+                                    'Nome da Rota (ex: Manhã - PUC Coreu)',
                                 border: OutlineInputBorder()),
                             validator: (v) =>
                                 v!.isEmpty ? 'Campo obrigatório' : null),
                         const SizedBox(height: 16),
-                        _carregandoFaculdades
-                            ? const Center(child: Text('Carregando faculdades...'))
-                            : DropdownButtonFormField<String>(
-                                isExpanded: true,
-                                value: _faculdadeSelecionada,
-                                items: _listaFaculdades
-                                    .map((faculdade) => DropdownMenuItem(
-                                          value: faculdade,
-                                          child: Text(faculdade, overflow: TextOverflow.ellipsis),
-                                        ))
-                                    .toList(),
-                                onChanged: (value) async {
-                                  if (value == null) return;
-                                  setState(() => _faculdadeSelecionada = value);
-                                  try {
-                                    List<Location> locations = await locationFromAddress(value);
-                                    if(locations.isNotEmpty) {
-                                      setState(() {
-                                        _localDestinoGeoPoint = GeoPoint(locations.first.latitude, locations.first.longitude);
-                                      });
-                                    }
-                                  } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao obter coordenadas: $e')));
-                                  }
-                                },
-                                decoration: InputDecoration(
-                                  labelText: 'Local de Destino (Faculdade)',
-                                  border: const OutlineInputBorder(),
-                                  errorText: _listaFaculdades.isEmpty &&
-                                          !_carregandoFaculdades
-                                      ? 'Nenhuma faculdade encontrada.'
-                                      : null,
-                                ),
-                                validator: (value) => value == null
-                                    ? 'Selecione uma faculdade.'
-                                    : null,
+                        Autocomplete<AutocompletePrediction>(
+                          optionsBuilder: _buscaEndereco,
+                          onSelected: _onEnderecoSelecionado,
+                          displayStringForOption: (option) => option.fullText,
+                          fieldViewBuilder: (
+                            BuildContext context,
+                            TextEditingController fieldTextEditingController,
+                            FocusNode fieldFocusNode,
+                            VoidCallback onFieldSubmitted,
+                          ) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              fieldTextEditingController.text =
+                                  _enderecoDestinoController.text;
+                            });
+
+                            return TextFormField(
+                              controller: fieldTextEditingController,
+                              focusNode: fieldFocusNode,
+                              decoration: const InputDecoration(
+                                labelText: 'Local de Destino (Faculdade)',
+                                border: OutlineInputBorder(),
                               ),
+                              onChanged: (value) {
+                                _enderecoDestinoController.text = value;
+                              },
+                            );
+                          },
+                        ),
                         const SizedBox(height: 16),
                         DropdownButtonFormField<Van>(
                           isExpanded: true,
@@ -473,7 +547,8 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                               .map((van) => DropdownMenuItem(
                                     value: van,
                                     child: Text(
-                                        '${van.marca} ${van.modelo} - ${van.placa}', overflow: TextOverflow.ellipsis),
+                                        '${van.marca} ${van.modelo} - ${van.placa}',
+                                        overflow: TextOverflow.ellipsis),
                                   ))
                               .toList(),
                           onChanged: (value) =>
@@ -511,7 +586,8 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                           trailing: const Icon(Icons.schedule),
                           onTap: () async {
                             final hora = await _selecionarHora(_horarioFim);
-                            if (hora != null) setState(() => _horarioFim = hora);
+                            if (hora != null)
+                              setState(() => _horarioFim = hora);
                           },
                         ),
                         const Divider(height: 24),
@@ -528,10 +604,11 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                                     color: Colors.white,
                                   ))
                               : const Icon(Icons.save),
-                          label: Text(
-                              _isEditMode ? 'ATUALIZAR ROTA' : 'SALVAR ROTA'),
+                          label: Text(_isEditMode
+                              ? 'ATUALIZAR ROTA'
+                              : 'SALVAR ROTA'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Theme.of(context).colorScheme.primary,
+                            backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                           ),

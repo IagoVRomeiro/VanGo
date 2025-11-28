@@ -8,6 +8,7 @@
 .env
 .build/
 .buildlog/
+VanGo (Cópia)/
 
 # Android
 /android/local.properties

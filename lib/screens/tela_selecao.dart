@@ -12,7 +12,7 @@ class TelaSelecao extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -47,7 +47,7 @@ class TelaSelecao extends StatelessWidget {
                   title: 'MOTORISTA',
                   description: 'Gerencie suas rotas e alunos.',
                   icon: Icons.drive_eta_outlined,
-                  color: theme.colorScheme.error, // Vermelho do tema
+                  color: theme.colorScheme.error,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -64,7 +64,7 @@ class TelaSelecao extends StatelessWidget {
                   title: 'ALUNO',
                   description: 'Acompanhe sua van e converse com o motorista.',
                   icon: Icons.backpack_outlined,
-                  color: theme.colorScheme.primary, // Âmbar do tema
+                  color: theme.colorScheme.primary,
                   onTap: () {
                     Navigator.push(
                       context,

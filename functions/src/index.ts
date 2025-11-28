@@ -1,4 +1,4 @@
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 
 admin.initializeApp();
@@ -16,9 +16,9 @@ export const enviarConvite = functions.https.onCall(async (data, context) => {
         );
     }
     const motoristaId = context.auth.uid;
-    const emailAluno = data.email;
+    const emailAluno = typeof data.email === "string" ? data.email.trim() : null;
 
-    if (!emailAluno || typeof emailAluno !== "string") {
+    if (!emailAluno) {
         throw new functions.https.HttpsError(
             "invalid-argument",
             "O email do aluno é obrigatório."
@@ -26,21 +26,48 @@ export const enviarConvite = functions.https.onCall(async (data, context) => {
     }
 
     try {
-        // 2. Encontrar o aluno pelo email
-        const userQuery = await db
+        const emailLower = emailAluno.toLowerCase();
+        let alunoDocId: string | null = null;
+
+        // 2. Encontrar o aluno pelo email na coleção de usuários
+        let userQuery = await db
             .collection("users")
             .where("email", "==", emailAluno)
             .where("role", "==", "aluno")
             .limit(1)
             .get();
 
-        if (userQuery.empty) {
+        if (userQuery.empty && emailLower !== emailAluno) {
+            userQuery = await db
+                .collection("users")
+                .where("email", "==", emailLower)
+                .where("role", "==", "aluno")
+                .limit(1)
+                .get();
+        }
+
+        if (!userQuery.empty) {
+            alunoDocId = userQuery.docs[0].id;
+        } else {
+            // Tenta localizar na coleção 'alunos' (caso ainda não exista em 'users')
+            const alunoQuery = await db
+                .collection("alunos")
+                .where("email", "==", emailAluno)
+                .limit(1)
+                .get();
+
+            if (!alunoQuery.empty) {
+                alunoDocId = alunoQuery.docs[0].id;
+            }
+        }
+
+        if (!alunoDocId) {
             throw new functions.https.HttpsError(
                 "not-found",
                 "Nenhum aluno encontrado com este email."
             );
         }
-        const alunoId = userQuery.docs[0].id;
+        const alunoId = alunoDocId;
 
         // 3. Verificar se o aluno já está vinculado ao motorista
         const motoristaDoc = await db.collection("motoristas").doc(motoristaId).get();
@@ -144,7 +171,15 @@ export const desvincularAluno = functions.https.onCall(async (data, context) => 
         return { success: true, message: "Aluno desvinculado com sucesso." };
     } catch (error) {
         console.error("Erro ao desvincular aluno:", error);
-
+        if (error instanceof functions.https.HttpsError) {
+            throw error;
+        }
+        throw new functions.https.HttpsError(
+            "unknown",
+            "Ocorreu um erro inesperado ao desvincular o aluno."
+        );
+    }
+});
 
 export const notificarAlunosRotaIniciada = functions.firestore
     .document("rotas/{rotaId}")

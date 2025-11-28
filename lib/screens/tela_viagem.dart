@@ -9,6 +9,8 @@ import '../models/aluno.dart';
 import '../models/motorista.dart';
 import '../models/van.dart';
 import '../models/rota.dart';
+import '../models/usuario.dart';
+import '../services/chat_service.dart';
 import 'tela_motorista.dart';
 
 // Imports das telas de destino
@@ -16,6 +18,7 @@ import 'tela_criar_rota.dart';
 import 'tela_criar_van.dart';
 import 'tela_gerenciar_alunos.dart';
 import 'tela_cadastro.dart';
+import 'tela_chat.dart';
 
 class TelaViagem extends StatefulWidget {
   const TelaViagem({super.key});
@@ -26,6 +29,31 @@ class TelaViagem extends StatefulWidget {
 
 class _TelaViagemState extends State<TelaViagem> {
   final User? _currentUser = FirebaseAuth.instance.currentUser;
+
+  Future<Map<String, Usuario>> _buscarUsuariosPorIds(List<String> ids) async {
+    if (ids.isEmpty) return {};
+
+    const chunkSize = 10;
+    final futures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
+    for (var i = 0; i < ids.length; i += chunkSize) {
+      final end = (i + chunkSize) > ids.length ? ids.length : i + chunkSize;
+      futures.add(
+        FirebaseFirestore.instance
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: ids.sublist(i, end))
+            .get(),
+      );
+    }
+
+    final snapshots = await Future.wait(futures);
+    final usuarios = <String, Usuario>{};
+    for (final snapshot in snapshots) {
+      for (final doc in snapshot.docs) {
+        usuarios[doc.id] = Usuario.fromSnapshot(doc);
+      }
+    }
+    return usuarios;
+  }
 
   Widget _buildSectionTitle(BuildContext context, String title) {
     return Padding(
@@ -40,28 +68,8 @@ class _TelaViagemState extends State<TelaViagem> {
     );
   }
 
-  Widget _buildGerenciamentoVan(Van? van) {
-    if (van != null) {
-      return ListTile(
-        leading: Image.network(
-          van.vanFotoUrl ?? 'https://placehold.co/100x100/EFEFEF/AAAAAA?text=Van',
-          width: 50,
-          height: 50,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) =>
-              const Icon(Icons.airport_shuttle_outlined, size: 40),
-        ),
-        title: Text('${van.marca} ${van.modelo}'),
-        subtitle: Text(van.placa),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const CadastrarVanScreen()),
-          );
-        },
-      );
-    } else {
+  Widget _buildGerenciamentoVan(List<Van> vans) {
+    if (vans.isEmpty) {
       return ListTile(
         leading: Icon(Icons.add_circle_outline,
             color: Theme.of(context).colorScheme.primary, size: 40),
@@ -83,6 +91,45 @@ class _TelaViagemState extends State<TelaViagem> {
         },
       );
     }
+
+    return Column(
+      children: [
+        ...vans.map(
+          (van) => ListTile(
+            leading: Image.network(
+              van.vanFotoUrl ??
+                  'https://placehold.co/100x100/EFEFEF/AAAAAA?text=Van',
+              width: 50,
+              height: 50,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.airport_shuttle_outlined, size: 40),
+            ),
+            title: Text('${van.marca} ${van.modelo}'),
+            subtitle: Text(van.placa),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CadastrarVanScreen()),
+              );
+            },
+          ),
+        ),
+        ListTile(
+          leading: Icon(Icons.add_circle_outline,
+              color: Theme.of(context).colorScheme.primary, size: 40),
+          title: const Text('Cadastrar nova van'),
+          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CadastrarVanScreen()),
+            );
+          },
+        ),
+      ],
+    );
   }
 
   Widget _buildGerenciamentoRotas() {
@@ -199,17 +246,45 @@ class _TelaViagemState extends State<TelaViagem> {
     }
   }
 
-    Widget _buildCriarRotaTile(BuildContext context, Van? van) {
-
-      return ListTile(
-
-        leading: Icon(Icons.add_circle_outline,
-
-            color: Theme.of(context).colorScheme.primary, size: 40),
+  Future<void> _abrirChatComAluno(String alunoId, String motoristaId) async {
+    try {
+      final chatId = await ChatService.ensureChat(
+        alunoId: alunoId,
+        motoristaId: motoristaId,
+        activate: true,
+      );
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TelaChat(
+            chatId: chatId,
+            recipientId: alunoId,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao abrir chat: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+  Widget _buildCriarRotaTile(BuildContext context, bool possuiVan) {
+    return ListTile(
+      leading: Icon(
+        Icons.add_circle_outline,
+        color: Theme.of(context).colorScheme.primary,
+        size: 40,
+      ),
       title: const Text('Criar Nova Rota'),
       subtitle: const Text('Adicionar um novo trajeto'),
       onTap: () {
-        if (van != null) {
+        if (possuiVan) {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const CriarRotaScreen()),
@@ -217,7 +292,8 @@ class _TelaViagemState extends State<TelaViagem> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Você precisa cadastrar uma van antes de criar uma rota.'),
+              content:
+                  Text('Você precisa cadastrar pelo menos uma van antes de criar uma rota.'),
               backgroundColor: Colors.orange,
             ),
           );
@@ -226,7 +302,8 @@ class _TelaViagemState extends State<TelaViagem> {
     );
   }
 
-  Widget _buildGerenciamentoAlunos(List<String> alunosIds) {
+  Widget _buildGerenciamentoAlunos(Motorista motorista) {
+    final alunosIds = motorista.alunosIds ?? [];
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,10 +326,10 @@ class _TelaViagemState extends State<TelaViagem> {
             child: Center(child: Text("Nenhum aluno vinculado.")),
           )
         else
-          StreamBuilder<QuerySnapshot>(
+          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
                 .collection('alunos')
-                .where(FieldPath.documentId, whereIn: alunosIds)
+                .where('motoristaId', isEqualTo: motorista.id)
                 .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -268,23 +345,61 @@ class _TelaViagemState extends State<TelaViagem> {
                   child: Center(child: Text("Nenhum passageiro encontrado.")),
                 );
               }
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: snapshot.data!.docs.length,
-                itemBuilder: (context, index) {
-                  final doc = snapshot.data!.docs[index];
-                  final aluno = Aluno.fromMap(doc.id, doc.data() as Map<String, dynamic>);
-                  final nome = aluno.nome;
-                  final faculdade = aluno.endereco;
 
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.red.shade100,
-                      child: Text(nome.isNotEmpty ? nome[0] : 'A'),
-                    ),
-                    title: Text(nome),
-                    subtitle: Text(faculdade),
+              final alunos = snapshot.data!.docs
+                  .map((doc) => Aluno.fromMap(doc.id, doc.data()))
+                  .toList();
+
+              if (alunos.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Center(child: Text("Nenhum passageiro encontrado.")),
+                );
+              }
+
+              return FutureBuilder<Map<String, Usuario>>(
+                future: _buscarUsuariosPorIds(alunos.map((a) => a.id).toList()),
+                builder: (context, usuariosSnapshot) {
+                  if (usuariosSnapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  final usuarios = usuariosSnapshot.data ?? {};
+
+                  alunos.sort((a, b) {
+                    final nomeA = usuarios[a.id]?.nome ?? '';
+                    final nomeB = usuarios[b.id]?.nome ?? '';
+                    return nomeA.compareTo(nomeB);
+                  });
+
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: alunos.length,
+                    itemBuilder: (context, index) {
+                      final aluno = alunos[index];
+                      final usuario = usuarios[aluno.id];
+                      final nome = usuario?.nome ?? 'Nome não informado';
+                      final endereco =
+                          usuario?.endereco ?? 'Endereço não informado';
+
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.red.shade100,
+                          child: Text(nome.isNotEmpty ? nome[0] : 'A'),
+                        ),
+                        title: Text(nome),
+                        subtitle: Text(endereco),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.chat_bubble_outline),
+                          tooltip: 'Conversar',
+                          onPressed: () => _abrirChatComAluno(aluno.id, motorista.id),
+                        ),
+                        onTap: () => _abrirChatComAluno(aluno.id, motorista.id),
+                      );
+                    },
                   );
                 },
               );
@@ -321,7 +436,7 @@ class _TelaViagemState extends State<TelaViagem> {
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
-      child: StreamBuilder<DocumentSnapshot>(
+      child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance.collection('motoristas').doc(_currentUser!.uid).snapshots(),
         builder: (context, motoristaSnapshot) {
           if (motoristaSnapshot.connectionState == ConnectionState.waiting) {
@@ -331,68 +446,63 @@ class _TelaViagemState extends State<TelaViagem> {
             return const Center(child: Text('Erro: Não foi possível carregar o perfil.'));
           }
 
-          final motorista = Motorista.fromMap(motoristaSnapshot.data!.id, motoristaSnapshot.data!.data() as Map<String, dynamic>);
-          final vanId = motorista.vanId;
+          final motorista = Motorista.fromMap(
+            motoristaSnapshot.data!.id,
+            motoristaSnapshot.data!.data()!,
+          );
 
-          return StreamBuilder<DocumentSnapshot>(
-            stream: vanId != null ? FirebaseFirestore.instance.collection('vans').doc(vanId).snapshots() : null,
-            builder: (context, vanSnapshot) {
-              Van? van;
-              if (vanSnapshot.connectionState == ConnectionState.active && vanSnapshot.hasData && vanSnapshot.data!.exists) {
-                van = Van.fromSnapshot(vanSnapshot.data! as DocumentSnapshot<Map<String, dynamic>>);
-              }
-              
-              if (vanId != null && vanSnapshot.connectionState == ConnectionState.waiting) {
-                 return const Center(child: CircularProgressIndicator());
+          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('vans')
+                .where('motoristaId', isEqualTo: motorista.id)
+                .snapshots(),
+            builder: (context, vansSnapshot) {
+              if (vansSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
               }
 
-              return _DriverDashboard(motorista: motorista, van: van);
+              final vans = vansSnapshot.hasData
+                  ? vansSnapshot.data!.docs
+                      .map((doc) => Van.fromSnapshot(doc))
+                      .toList()
+                  : <Van>[];
+
+              return _buildDriverDashboard(motorista, vans);
             },
           );
         },
       ),
     );
   }
-}
 
-class _DriverDashboard extends StatelessWidget {
-  final Motorista motorista;
-  final Van? van;
-
-  const _DriverDashboard({required this.motorista, this.van});
-
-  @override
-  Widget build(BuildContext context) {
-    // Re-use the existing build methods from the state class
-    final state = context.findAncestorStateOfType<_TelaViagemState>()!;
-
+  Widget _buildDriverDashboard(Motorista motorista, List<Van> vans) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        state._buildSectionTitle(context, 'Gerenciamento do Veículo'),
+        _buildSectionTitle(context, 'Gerenciamento do Veículo'),
         Card(
           clipBehavior: Clip.antiAlias,
           margin: const EdgeInsets.symmetric(vertical: 8.0),
-          child: state._buildGerenciamentoVan(van),
+          child: _buildGerenciamentoVan(vans),
         ),
-        state._buildSectionTitle(context, 'Gerenciamento da Rota'),
+        _buildSectionTitle(context, 'Gerenciamento da Rota'),
         Card(
           clipBehavior: Clip.antiAlias,
           margin: const EdgeInsets.symmetric(vertical: 8.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              state._buildGerenciamentoRotas(),
+              _buildGerenciamentoRotas(),
               const Divider(height: 1),
-              state._buildCriarRotaTile(context, van),
+              _buildCriarRotaTile(context, vans.isNotEmpty),
             ],
           ),
         ),
-        state._buildSectionTitle(context, 'Alunos'),
+        _buildSectionTitle(context, 'Alunos'),
         Card(
           clipBehavior: Clip.antiAlias,
           margin: const EdgeInsets.symmetric(vertical: 8.0),
-          child: state._buildGerenciamentoAlunos(motorista.alunosIds ?? []),
+          child: _buildGerenciamentoAlunos(motorista),
         ),
         const SizedBox(height: 80),
       ],

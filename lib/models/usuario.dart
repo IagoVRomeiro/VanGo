@@ -18,26 +18,35 @@ enum UserRole {
 /// Representa o documento de controle de acesso na coleção 'users' do Firestore.
 /// Contém as informações básicas e o papel de cada usuário autenticado.
 class Usuario {
-  final String id;        // UID do Firebase Auth
+  final String id; // UID do Firebase Auth
+  final String nome;
   final String email;
+  final String? telefone;
+  final String? endereco;
   final UserRole role;
-  final String? fotoUrl; // 🔹 ADICIONADO
+  final String? fotoUrl;
   final Timestamp? criadoEm;
 
   const Usuario({
     required this.id,
+    required this.nome,
     required this.email,
     required this.role,
-    this.fotoUrl, // 🔹 ADICIONADO
+    this.telefone,
+    this.endereco,
+    this.fotoUrl,
     this.criadoEm,
   });
 
   /// Converte o objeto [Usuario] em um [Map] para salvar no Firestore.
   Map<String, dynamic> toMap() {
     return {
+      'nome': nome,
       'email': email,
+      'telefone': telefone,
+      'endereco': endereco,
       'role': role.name,
-      'fotoUrl': fotoUrl, // 🔹 ADICIONADO
+      'fotoUrl': fotoUrl,
       'criadoEm': criadoEm ?? FieldValue.serverTimestamp(),
     };
   }
@@ -51,9 +60,12 @@ class Usuario {
 
     return Usuario(
       id: snapshot.id,
+      nome: data['nome'] ?? 'Nome não informado',
       email: data['email'] ?? '',
+      telefone: data['telefone'],
+      endereco: data['endereco'],
       role: UserRole.fromString(data['role']),
-      fotoUrl: data['fotoUrl'], 
+      fotoUrl: data['fotoUrl'],
       criadoEm: data['criadoEm'],
     );
   }
