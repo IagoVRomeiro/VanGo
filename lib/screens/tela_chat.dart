@@ -165,12 +165,13 @@ class _TelaChatState extends State<TelaChat> {
   Widget build(BuildContext context) {
     final parentTheme = Theme.of(context);
 
-    final Color primaryColor = _isCurrentUserDriver
-        ? Theme.of(context).colorScheme.secondary
-        : Theme.of(context).colorScheme.primary;
-    final Color onPrimaryColor = _isCurrentUserDriver ? Colors.white : Colors.black;
-    final Color surfaceVariantColor = Theme.of(context).colorScheme.surfaceVariant;
-    final Color onSurfaceVariantColor = Colors.black; // Keep black for contrast on light variants
+    final colorScheme = parentTheme.colorScheme;
+    final Color primaryColor =
+        _isCurrentUserDriver ? colorScheme.secondary : colorScheme.primary;
+    final Color onPrimaryColor =
+        _isCurrentUserDriver ? colorScheme.onSecondary : colorScheme.onPrimary;
+    final Color surfaceVariantColor = colorScheme.surfaceVariant;
+    final Color onSurfaceVariantColor = colorScheme.onSurfaceVariant;
 
     return Theme(
       data: parentTheme.copyWith(
