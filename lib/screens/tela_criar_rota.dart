@@ -1,13 +1,15 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
-import 'package:vango/models/aluno.dart';
-import 'package:vango/models/motorista.dart';
-import 'package:vango/models/rota.dart';
-import 'package:vango/models/usuario.dart';
-import 'package:vango/models/van.dart';
+import 'package:google_places_flutter/google_places_flutter.dart';
+import 'package:google_places_flutter/model/place_type.dart';
+import 'package:google_places_flutter/model/prediction.dart';
+import '../models/aluno.dart';
+import '../models/motorista.dart';
+import '../models/usuario.dart';
+import '../models/van.dart';
+import '../models/rota.dart';
 import 'package:vango/screens/tela_notificacoes.dart';
 import 'package:vango/widgets/neon_app_bar.dart';
 
@@ -23,9 +25,6 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _nomeController = TextEditingController();
-  final _enderecoDestinoController = TextEditingController();
-  final String _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY']!;
-  late final FlutterGooglePlacesSdk _places;
 
   Van? _vanSelecionada;
   TimeOfDay? _horarioInicio;
@@ -37,26 +36,23 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   Timestamp? _criadoEm;
 
   final Map<String, bool> _diasSemana = {
-    'Seg': false,
-    'Ter': false,
-    'Qua': false,
-    'Qui': false,
-    'Sex': false,
-    'Sab': false,
-    'Dom': false,
+    'Seg': false, 'Ter': false, 'Qua': false,
+    'Qui': false, 'Sex': false, 'Sab': false, 'Dom': false,
   };
 
   List<Aluno> _motoristaAlunosDisponiveis = [];
   Map<String, Usuario> _usuariosAlunos = {};
   Set<String> _alunosSelecionadosParaRota = {};
 
-  String? _faculdadeSelecionada;
+  final TextEditingController _destinoController = TextEditingController();
+  final FocusNode _destinoFocusNode = FocusNode();
+  late final String _apiKey;
   GeoPoint? _localDestinoGeoPoint;
 
   @override
   void initState() {
     super.initState();
-    _places = FlutterGooglePlacesSdk(_apiKey);
+    _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
     if (widget.rotaId != null) {
       _isEditMode = true;
     }
@@ -66,7 +62,8 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   @override
   void dispose() {
     _nomeController.dispose();
-    _enderecoDestinoController.dispose();
+    _destinoController.dispose();
+    _destinoFocusNode.dispose();
     super.dispose();
   }
 
@@ -97,8 +94,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Erro ao carregar dados iniciais: ${e.toString()}'),
+          SnackBar(content: Text('Erro ao carregar dados iniciais: ${e.toString()}'),
               backgroundColor: Colors.red),
         );
       }
@@ -165,8 +161,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
     const chunkSize = 10;
     final futures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
     for (var i = 0; i < alunosIds.length; i += chunkSize) {
-      final end =
-          (i + chunkSize) > alunosIds.length ? alunosIds.length : i + chunkSize;
+      final end = (i + chunkSize) > alunosIds.length ? alunosIds.length : i + chunkSize;
       futures.add(
         FirebaseFirestore.instance
             .collection('users')
@@ -192,15 +187,16 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
 
   Future<void> _carregarDadosDaRota(String rotaId) async {
     try {
-      final doc =
-          await FirebaseFirestore.instance.collection('rotas').doc(rotaId).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('rotas')
+          .doc(rotaId)
+          .get();
 
       if (doc.exists && mounted) {
         final rota = Rota.fromSnapshot(doc);
 
         _nomeController.text = rota.nome;
-        _enderecoDestinoController.text = rota.localDestinoNome;
-        _faculdadeSelecionada = rota.localDestinoNome;
+        _destinoController.text = rota.localDestinoNome;
         _localDestinoGeoPoint = rota.localDestino;
         _criadoEm = rota.criadoEm;
 
@@ -225,8 +221,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Erro ao carregar rota: $e'),
+          SnackBar(content: Text('Erro ao carregar rota: $e'),
               backgroundColor: Colors.red),
         );
       }
@@ -246,18 +241,20 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       return;
     }
 
-    if (_faculdadeSelecionada == null ||
+    if (_destinoController.text.trim().isEmpty ||
+        _localDestinoGeoPoint == null ||
         _vanSelecionada == null ||
         _horarioInicio == null ||
-        _horarioFim == null ||
-        _localDestinoGeoPoint == null) {
+        _horarioFim == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Por favor, preencha todos os campos.'),
+            content:
+                Text('Por favor, selecione o destino e preencha os demais campos.'),
             backgroundColor: Colors.orange),
       );
       return;
     }
+    final destino = _localDestinoGeoPoint!;
 
     final inicioEmMinutos = _horarioInicio!.hour * 60 + _horarioInicio!.minute;
     final fimEmMinutos = _horarioFim!.hour * 60 + _horarioFim!.minute;
@@ -265,8 +262,8 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
     if (inicioEmMinutos >= fimEmMinutos) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text(
-                'O horário de chegada deve ser depois do horário de início.'),
+            content:
+                Text('O horário de chegada deve ser depois do horário de início.'),
             backgroundColor: Colors.orange),
       );
       return;
@@ -281,8 +278,8 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       final rotaData = Rota(
         id: _isEditMode ? widget.rotaId! : '',
         nome: _nomeController.text.trim(),
-        localDestino: _localDestinoGeoPoint!,
-        localDestinoNome: _faculdadeSelecionada!,
+        localDestino: destino,
+        localDestinoNome: _destinoController.text.trim(),
         vanId: _vanSelecionada!.id,
         motoristaId: user.uid,
         listaAlunosIds: _alunosSelecionadosParaRota.toList(),
@@ -333,48 +330,6 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
     return hora;
   }
 
-  Future<Iterable<AutocompletePrediction>> _buscaEndereco(
-      TextEditingValue textEditingValue) async {
-    final text = textEditingValue.text.trim();
-    if (text.isEmpty) {
-      return const Iterable.empty();
-    }
-
-    try {
-      final result = await _places.findAutocompletePredictions(
-        text,
-        countries: ['br'],
-      );
-      return result.predictions;
-    } catch (e) {
-      return const Iterable.empty();
-    }
-  }
-
-  Future<void> _onEnderecoSelecionado(AutocompletePrediction selection) async {
-    try {
-      final placeDetails = await _places.fetchPlace(
-        selection.placeId,
-        fields: [PlaceField.Location, PlaceField.Address, PlaceField.Name],
-      );
-
-      final location = placeDetails.place?.latLng;
-      if (location != null && mounted) {
-        final formattedAddress = placeDetails.place?.address ??
-            placeDetails.place?.name ??
-            selection.fullText;
-
-        setState(() {
-          _localDestinoGeoPoint = GeoPoint(location.lat, location.lng);
-          _faculdadeSelecionada = formattedAddress;
-          _enderecoDestinoController.text = formattedAddress;
-        });
-      }
-    } catch (e) {
-      // Handle error
-    }
-  }
-
   Widget _buildDiasSemanaChips() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,6 +362,72 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
           }).toList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildDestinoField(BuildContext context) {
+    if (_apiKey.isEmpty || _apiKey == 'YOUR_API_KEY') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: _destinoController,
+            focusNode: _destinoFocusNode,
+            readOnly: true,
+            decoration: const InputDecoration(
+              labelText: 'Local de Destino (Faculdade)',
+              border: OutlineInputBorder(),
+              hintText: 'Configure GOOGLE_MAPS_API_KEY no assets/.env',
+            ),
+            validator: (_) => 'Configure GOOGLE_MAPS_API_KEY para usar o autocomplete.',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'É necessário configurar a chave do Google Maps no arquivo assets/.env para habilitar o campo.',
+            style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+          ),
+        ],
+      );
+    }
+
+    return GooglePlaceAutoCompleteTextField(
+      textEditingController: _destinoController,
+      focusNode: _destinoFocusNode,
+      googleAPIKey: _apiKey,
+      debounceTime: 400,
+      countries: const ['br'],
+      language: 'pt-BR',
+      placeType: PlaceType.establishment,
+      isLatLngRequired: true,
+      textStyle: Theme.of(context).textTheme.bodyMedium ?? const TextStyle(),
+      inputDecoration: const InputDecoration(
+        labelText: 'Local de Destino (Faculdade)',
+        border: OutlineInputBorder(),
+      ),
+      validator: (value, _) =>
+          value == null || value.trim().isEmpty ? 'Informe o destino.' : null,
+      itemClick: (Prediction prediction) {
+        _destinoController.text = prediction.description ?? '';
+        _destinoController.selection = TextSelection.fromPosition(
+          TextPosition(offset: prediction.description?.length ?? 0),
+        );
+      },
+      getPlaceDetailWithLatLng: (Prediction prediction) {
+        if (prediction.lat != null && prediction.lng != null) {
+          setState(() {
+            _localDestinoGeoPoint = GeoPoint(
+              double.parse(prediction.lat!),
+              double.parse(prediction.lng!),
+            );
+          });
+        }
+      },
+      itemBuilder: (context, index, Prediction prediction) {
+        return ListTile(
+          dense: true,
+          title: Text(prediction.description ?? ''),
+        );
+      },
     );
   }
 
@@ -447,8 +468,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
 
                       final usuario = _usuariosAlunos[aluno.id];
                       final nome = usuario?.nome ?? 'Nome não informado';
-                      final endereco =
-                          usuario?.endereco ?? 'Endereço não informado';
+                      final endereco = usuario?.endereco ?? 'Endereço não informado';
 
                       return CheckboxListTile(
                         title: Text(nome),
@@ -505,40 +525,12 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                         TextFormField(
                             controller: _nomeController,
                             decoration: const InputDecoration(
-                                labelText:
-                                    'Nome da Rota (ex: Manhã - PUC Coreu)',
+                                labelText: 'Nome da Rota (ex: Manhã - PUC Coreu)',
                                 border: OutlineInputBorder()),
                             validator: (v) =>
                                 v!.isEmpty ? 'Campo obrigatório' : null),
                         const SizedBox(height: 16),
-                        Autocomplete<AutocompletePrediction>(
-                          optionsBuilder: _buscaEndereco,
-                          onSelected: _onEnderecoSelecionado,
-                          displayStringForOption: (option) => option.fullText,
-                          fieldViewBuilder: (
-                            BuildContext context,
-                            TextEditingController fieldTextEditingController,
-                            FocusNode fieldFocusNode,
-                            VoidCallback onFieldSubmitted,
-                          ) {
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              fieldTextEditingController.text =
-                                  _enderecoDestinoController.text;
-                            });
-
-                            return TextFormField(
-                              controller: fieldTextEditingController,
-                              focusNode: fieldFocusNode,
-                              decoration: const InputDecoration(
-                                labelText: 'Local de Destino (Faculdade)',
-                                border: OutlineInputBorder(),
-                              ),
-                              onChanged: (value) {
-                                _enderecoDestinoController.text = value;
-                              },
-                            );
-                          },
-                        ),
+                        _buildDestinoField(context),
                         const SizedBox(height: 16),
                         DropdownButtonFormField<Van>(
                           isExpanded: true,
@@ -547,9 +539,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                               .map((van) => DropdownMenuItem(
                                     value: van,
                                     child: Text(
-                                        '${van.marca} ${van.modelo} - ${van.placa}',
-                                        overflow: TextOverflow.ellipsis),
-                                  ))
+                                        '${van.marca} ${van.modelo} - ${van.placa}', overflow: TextOverflow.ellipsis),                                  ))
                               .toList(),
                           onChanged: (value) =>
                               setState(() => _vanSelecionada = value),
@@ -586,8 +576,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                           trailing: const Icon(Icons.schedule),
                           onTap: () async {
                             final hora = await _selecionarHora(_horarioFim);
-                            if (hora != null)
-                              setState(() => _horarioFim = hora);
+                            if (hora != null) setState(() => _horarioFim = hora);
                           },
                         ),
                         const Divider(height: 24),
@@ -597,16 +586,14 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                           onPressed: _isLoading ? null : _salvarRota,
                           icon: _isLoading
                               ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
+                                  width: 20, height: 20,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
                                     color: Colors.white,
                                   ))
                               : const Icon(Icons.save),
-                          label: Text(_isEditMode
-                              ? 'ATUALIZAR ROTA'
-                              : 'SALVAR ROTA'),
+                          label: Text(
+                              _isEditMode ? 'ATUALIZAR ROTA' : 'SALVAR ROTA'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,

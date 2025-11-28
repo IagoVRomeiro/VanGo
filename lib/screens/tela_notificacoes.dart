@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:vango/services/chat_service.dart';
 import '../models/usuario.dart'; // Importa Usuario para pegar o Role
 import 'package:vango/widgets/neon_app_bar.dart';
@@ -16,6 +17,7 @@ class TelaNotificacoes extends StatefulWidget {
 class _TelaNotificacoesState extends State<TelaNotificacoes> {
   User? _currentUser;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFunctions _functions = FirebaseFunctions.instance;
   Future<UserRole>? _userRoleFuture;
 
   @override
@@ -46,22 +48,46 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
      final alunoId = _currentUser?.uid;
      if (alunoId == null) return;
       try {
-        await _firestore.runTransaction((transaction) async {
-          final contratoRef = _firestore.collection('contratos').doc(contratoId);
-          transaction.update(contratoRef, {'status': 'aprovado'});
-          final motoristaRef = _firestore.collection('motoristas').doc(motoristaId);
-          transaction.update(motoristaRef, {'alunosIds': FieldValue.arrayUnion([alunoId])});
-          final alunoRef = _firestore.collection('alunos').doc(alunoId);
-          transaction.update(alunoRef, {'motoristaId': motoristaId});
+        final callable = _functions.httpsCallable('aceitarConviteAluno');
+        final result = await callable.call<Map<String, dynamic>>({
+          'contratoId': contratoId,
+          'motoristaId': motoristaId,
         });
+
         await ChatService.ensureChat(
           alunoId: alunoId,
           motoristaId: motoristaId,
           activate: true,
         );
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Vinculado!'), backgroundColor: theme.colorScheme.primary));
+
+        if (mounted) {
+          final message =
+              result.data['message'] as String? ?? 'Vínculo confirmado.';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: theme.colorScheme.primary,
+            ),
+          );
+        }
+      } on FirebaseFunctionsException catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.message ?? 'Erro ao aceitar convite.'),
+              backgroundColor: theme.colorScheme.error,
+            ),
+          );
+        }
       } catch (e) {
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: theme.colorScheme.error));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro: $e'),
+              backgroundColor: theme.colorScheme.error,
+            ),
+          );
+        }
       }
   }
 

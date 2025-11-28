@@ -117,6 +117,93 @@ export const enviarConvite = functions.https.onCall(async (data, context) => {
 });
 
 /**
+ * Cloud Function para o aluno aceitar um convite enviado por um motorista.
+ */
+export const aceitarConviteAluno = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            "unauthenticated",
+            "A função só pode ser chamada por um usuário autenticado."
+        );
+    }
+
+    const alunoId = context.auth.uid;
+    const contratoId = typeof data.contratoId === "string" ? data.contratoId : null;
+    const motoristaId = typeof data.motoristaId === "string" ? data.motoristaId : null;
+
+    if (!contratoId || !motoristaId) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Os campos contratoId e motoristaId são obrigatórios."
+        );
+    }
+
+    try {
+        await db.runTransaction(async (transaction) => {
+            const contratoRef = db.collection("contratos").doc(contratoId);
+            const contratoSnap = await transaction.get(contratoRef);
+            if (!contratoSnap.exists) {
+                throw new functions.https.HttpsError(
+                    "not-found",
+                    "Convite não encontrado."
+                );
+            }
+
+            const contratoData = contratoSnap.data();
+            if (!contratoData) {
+                throw new functions.https.HttpsError(
+                    "not-found",
+                    "Dados do convite não encontrados."
+                );
+            }
+
+            if (contratoData.alunoId !== alunoId || contratoData.motoristaId !== motoristaId) {
+                throw new functions.https.HttpsError(
+                    "permission-denied",
+                    "Você não pode aceitar este convite."
+                );
+            }
+
+            if (contratoData.status !== "convite_motorista") {
+                throw new functions.https.HttpsError(
+                    "failed-precondition",
+                    "Este convite já foi processado."
+                );
+            }
+
+            const motoristaRef = db.collection("motoristas").doc(motoristaId);
+            const alunoRef = db.collection("alunos").doc(alunoId);
+
+            transaction.update(contratoRef, {
+                status: "aprovado",
+                dataAprovacao: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+            transaction.update(motoristaRef, {
+                alunosIds: admin.firestore.FieldValue.arrayUnion(alunoId),
+            });
+
+            transaction.set(
+                alunoRef,
+                { motoristaId: motoristaId },
+                { merge: true }
+            );
+        });
+
+        return { success: true, message: "Convite aceito com sucesso." };
+    } catch (error) {
+        console.error("Erro ao aceitar convite:", error);
+        if (error instanceof functions.https.HttpsError) {
+            throw error;
+        }
+        throw new functions.https.HttpsError(
+            "unknown",
+            "Ocorreu um erro inesperado ao aceitar o convite."
+        );
+    }
+});
+
+/**
  * Cloud Function para um motorista desvincular um aluno.
  */
 export const desvincularAluno = functions.https.onCall(async (data, context) => {
@@ -321,3 +408,9 @@ export const notificarNovoChat = functions.firestore
             console.error("Erro ao enviar notificação para o motorista:", error);
         }
     });
+
+export const sendWelcomeEmail = functions.https.onCall(async (data, context) => {
+  // TODO: Implement actual email sending logic
+  console.log("sendWelcomeEmail called with data:", data);
+  return { success: true, message: "Welcome email sent (not really)!" };
+});

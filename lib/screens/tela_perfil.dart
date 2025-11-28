@@ -80,7 +80,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
   @override
   void initState() {
     super.initState();
-    _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? 'YOUR_API_KEY';
+    _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
     _verificarLoginECarregar();
   }
 
