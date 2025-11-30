@@ -6,6 +6,7 @@ class NeonAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool showMenuButton;
   final bool showBackButton;
   final bool showNotificationsButton;
+  final Widget? notificationAction;
   final VoidCallback? onMenuPressed;
   final VoidCallback? onNotificationsPressed;
 
@@ -16,6 +17,7 @@ class NeonAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.showMenuButton = true,
     this.showBackButton = false,
     this.showNotificationsButton = true,
+    this.notificationAction,
     this.onMenuPressed,
     this.onNotificationsPressed,
   });
@@ -35,11 +37,7 @@ class NeonAppBar extends StatelessWidget implements PreferredSizeWidget {
       leading: showBackButton
           ? IconButton(
               icon: const Icon(Icons.arrow_back),
-              onPressed: () {
-                if (Navigator.of(context).canPop()) {
-                  Navigator.of(context).pop();
-                }
-              },
+              onPressed: () => Navigator.of(context).maybePop(),
             )
           : showMenuButton
               ? Builder(
@@ -52,11 +50,12 @@ class NeonAppBar extends StatelessWidget implements PreferredSizeWidget {
                           return;
                         }
                         final scaffoldState = Scaffold.maybeOf(context);
-                        if (scaffoldState != null &&
-                            (scaffoldState.hasDrawer || scaffoldState.hasEndDrawer)) {
+                        if (scaffoldState != null && scaffoldState.hasDrawer) {
                           scaffoldState.openDrawer();
-                        } else if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
+                        } else if (scaffoldState != null && scaffoldState.hasEndDrawer) {
+                          scaffoldState.openEndDrawer();
+                        } else {
+                          Navigator.of(context).maybePop();
                         }
                       },
                     );
@@ -65,12 +64,13 @@ class NeonAppBar extends StatelessWidget implements PreferredSizeWidget {
               : null,
       actions: showNotificationsButton
           ? [
-              IconButton(
-                icon: const Icon(Icons.notifications),
-                onPressed: () {
-                  onNotificationsPressed?.call();
-                },
-              ),
+              notificationAction ??
+                  IconButton(
+                    icon: const Icon(Icons.notifications),
+                    onPressed: () {
+                      onNotificationsPressed?.call();
+                    },
+                  ),
             ]
           : null,
       flexibleSpace: Container(

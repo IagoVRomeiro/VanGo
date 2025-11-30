@@ -5,6 +5,7 @@
 // gerar imagens com o sufixo "_400x400".
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:vango/models/motorista.dart';
@@ -14,6 +15,7 @@ import 'package:vango/services/chat_service.dart';
 import 'package:vango/services/image_service.dart'; // ✨ IMPORTADO
 import '../widgets/neon_app_bar.dart';
 import 'tela_notificacoes.dart';
+import 'tela_avaliacoes_motorista.dart';
 
 class TelaDetalheMotorista extends StatefulWidget {
   final Motorista motorista;
@@ -38,6 +40,7 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
   bool _isLoadingRotas = true;
   double _avaliacaoAtual = 0;
   int _avaliacoesQtd = 0;
+  final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   @override
   void initState() {
@@ -247,42 +250,35 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
     final comentario = resultado['comentario'] as String? ?? '';
 
     try {
-      final motoristaRef = FirebaseFirestore.instance
-          .collection('motoristas')
-          .doc(widget.motorista.id);
-
-      await motoristaRef.collection('avaliacoes').doc(currentUser.uid).set({
-        'alunoId': currentUser.uid,
+      final callable = _functions.httpsCallable('avaliarMotorista');
+      final result = await callable.call<Map<String, dynamic>>({
+        'motoristaId': widget.motorista.id,
         'nota': nota,
         'comentario': comentario,
-        'atualizadoEm': FieldValue.serverTimestamp(),
       });
 
-      final avaliacoesSnapshot =
-          await motoristaRef.collection('avaliacoes').get();
-      double soma = 0;
-      for (final doc in avaliacoesSnapshot.docs) {
-        soma += (doc.data()['nota'] as num?)?.toDouble() ?? 0;
-      }
-      final media = avaliacoesSnapshot.docs.isNotEmpty
-          ? soma / avaliacoesSnapshot.docs.length
-          : nota;
-
-      await motoristaRef.update({
-        'avaliacao': media,
-        'avaliacoesQtd': avaliacoesSnapshot.docs.length,
-      });
+      final data = result.data;
+      final media = (data['media'] as num?)?.toDouble() ?? nota;
+      final quantidade = data['quantidade'] as int? ?? _avaliacoesQtd;
 
       if (!mounted) return;
       setState(() {
         _avaliacaoAtual = media;
-        _avaliacoesQtd = avaliacoesSnapshot.docs.length;
+        _avaliacoesQtd = quantidade;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Avaliação registrada!'),
           backgroundColor: theme.colorScheme.primary,
+        ),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message ?? 'Erro ao salvar avaliação.'),
+          backgroundColor: Colors.red,
         ),
       );
     } catch (e) {
@@ -294,6 +290,18 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
         ),
       );
     }
+  }
+
+  void _abrirTelaAvaliacoes() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TelaAvaliacoesMotorista(
+          motoristaId: widget.motorista.id,
+          motoristaNome: widget.nome,
+        ),
+      ),
+    );
   }
 
 
@@ -324,7 +332,7 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
                 radius: 50,
                 backgroundImage: resizedProfileUrl != null
                     ? NetworkImage(resizedProfileUrl)
-                    : const AssetImage('assets/vgo_logo.png') as ImageProvider,
+                    : const AssetImage('assets/iconSemFundo.png') as ImageProvider,
               ),
             ),
             const SizedBox(height: 16),
@@ -342,6 +350,13 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
                 ),
                 avatar: Icon(Icons.star, color: theme.colorScheme.primary),
                 backgroundColor: theme.colorScheme.surfaceVariant,
+              ),
+            ),
+            Center(
+              child: TextButton.icon(
+                onPressed: _abrirTelaAvaliacoes,
+                icon: const Icon(Icons.rate_review_outlined),
+                label: const Text('Ver avaliações'),
               ),
             ),
             const Divider(height: 32),

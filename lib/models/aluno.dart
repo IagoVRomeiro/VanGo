@@ -1,3 +1,4 @@
+// vango 1.0
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum StatusPresenca { presente, ausente, embarcou }
@@ -39,3 +40,4 @@ class Aluno {
     );
   }
 }
+

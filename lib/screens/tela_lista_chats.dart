@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:intl/intl.dart';
+import 'package:vango/models/chat.dart';
 import 'package:vango/models/usuario.dart';
 import 'package:vango/services/chat_service.dart';
 
@@ -134,40 +135,55 @@ class _TelaListaChatsState extends State<TelaListaChats> {
   Widget _buildMotoristaChatList(String motoristaId) {
     final theme = Theme.of(context);
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Text(
-              "Conversas com alunos não vinculados",
-              style: theme.textTheme.titleLarge,
-            ),
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _firestore.collection('motoristas').doc(motoristaId).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final data = snapshot.data?.data();
+        final alunosVinculados =
+            List<String>.from(data?['alunosIds'] ?? const <String>[]);
+
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Text(
+                  "Conversas com alunos não vinculados",
+                  style: theme.textTheme.titleLarge,
+                ),
+              ),
+              _buildChatListNaoVinculados(
+                motoristaId: motoristaId,
+                alunosVinculados: alunosVinculados,
+              ),
+              const Divider(height: 30),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text("Alunos Vinculados", style: theme.textTheme.titleLarge),
+              ),
+              _buildAlunosVinculadosSection(motoristaId),
+            ],
           ),
-          _buildChatList(
-            motoristaId: motoristaId,
-            status: 'inquiry',
-            emptyMessage: 'Nenhuma nova solicitação de contato.',
-          ),
-          const Divider(height: 30),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text("Alunos Vinculados", style: theme.textTheme.titleLarge),
-          ),
-          _buildAlunosVinculadosSection(motoristaId),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  // Widget reutilizável para construir cada lista de chat
-  Widget _buildChatList({required String motoristaId, required String status, required String emptyMessage}) {
-     return StreamBuilder<QuerySnapshot>(
+  Widget _buildChatListNaoVinculados({
+    required String motoristaId,
+    required List<String> alunosVinculados,
+  }) {
+    return StreamBuilder<QuerySnapshot>(
       stream: _firestore
           .collection('chats')
           .where('participants', arrayContains: motoristaId)
-          .where('status', isEqualTo: status)
+          .where('status',
+              whereIn: [ChatStatus.inquiry.name, ChatStatus.active.name])
           .orderBy('lastMessage.timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -175,10 +191,19 @@ class _TelaListaChatsState extends State<TelaListaChats> {
           return const Center(child: CircularProgressIndicator());
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState(title: emptyMessage);
+          return _buildEmptyState(title: 'Nenhuma nova solicitação de contato.');
         }
 
-        final chats = snapshot.data!.docs;
+        final chats = snapshot.data!.docs.where((chat) {
+          final participants = List<String>.from(chat['participants'] ?? []);
+          final otherUserId = participants.firstWhere((id) => id != motoristaId);
+          return !alunosVinculados.contains(otherUserId);
+        }).toList();
+
+        if (chats.isEmpty) {
+          return _buildEmptyState(title: 'Nenhuma nova solicitação de contato.');
+        }
+
         return AnimationLimiter(
           child: ListView.builder(
             shrinkWrap: true,
@@ -190,7 +215,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
               final participants = List<String>.from(chat['participants']);
               final otherUserId = participants.firstWhere((id) => id != motoristaId);
               final lastMessage = chat['lastMessage'] as Map<String, dynamic>? ?? {};
-              final status = chat['status'] as String? ?? 'active';
+              final status = ChatStatus.fromString(chat['status'] as String?);
 
               return AnimationConfiguration.staggeredList(
                 position: index,
@@ -210,7 +235,12 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                         final timestamp = lastMessage['timestamp'] as Timestamp?;
 
                         return Card.filled(
-                          color: status == 'inquiry' ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5) : null,
+                          color: status == ChatStatus.inquiry
+                              ? Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withOpacity(0.5)
+                              : null,
                           margin: const EdgeInsets.symmetric(vertical: 4.0),
                           child: ListTile(
                             leading: CircleAvatar(
@@ -223,17 +253,22 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                             ),
                             title: Text(
                               nome,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                             subtitle: Text(
-                              status == 'inquiry'
+                              status == ChatStatus.inquiry
                                   ? 'Aluno ainda não vinculado'
                                   : (lastMessage['text'] ?? 'Toque para responder.'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             trailing: Text(
-                              timestamp != null ? DateFormat('HH:mm').format(timestamp.toDate()) : '',
+                              timestamp != null
+                                  ? DateFormat('HH:mm').format(timestamp.toDate())
+                                  : '',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                             onTap: () {
@@ -265,208 +300,219 @@ class _TelaListaChatsState extends State<TelaListaChats> {
     final motoristaFuture =
         _motoristaVinculadoFuture ??= _buscarMotoristaVinculado(alunoId);
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('chats')
-          .where('participants', arrayContains: alunoId)
-          .orderBy('lastMessage.timestamp', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+    return FutureBuilder<_MotoristaVinculadoInfo?>(
+      future: motoristaFuture,
+      builder: (context, motoristaSnapshot) {
+        if (motoristaSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final chats = snapshot.data?.docs ?? [];
-        final children = <Widget>[
-          FutureBuilder<_MotoristaVinculadoInfo?>(
-            future: motoristaFuture,
-            builder: (context, motoristaSnapshot) {
-              if (motoristaSnapshot.connectionState ==
-                  ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: LinearProgressIndicator(minHeight: 2),
+        final motoristaInfo = motoristaSnapshot.data;
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: _firestore
+              .collection('chats')
+              .where('participants', arrayContains: alunoId)
+              .orderBy('lastMessage.timestamp', descending: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final chats = snapshot.data?.docs ?? [];
+            final children = <Widget>[];
+
+            if (motoristaInfo != null) {
+              children.add(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: Text(
+                        'Seu motorista vinculado',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Card.filled(
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 16.0, vertical: 4),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .secondaryContainer
+                          .withOpacity(0.6),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundImage: motoristaInfo.fotoUrl != null &&
+                                  motoristaInfo.fotoUrl!.isNotEmpty
+                              ? NetworkImage(motoristaInfo.fotoUrl!)
+                              : null,
+                          child: motoristaInfo.fotoUrl == null ||
+                                  motoristaInfo.fotoUrl!.isEmpty
+                              ? const Icon(Icons.drive_eta)
+                              : null,
+                        ),
+                        title: Text(
+                          motoristaInfo.nome,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: const Text(
+                          'Toque aqui para iniciar ou retomar a conversa.',
+                        ),
+                        trailing: const Icon(Icons.chat_bubble_outline),
+                        onTap: () => _abrirChatComMotorista(
+                          alunoId: alunoId,
+                          motoristaId: motoristaInfo.motoristaId,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            if (chats.isEmpty && motoristaInfo == null) {
+              children.add(
+                Padding(
+                  padding: const EdgeInsets.only(top: 24.0),
+                  child: _buildEmptyState(
+                    title: 'Nenhuma conversa',
+                    subtitle:
+                        'Inicie uma conversa com um motorista para que ela apareça aqui.',
+                    actionText: 'Encontrar Motoristas',
+                    onAction: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const TelaBuscaMotorista()),
+                      );
+                    },
+                  ),
+                ),
+              );
+            }
+
+            if (chats.isNotEmpty) {
+              for (final chat in chats) {
+                final participants = List<String>.from(chat['participants']);
+                final motoristaId =
+                    participants.firstWhere((id) => id != alunoId);
+                final lastMessage =
+                    chat['lastMessage'] as Map<String, dynamic>? ?? {};
+                final status = ChatStatus.fromString(chat['status'] as String?);
+
+                children.add(
+                  FutureBuilder<DocumentSnapshot>(
+                    future: _firestore.collection('users').doc(motoristaId).get(),
+                    builder: (context, userSnapshot) {
+                      if (!userSnapshot.hasData ||
+                          !(userSnapshot.data?.exists ?? false)) {
+                        return const SizedBox.shrink();
+                      }
+                      final userData =
+                          userSnapshot.data!.data() as Map<String, dynamic>;
+                      final nomeMotorista =
+                          userData['nome'] ?? 'Motorista Desconhecido';
+                      final fotoUrl = userData['fotoUrl'] as String?;
+                      final timestamp = lastMessage['timestamp'] as Timestamp?;
+
+                      return Card.filled(
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 16.0, vertical: 4.0),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundImage:
+                                fotoUrl != null && fotoUrl.isNotEmpty
+                                    ? NetworkImage(fotoUrl)
+                                    : null,
+                            child: fotoUrl == null || fotoUrl.isEmpty
+                                ? const Icon(Icons.drive_eta)
+                                : null,
+                          ),
+                          title: Text(
+                            nomeMotorista,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(
+                            status == ChatStatus.inquiry
+                                ? 'Você ainda não está vinculado a este motorista'
+                                : (lastMessage['text'] ??
+                                    'Toque para responder.'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                timestamp != null
+                                    ? DateFormat('HH:mm')
+                                        .format(timestamp.toDate())
+                                    : '',
+                                style:
+                                    Theme.of(context).textTheme.bodySmall,
+                              ),
+                              if (status == ChatStatus.inquiry)
+                                Text(
+                                  'Não vinculado',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall,
+                                ),
+                            ],
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => TelaChat(
+                                  chatId: chat.id,
+                                  recipientId: motoristaId,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
                 );
               }
-              final info = motoristaSnapshot.data;
-              if (info == null) {
-                return const SizedBox.shrink();
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                    child: Text(
-                      'Seu motorista vinculado',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  Card.filled(
-                    margin:
-                        const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4),
-                    color: Theme.of(context)
-                        .colorScheme
-                        .secondaryContainer
-                        .withOpacity(0.6),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: info.fotoUrl != null &&
-                                info.fotoUrl!.isNotEmpty
-                            ? NetworkImage(info.fotoUrl!)
-                            : null,
-                        child: info.fotoUrl == null || info.fotoUrl!.isEmpty
-                            ? const Icon(Icons.drive_eta)
-                            : null,
-                      ),
-                      title: Text(
-                        info.nome,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: const Text(
-                        'Toque aqui para iniciar ou retomar a conversa.',
-                      ),
-                      trailing: const Icon(Icons.chat_bubble_outline),
-                      onTap: () => _abrirChatComMotorista(
-                        alunoId: alunoId,
-                        motoristaId: info.motoristaId,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ];
+            }
 
-        if (chats.isEmpty) {
-          children.add(
-            Padding(
-              padding: const EdgeInsets.only(top: 24.0),
-              child: _buildEmptyState(
-                title: 'Nenhuma conversa',
-                subtitle:
-                    'Inicie uma conversa com um motorista para que ela apareça aqui.',
-                actionText: 'Encontrar Motoristas',
-                onAction: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const TelaBuscaMotorista()),
-                  );
-                },
-              ),
-            ),
-          );
-        } else {
-          for (final chat in chats) {
-            final participants = List<String>.from(chat['participants']);
-            final motoristaId =
-                participants.firstWhere((id) => id != alunoId);
-            final lastMessage =
-                chat['lastMessage'] as Map<String, dynamic>? ?? {};
-            final status = chat['status'] as String? ?? 'active';
+            if (children.isEmpty) {
+              return const SizedBox.shrink();
+            }
 
-            children.add(
-              FutureBuilder<DocumentSnapshot>(
-                future: _firestore.collection('users').doc(motoristaId).get(),
-                builder: (context, userSnapshot) {
-                  if (!userSnapshot.hasData ||
-                      !(userSnapshot.data?.exists ?? false)) {
-                    return const SizedBox.shrink();
-                  }
-                  final userData =
-                      userSnapshot.data!.data() as Map<String, dynamic>;
-                  final nomeMotorista =
-                      userData['nome'] ?? 'Motorista Desconhecido';
-                  final fotoUrl = userData['fotoUrl'] as String?;
-                  final timestamp = lastMessage['timestamp'] as Timestamp?;
-
-                  return Card.filled(
-                    margin:
-                        const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: fotoUrl != null && fotoUrl.isNotEmpty
-                            ? NetworkImage(fotoUrl)
-                            : null,
-                        child: fotoUrl == null || fotoUrl.isEmpty
-                            ? const Icon(Icons.drive_eta)
-                            : null,
+            return AnimationLimiter(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                itemCount: children.length,
+                itemBuilder: (context, index) {
+                  return AnimationConfiguration.staggeredList(
+                    position: index,
+                    duration: const Duration(milliseconds: 375),
+                    child: SlideAnimation(
+                      verticalOffset: 50.0,
+                      child: FadeInAnimation(
+                        child: children[index],
                       ),
-                      title: Text(
-                        nomeMotorista,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                    subtitle: Text(
-                      status == 'inquiry'
-                          ? 'Você ainda não está vinculado a este motorista'
-                          : (lastMessage['text'] ?? 'Toque para responder.'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            timestamp != null
-                                ? DateFormat('HH:mm')
-                                    .format(timestamp.toDate())
-                                : '',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        if (status == 'inquiry')
-                          Text(
-                            'Não vinculado',
-                              style: Theme.of(context).textTheme.labelSmall,
-                            ),
-                        ],
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => TelaChat(
-                              chatId: chat.id,
-                              recipientId: motoristaId,
-                            ),
-                          ),
-                        );
-                      },
                     ),
                   );
                 },
               ),
             );
-          }
-        }
-
-        return AnimationLimiter(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            itemCount: children.length,
-            itemBuilder: (context, index) {
-              return AnimationConfiguration.staggeredList(
-                position: index,
-                duration: const Duration(milliseconds: 375),
-                child: SlideAnimation(
-                  verticalOffset: 50.0,
-                  child: FadeInAnimation(
-                    child: children[index],
-                  ),
-                ),
-              );
-            },
-          ),
+          },
         );
       },
     );

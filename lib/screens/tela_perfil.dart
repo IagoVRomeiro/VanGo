@@ -16,7 +16,10 @@ import 'tela_notificacoes.dart';
 import '../widgets/neon_app_bar.dart';
 import '../widgets/neon_bottom_nav_bar.dart';
 import '../widgets/neon_drawer.dart';
+import '../widgets/notifications_bell.dart';
 import 'tela_busca_motorista.dart';
+import '../models/usuario.dart';
+import 'tela_selecao.dart';
 
 class PerfilNavResult {
   final int targetIndex;
@@ -306,7 +309,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
       await FirebaseAuth.instance.signOut();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const TelaLogin()),
+          MaterialPageRoute(builder: (_) => const TelaSelecao()),
           (route) => false,
         );
       }
@@ -502,21 +505,28 @@ class _PerfilScreenState extends State<PerfilScreen> {
               );
 
     if (!widget.showAppBar) {
-      return Material(child: bodyContent);
+      return bodyContent;
     }
+
+    final userId = FirebaseAuth.instance.currentUser?.uid;
 
     return Scaffold(
       appBar: NeonAppBar(
         title: "Meu Perfil",
         onNotificationsPressed: _goToNotifications,
+        notificationAction: userId == null
+            ? null
+            : NotificationsBell(
+                role: _isDriver ? UserRole.motorista : UserRole.aluno,
+                userId: userId,
+                onPressed: _goToNotifications,
+              ),
       ),
       body: bodyContent,
-      drawer: widget.showAppBar
-          ? NeonDrawer(
-              onSettings: _openSettingsFromDrawer,
-              onLogout: _logout,
-            )
-          : null,
+      drawer: NeonDrawer(
+        onSettings: _openSettingsFromDrawer,
+        onLogout: _logout,
+      ),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }

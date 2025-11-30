@@ -21,7 +21,9 @@ import 'tela_cadastro.dart';
 import 'tela_chat.dart';
 
 class TelaViagem extends StatefulWidget {
-  const TelaViagem({super.key});
+  final VoidCallback? onNavigateToGerenciarAlunos;
+
+  const TelaViagem({super.key, this.onNavigateToGerenciarAlunos});
 
   @override
   State<TelaViagem> createState() => _TelaViagemState();
@@ -162,7 +164,8 @@ class _TelaViagemState extends State<TelaViagem> {
             final subtitulo = '${rota.localDestinoNome}${diasAtivos.isNotEmpty ? " ($diasAtivos)" : ""}';
 
             Widget? trailingWidget;
-            if (rota.status == StatusRota.planejada) {
+            if (rota.status == StatusRota.planejada ||
+                rota.status == StatusRota.concluida) {
               trailingWidget = ElevatedButton(
                 onPressed: () => _iniciarRota(rota.id),
                 child: const Text('Iniciar'),
@@ -224,7 +227,7 @@ class _TelaViagemState extends State<TelaViagem> {
   Future<void> _pararRota(String rotaId) async {
     try {
       await FirebaseFirestore.instance.collection('rotas').doc(rotaId).update({
-        'status': StatusRota.concluida.name,
+        'status': StatusRota.planejada.name,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -303,7 +306,6 @@ class _TelaViagemState extends State<TelaViagem> {
   }
 
   Widget _buildGerenciamentoAlunos(Motorista motorista) {
-    final alunosIds = motorista.alunosIds ?? [];
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -314,19 +316,18 @@ class _TelaViagemState extends State<TelaViagem> {
           subtitle: const Text("Ver lista de passageiros e solicitações"),
           trailing: const Icon(Icons.arrow_forward_ios, size: 16),
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const TelaGerenciarAlunos(showAppBar: true)),
-            );
+            if (widget.onNavigateToGerenciarAlunos != null) {
+              widget.onNavigateToGerenciarAlunos!.call();
+            } else {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const TelaGerenciarAlunos(showAppBar: true)),
+              );
+            }
           },
         ),
-        if (alunosIds.isEmpty)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Center(child: Text("Nenhum aluno vinculado.")),
-          )
-        else
-          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
                 .collection('alunos')
                 .where('motoristaId', isEqualTo: motorista.id)
@@ -439,7 +440,8 @@ class _TelaViagemState extends State<TelaViagem> {
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance.collection('motoristas').doc(_currentUser!.uid).snapshots(),
         builder: (context, motoristaSnapshot) {
-          if (motoristaSnapshot.connectionState == ConnectionState.waiting) {
+          final isMotoristaLoading = motoristaSnapshot.connectionState == ConnectionState.waiting && !motoristaSnapshot.hasData;
+          if (isMotoristaLoading) {
             return const Center(child: CircularProgressIndicator());
           }
           if (!motoristaSnapshot.hasData || !motoristaSnapshot.data!.exists) {
@@ -457,7 +459,8 @@ class _TelaViagemState extends State<TelaViagem> {
                 .where('motoristaId', isEqualTo: motorista.id)
                 .snapshots(),
             builder: (context, vansSnapshot) {
-              if (vansSnapshot.connectionState == ConnectionState.waiting) {
+              final isVansLoading = vansSnapshot.connectionState == ConnectionState.waiting && !vansSnapshot.hasData;
+              if (isVansLoading) {
                 return const Center(child: CircularProgressIndicator());
               }
 

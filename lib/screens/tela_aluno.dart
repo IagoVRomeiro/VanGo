@@ -4,19 +4,24 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../models/rota.dart';
+import 'package:vango/models/rota.dart';
+import 'package:vango/models/usuario.dart';
+import 'package:vango/screens/tela_configuracoes.dart';
 import 'tela_perfil.dart';
 import 'tela_notificacoes.dart';
-import 'tela_login.dart';
 import 'tela_lista_chats.dart';
 import 'tela_busca_motorista.dart';
+import 'tela_selecao.dart';
+import 'tela_login.dart'; // Adicionar esta linha
 import '../widgets/neon_app_bar.dart';
 import '../widgets/neon_bottom_nav_bar.dart';
 import '../widgets/neon_drawer.dart';
+import '../widgets/notifications_bell.dart';
 
 
 class TelaAluno extends StatefulWidget {
-  TelaAluno({super.key});
+  final int initialIndex;
+  TelaAluno({super.key, this.initialIndex = 0});
 
   @override
   State<TelaAluno> createState() => _TelaAlunoState();
@@ -32,6 +37,7 @@ class _TelaAlunoState extends State<TelaAluno> {
   @override
   void initState() {
     super.initState();
+    _selectedIndex = widget.initialIndex;
     _addMarkers();
     _ouvirLocalizacaoDoMotorista();
   }
@@ -50,7 +56,7 @@ class _TelaAlunoState extends State<TelaAluno> {
       _removerMarcadorMotorista();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const TelaLogin()),
+          MaterialPageRoute(builder: (_) => const TelaSelecao()),
           (route) => false,
         );
       }
@@ -89,62 +95,28 @@ class _TelaAlunoState extends State<TelaAluno> {
       return;
     }
 
-    if (index == 2) {
-      await _navigateToBuscaMotorista();
-    } else if (index == 3) {
+    if (index == 3) {
       await _navigateToPerfil();
-    } else {
-      if (_selectedIndex == index) return;
-      setState(() {
-        _selectedIndex = index;
-      });
+      return;
     }
-  }
 
-  void _handlePerfilNavResult(dynamic result) {
-    if (result is! PerfilNavResult || result.isDriver) return;
-
-    switch (result.targetIndex) {
-      case 0:
-      case 1:
-        if (_selectedIndex != result.targetIndex) {
-          setState(() {
-            _selectedIndex = result.targetIndex;
-          });
-        }
-        break;
-      case 2:
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const TelaBuscaMotorista(),
-          ),
-        );
-        break;
-      default:
-        break;
-    }
+    if (_selectedIndex == index) return;
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 
   Future<void> _navigateToPerfil() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const PerfilScreen(
-          collectionPath: 'alunos',
-          showAppBar: true,
-        ),
-      ),
-    );
-    _handlePerfilNavResult(result);
+    if (_selectedIndex == 3) return;
+    setState(() {
+      _selectedIndex = 3;
+    });
   }
 
-  Future<void> _navigateToBuscaMotorista() async {
+  Future<void> _navigateToSettings() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const TelaBuscaMotorista(),
-      ),
+      MaterialPageRoute(builder: (context) => const TelaConfiguracoes()),
     );
   }
 
@@ -244,11 +216,16 @@ class _TelaAlunoState extends State<TelaAluno> {
           ? NeonAppBar(
               title: _getAppBarTitle(_selectedIndex),
               onNotificationsPressed: _openNotifications,
+              notificationAction: NotificationsBell(
+                role: UserRole.aluno,
+                userId: user!.uid,
+                onPressed: _openNotifications,
+              ),
             )
           : null,
       drawer: isLoggedIn
           ? NeonDrawer(
-              onSettings: _navigateToPerfil,
+              onSettings: _navigateToSettings,
               onLogout: _logout,
             )
           : null,
@@ -256,8 +233,9 @@ class _TelaAlunoState extends State<TelaAluno> {
         index: _selectedIndex,
         children: [
           mapaWidget, // Índice 0
-          const TelaListaChats(), // Índice 1
-          // As telas de busca e perfil serão navegadas diretamente
+          const TelaListaChats(showAppBar: false), // Índice 1
+          TelaBuscaMotorista(showScaffold: false), // Índice 2
+          const PerfilScreen(collectionPath: 'alunos', showAppBar: false), // Índice 3
         ],
       ),
       bottomNavigationBar: NeonBottomNavBar(
@@ -275,5 +253,7 @@ class _TelaAlunoState extends State<TelaAluno> {
     );
   }
 }
+
+// Removido AlunoChatWrapper
 
 // Removido AlunoChatWrapper

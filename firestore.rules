@@ -24,11 +24,16 @@ service cloud.firestore {
     match /motoristas/{motoristaId} {
       allow read: if isSignedIn();
       allow create, update: if isUser(motoristaId);
+
+      // Avaliações: Qualquer usuário logado pode ler as avaliações.
+      match /avaliacoes/{avaliacaoId} {
+        allow read: if isSignedIn();
+      }
     }
 
     // Alunos: Apenas o próprio aluno ou o motorista associado podem ler. Só o aluno pode editar.
     match /alunos/{alunoId} {
-      allow read: if isUser(alunoId) ||
+      allow read, list: if isUser(alunoId) ||
         (isDriver() && alunoId in get(/databases/$(database)/documents/motoristas/$(request.auth.uid)).data.alunosIds);
       allow create: if isUser(alunoId);
       allow update: if isUser(alunoId) ||

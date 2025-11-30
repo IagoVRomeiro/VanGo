@@ -7,15 +7,17 @@ import 'package:vango/models/motorista.dart';
 import 'package:vango/models/usuario.dart';
 import 'package:vango/screens/tela_aluno.dart';
 import 'package:vango/screens/tela_detalhe_motorista.dart';
-import 'package:vango/screens/tela_lista_chats.dart';
 import 'package:vango/screens/tela_notificacoes.dart';
 import 'package:vango/screens/tela_perfil.dart';
+import 'package:vango/screens/tela_selecao.dart'; // Add this line
 import '../widgets/neon_app_bar.dart';
 import '../widgets/neon_drawer.dart';
 import '../widgets/neon_bottom_nav_bar.dart';
+import '../widgets/notifications_bell.dart';
 
 class TelaBuscaMotorista extends StatefulWidget {
-  const TelaBuscaMotorista({super.key});
+  final bool showScaffold;
+  const TelaBuscaMotorista({super.key, this.showScaffold = true});
 
   @override
   State<TelaBuscaMotorista> createState() => _TelaBuscaMotoristaState();
@@ -203,17 +205,21 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
     });
   }
 
+  void _navigateToAlunoHome(int index) {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => TelaAluno(initialIndex: index)),
+      (route) => false,
+    );
+  }
+
   void _onItemTapped(int index) {
     if (index == _selectedIndex) return;
     switch (index) {
       case 0:
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => TelaAluno()));
+        _navigateToAlunoHome(0);
         break;
       case 1:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const TelaListaChats(showAppBar: true)),
-        );
+        _navigateToAlunoHome(1);
         break;
       case 2:
         break;
@@ -228,7 +234,7 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
       await FirebaseAuth.instance.signOut();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => TelaAluno()),
+          MaterialPageRoute(builder: (_) => TelaSelecao()),
           (route) => false,
         );
       }
@@ -249,37 +255,50 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
       return _buildLoginPrompt(theme);
     }
     
-    return Scaffold(
-        appBar: NeonAppBar(
-          title: 'Encontrar Motorista',
-          onNotificationsPressed: _openNotifications,
-        ),
-        drawer: NeonDrawer(
-          onSettings: _openSettingsFromDrawer,
-          onLogout: _logout,
-        ),
-        body: SafeArea(
-          bottom: true,
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: _buildMotoristaVinculadoSection(theme),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                sliver: SliverToBoxAdapter(
-                  child: _buildFiltros(theme),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.only(bottom: 16),
-                sliver: _buildMotoristasSliver(theme),
-              ),
-            ],
+    final body = SafeArea(
+      bottom: true,
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: _buildMotoristaVinculadoSection(theme),
           ),
-        ),
-        bottomNavigationBar: _buildBottomNavBar(),
-      );
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            sliver: SliverToBoxAdapter(
+              child: _buildFiltros(theme),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.only(bottom: 16),
+            sliver: _buildMotoristasSliver(theme),
+          ),
+        ],
+      ),
+    );
+
+    if (!widget.showScaffold) {
+      return body;
+    }
+
+    return Scaffold(
+      appBar: NeonAppBar(
+        title: 'Encontrar Motorista',
+        onNotificationsPressed: _openNotifications,
+        notificationAction: _currentUser != null
+            ? NotificationsBell(
+                role: UserRole.aluno,
+                userId: _currentUser!.uid,
+                onPressed: _openNotifications,
+              )
+            : null,
+      ),
+      drawer: NeonDrawer(
+        onSettings: _openSettingsFromDrawer,
+        onLogout: _logout,
+      ),
+      body: body,
+      bottomNavigationBar: _buildBottomNavBar(),
+    );
   }
 
   void _openNotifications() {

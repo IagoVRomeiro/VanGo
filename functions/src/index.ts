@@ -204,6 +204,92 @@ export const aceitarConviteAluno = functions.https.onCall(async (data, context) 
 });
 
 /**
+ * Cloud Function para alunos avaliarem motoristas.
+ */
+export const avaliarMotorista = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            "unauthenticated",
+            "A função só pode ser chamada por um usuário autenticado."
+        );
+    }
+
+    const alunoId = context.auth.uid;
+    const motoristaId = typeof data.motoristaId === "string" ? data.motoristaId : null;
+    const notaValue = Number(data.nota);
+    const comentario = typeof data.comentario === "string" ? data.comentario.trim() : "";
+
+    if (!motoristaId || isNaN(notaValue)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Os campos motoristaId e nota são obrigatórios."
+        );
+    }
+
+    if (motoristaId === alunoId) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Você não pode avaliar a si mesmo."
+        );
+    }
+
+    if (notaValue < 1 || notaValue > 5) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "A nota deve estar entre 1 e 5."
+        );
+    }
+
+    const motoristaRef = db.collection("motoristas").doc(motoristaId);
+    const motoristaSnap = await motoristaRef.get();
+    if (!motoristaSnap.exists) {
+        throw new functions.https.HttpsError(
+            "not-found",
+            "Motorista não encontrado."
+        );
+    }
+
+    try {
+        await motoristaRef
+            .collection("avaliacoes")
+            .doc(alunoId)
+            .set({
+                alunoId,
+                nota: notaValue,
+                comentario,
+                atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+
+        const avaliacoesSnapshot = await motoristaRef.collection("avaliacoes").get();
+        let soma = 0;
+        avaliacoesSnapshot.forEach((doc) => {
+            const data = doc.data();
+            soma += Number(data.nota) || 0;
+        });
+
+        const quantidade = avaliacoesSnapshot.size;
+        const media = quantidade > 0 ? soma / quantidade : notaValue;
+
+        await motoristaRef.update({
+            avaliacao: media,
+            avaliacaoAtualizadaEm: admin.firestore.FieldValue.serverTimestamp(),
+            avaliacoesQtd: quantidade,
+        });
+
+        return { media, quantidade };
+    } catch (error) {
+        console.error("Erro ao registrar avaliação:", error);
+        if (error instanceof functions.https.HttpsError) {
+            throw error;
+        }
+        throw new functions.https.HttpsError(
+            "unknown",
+            "Ocorreu um erro inesperado ao registrar a avaliação."
+        );
+    }
+});
+
+/**
  * Cloud Function para um motorista desvincular um aluno.
  */
 export const desvincularAluno = functions.https.onCall(async (data, context) => {
@@ -413,4 +499,70 @@ export const sendWelcomeEmail = functions.https.onCall(async (data, context) => 
   // TODO: Implement actual email sending logic
   console.log("sendWelcomeEmail called with data:", data);
   return { success: true, message: "Welcome email sent (not really)!" };
+});
+
+export const notificarAlunosProximidadeInicioRota = functions.pubsub.schedule("every 5 minutes").onRun(async (context) => {
+    console.log("Executando verificação de rotas prestes a iniciar...");
+
+    const now = admin.firestore.Timestamp.now();
+    const future15 = new admin.firestore.Timestamp(now.seconds + 15 * 60, now.nanoseconds); // 15 minutos no futuro
+    const future10 = new admin.firestore.Timestamp(now.seconds + 10 * 60, now.nanoseconds); // 10 minutos no futuro
+
+    try {
+        const querySnapshot = await db.collection("rotas")
+            .where("status", "==", "planejada")
+            .where("horaInicio", ">=", future10)
+            .where("horaInicio", "<", future15)
+            .get();
+
+        if (querySnapshot.empty) {
+            console.log("Nenhuma rota encontrada no intervalo de 10 a 15 minutos.");
+            return null;
+        }
+
+        console.log(`Encontradas ${querySnapshot.size} rotas para notificar.`);
+
+        const promises = querySnapshot.docs.map(async (doc) => {
+            const rota = doc.data();
+            const alunosIds = rota.listaAlunosIds as string[];
+
+            if (!alunosIds || alunosIds.length === 0) {
+                return;
+            }
+
+            const tokensPromises = alunosIds.map((alunoId) => db.collection("users").doc(alunoId).get());
+            const usersDocs = await Promise.all(tokensPromises);
+
+            const tokens = usersDocs
+                .map((userDoc) => userDoc.data()?.fcmToken as string)
+                .filter((token): token is string => !!token);
+
+            if (tokens.length === 0) {
+                console.log(`Nenhum token FCM para a rota ${doc.id}`);
+                return;
+            }
+
+            const payload = {
+                notification: {
+                    title: "Sua van está quase saindo!",
+                    body: `Faltam 10 minutos para o motorista começar a buscar os alunos da rota "${rota.nome}".`,
+                    sound: "default",
+                },
+                data: {
+                    screen: "tela_viagem",
+                    rotaId: doc.id,
+                },
+            };
+
+            await admin.messaging().sendToDevice(tokens, payload);
+            console.log(`Notificações enviadas para ${tokens.length} alunos da rota ${doc.id}`);
+        });
+
+        await Promise.all(promises);
+        return null;
+
+    } catch (error) {
+        console.error("Erro ao executar a função de notificação de rotas:", error);
+        return null;
+    }
 });

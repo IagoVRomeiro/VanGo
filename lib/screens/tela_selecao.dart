@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 
-import 'tela_motorista.dart';
-import 'tela_aluno.dart';
+import 'tela_cadastro.dart';
 import 'tela_sobre_carrossel.dart';
 import 'tela_login.dart';
 
@@ -25,7 +24,7 @@ class TelaSelecao extends StatelessWidget {
                 SizedBox(
                   height: 100,
                   child: Image.asset(
-                    'assets/vgo_logo.png',
+                    'assets/iconSemFundo.png',
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -52,7 +51,9 @@ class TelaSelecao extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const TelaMotorista(),
+                        builder: (context) => const TelaCadastro(
+                          tipoInicial: TipoUsuario.motorista,
+                        ),
                       ),
                     );
                   },
@@ -69,7 +70,9 @@ class TelaSelecao extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => TelaAluno(),
+                        builder: (context) => const TelaCadastro(
+                          tipoInicial: TipoUsuario.aluno,
+                        ),
                       ),
                     );
                   },

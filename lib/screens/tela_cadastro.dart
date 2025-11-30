@@ -17,14 +17,16 @@ import 'tela_aluno.dart';
 enum TipoUsuario { motorista, aluno }
 
 class TelaCadastro extends StatefulWidget {
-  const TelaCadastro({super.key});
+  final TipoUsuario? tipoInicial;
+
+  const TelaCadastro({super.key, this.tipoInicial});
 
   @override
   State<TelaCadastro> createState() => _TelaCadastroState();
 }
 
 class _TelaCadastroState extends State<TelaCadastro> {
-  TipoUsuario _tipoUsuarioSelecionado = TipoUsuario.motorista;
+  late TipoUsuario _tipoUsuarioSelecionado;
   final _formKey = GlobalKey<FormState>();
   final EmailService _emailService = EmailService(); // Instância do serviço
 
@@ -33,6 +35,13 @@ class _TelaCadastroState extends State<TelaCadastro> {
   final _senhaController = TextEditingController();
 
   bool _senhaVisivel = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tipoUsuarioSelecionado =
+        widget.tipoInicial ?? TipoUsuario.motorista;
+  }
 
   @override
   void dispose() {
@@ -180,7 +189,7 @@ class _TelaCadastroState extends State<TelaCadastro> {
                   const SizedBox(height: 40),
                   SizedBox(
                     height: 100,
-                    child: Image.asset('assets/vgo_logo.png'),
+                    child: Image.asset('assets/iconSemFundo.png'),
                   ),
                   const SizedBox(height: 40),
                   Text('Criar Conta',

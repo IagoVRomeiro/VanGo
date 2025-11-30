@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:vango/models/chat.dart'; // Import ChatStatus
 import 'package:vango/models/mensagem.dart';
 import 'package:vango/models/usuario.dart';
 import '../widgets/neon_app_bar.dart';
@@ -30,10 +31,11 @@ class _TelaChatState extends State<TelaChat> {
   final String? _meuId = FirebaseAuth.instance.currentUser?.uid;
   late final Stream<List<Mensagem>> _messagesStream;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _chatSubscription;
+  bool _chatExiste = true;
 
   // State for inquiry chat logic
   bool _isLoadingDetails = true;
-  String? _chatStatus;
+  ChatStatus? _chatStatus; // Use ChatStatus enum
   bool _isCurrentUserDriver = false;
   String _recipientName = "...";
 
@@ -81,7 +83,7 @@ class _TelaChatState extends State<TelaChat> {
           _recipientName = recipientDoc.data()?['nome'] ?? 'Usuário';
           
           if(chatDoc.exists) {
-             _chatStatus = chatDoc.data()?['status'];
+             _chatStatus = ChatStatus.fromString(chatDoc.data()?['status']);
           }
           _isLoadingDetails = false;
         });
@@ -108,16 +110,19 @@ class _TelaChatState extends State<TelaChat> {
         return;
       }
       setState(() {
-        _chatStatus = doc.data()?['status'];
+        _chatExiste = doc.exists;
+        _chatStatus = ChatStatus.fromString(doc.data()?['status']);
       });
     }, onError: (error) {
       debugPrint('Erro ao ouvir status do chat: $error');
     });
   }
 
-
-  bool get _chatLiberadoParaEnvio =>
-      _chatStatus == 'active' || _chatStatus == 'inquiry';
+  bool get _chatLiberadoParaEnvio {
+    if (!_chatExiste) return false;
+    if (_chatStatus == null) return true;
+    return _chatStatus == ChatStatus.active || _chatStatus == ChatStatus.inquiry;
+  }
 
   Future<void> _enviarMensagem() async {
     final texto = _controller.text.trim();
@@ -190,6 +195,8 @@ class _TelaChatState extends State<TelaChat> {
           return Scaffold(
             appBar: NeonAppBar(
               title: _recipientName,
+              showMenuButton: false,
+              showBackButton: true,
               onNotificationsPressed: () {
                 Navigator.push(
                   context,
@@ -199,16 +206,16 @@ class _TelaChatState extends State<TelaChat> {
             ),
             body: _isLoadingDetails
               ? const Center(child: CircularProgressIndicator())
-              : _chatStatus == null
+              : !_chatExiste
                   ? Center(
                       child: Text(
                         'Esta conversa não está mais disponível.',
-                        style: TextStyle(color: currentTheme.colorScheme.onSurfaceVariant), // Use new theme
+                        style: TextStyle(color: currentTheme.colorScheme.onSurfaceVariant),
                       ),
                     )
                   : Column(
                       children: [
-                        if (_chatStatus == 'inquiry')
+                        if (_chatStatus == ChatStatus.inquiry)
                           _buildInquiryInfoBar(currentTheme),
 
                         Expanded(
@@ -301,7 +308,7 @@ class _TelaChatState extends State<TelaChat> {
                         // Área de input de mensagem
                         _buildChatInputArea(currentTheme), // Pass new theme
                       ],
-                    ),
+            ),
           );
         },
       ),
@@ -310,7 +317,11 @@ class _TelaChatState extends State<TelaChat> {
 
   Widget _buildChatInputArea(ThemeData theme) {
     if (!_chatLiberadoParaEnvio) {
-      final text = 'Esta conversa não está mais disponível.';
+      final text = _chatExiste
+          ? (_isCurrentUserDriver
+              ? 'Confirme o contato para liberar o envio de mensagens.'
+              : 'Aguardando aprovação do motorista para iniciar a conversa.')
+          : 'Esta conversa não está mais disponível.';
       return Container(
         padding: const EdgeInsets.all(16.0),
         color: theme.colorScheme.surfaceVariant.withOpacity(0.5),

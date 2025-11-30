@@ -46,8 +46,6 @@ class NeonDrawer extends StatelessWidget {
                   ),
                 ),
               ),
-              const Spacer(),
-              const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.settings),
                 title: const Text('Configurações'),
@@ -56,7 +54,6 @@ class NeonDrawer extends StatelessWidget {
                   await onSettings();
                 },
               ),
-              const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.exit_to_app),
                 title: const Text('Sair'),
@@ -65,6 +62,8 @@ class NeonDrawer extends StatelessWidget {
                   await onLogout();
                 },
               ),
+              const Divider(height: 1),
+              const Spacer(),
             ],
           ),
         ),

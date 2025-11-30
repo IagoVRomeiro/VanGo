@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:vango/models/chat.dart';
 
 /// Serviço utilitário para padronizar a criação/resgate de chats
 /// entre aluno e motorista, evitando duplicidades e mantendo
@@ -49,7 +50,7 @@ class ChatService {
         'alunoId': alunoId,
         'motoristaId': motoristaId,
         if (activate) ...{
-          'status': 'active',
+          'status': ChatStatus.active.name,
           'updatedAt': FieldValue.serverTimestamp(),
         },
       }, SetOptions(merge: true));
@@ -58,7 +59,7 @@ class ChatService {
 
     final serverTimestamp = FieldValue.serverTimestamp();
     final docRef = chatsRef.doc();
-    final status = activate ? 'active' : 'inquiry';
+    final status = activate ? ChatStatus.active.name : ChatStatus.inquiry.name;
     final lastMessage = {
       'text': initialText ??
           (activate ? 'Conversa iniciada.' : 'Nova solicitação de contato'),

@@ -19,10 +19,12 @@ class Mensagem {
       throw Exception("Documento da mensagem não encontrado ou está vazio.");
     }
 
+    final texto = data['texto'] ?? data['text'] ?? '';
+
     return Mensagem(
       id: snapshot.id,
       senderId: data['senderId'] ?? '',
-      texto: data['texto'] ?? '',
+      texto: texto,
       timestamp: data['timestamp'] ?? Timestamp.now(),
     );
   }

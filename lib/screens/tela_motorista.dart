@@ -1,6 +1,7 @@
 // lib/screens/tela_motorista.dart
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,16 +15,20 @@ import 'package:vango/services/directions_service.dart';
 import 'package:vango/services/permission_service.dart';
 
 // Imports relativos
+import '../models/usuario.dart';
+import 'package:vango/screens/tela_configuracoes.dart';
 import 'tela_cadastro.dart';
 import 'tela_gerenciar_alunos.dart';
 import 'tela_lista_chats.dart';
 import 'tela_login.dart';
+import 'tela_selecao.dart';
 import 'tela_notificacoes.dart';
 import 'tela_perfil.dart';
 import 'tela_viagem.dart';
 import '../widgets/neon_app_bar.dart';
 import '../widgets/neon_bottom_nav_bar.dart';
 import '../widgets/neon_drawer.dart';
+import '../widgets/notifications_bell.dart';
 
 class TelaMotorista extends StatefulWidget {
   final int initialIndex;
@@ -73,10 +78,14 @@ class _RouteStatusChip extends StatelessWidget {
 class _RouteSummaryPanel extends StatelessWidget {
   final DirectionsInfo? directionsInfo;
   final List<String> stops;
+  final bool isExpanded;
+  final VoidCallback onToggle;
 
   const _RouteSummaryPanel({
     required this.directionsInfo,
     required this.stops,
+    required this.isExpanded,
+    required this.onToggle,
   });
 
   @override
@@ -100,58 +109,124 @@ class _RouteSummaryPanel extends StatelessWidget {
               'Trajeto Planejado',
               style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 4),
-            Text(
-              [
-                if (info.totalDistance != null) info.totalDistance!,
-                if (info.totalDuration != null) info.totalDuration!,
-              ].join(' • '),
-              style: theme.textTheme.bodySmall,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    [
+                      if (info.totalDistance != null) info.totalDistance!,
+                      if (info.totalDuration != null) info.totalDuration!,
+                    ].join(' • '),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(isExpanded ? Icons.expand_less : Icons.expand_more),
+                  onPressed: onToggle,
+                ),
+              ],
             ),
-            const Divider(height: 20),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 160),
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: stops.length,
-                itemBuilder: (context, index) {
-                  final label = index == stops.length - 1 ? 'Destino' : 'Parada ${index + 1}';
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8.0),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 14,
-                          backgroundColor: theme.colorScheme.primary.withOpacity(0.8),
-                          child: Text(
-                            index == stops.length - 1 ? 'D' : '${index + 1}',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: theme.colorScheme.onPrimary,
-                              fontWeight: FontWeight.bold,
+            if (isExpanded) ...[
+              const Divider(height: 20),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 160),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: stops.length,
+                  itemBuilder: (context, index) {
+                    final label = index == stops.length - 1 ? 'Destino' : 'Parada ${index + 1}';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundColor: theme.colorScheme.primary.withOpacity(0.8),
+                            child: Text(
+                              index == stops.length - 1 ? 'D' : '${index + 1}',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: theme.colorScheme.onPrimary,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                label,
-                                style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
-                              ),
-                              Text(
-                                stops[index],
-                                style: theme.textTheme.bodySmall,
-                              ),
-                            ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  label,
+                                  style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                                Text(
+                                  stops[index],
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProximaRotaCard extends StatelessWidget {
+  final Rota rota;
+  final VoidCallback onStart;
+
+  const _ProximaRotaCard({required this.rota, required this.onStart});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      color: theme.colorScheme.secondary,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Próxima Rota',
+                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSecondary),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    rota.nome,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: theme.colorScheme.onSecondary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Início às ${rota.horarioInicioPrevisto}',
+                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSecondary.withOpacity(0.8)),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton(
+              onPressed: onStart,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.onSecondary,
+                foregroundColor: theme.colorScheme.secondary,
+              ),
+              child: const Text('Iniciar Rota'),
             ),
           ],
         ),
@@ -169,26 +244,33 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   // State for Trip Mode
   String? _rotaEmAndamentoId;
   Rota? _rotaAtual;
-  bool _emModoViagemFinal = false;
   DirectionsInfo? _directionsInfo;
   final List<String> _rotaSequenciaParadas = [];
   bool _calculandoRota = false;
+  bool _mostrarResumoRota = true;
+  LatLng? _ultimaPosicaoMotorista;
 
   // State for Live Location
   final PermissionService _permissionService = PermissionService();
   StreamSubscription<Position>? _positionStreamSubscription;
   Marker? _driverMarker;
 
+  // State for upcoming route
+  Rota? _rotaProxima;
+  StreamSubscription? _proximaRotaSubscription;
+
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
     _loadApiKeyAndData();
+    _ouvirProximaRota();
   }
 
   @override
   void dispose() {
     _positionStreamSubscription?.cancel();
+    _proximaRotaSubscription?.cancel();
     super.dispose();
   }
 
@@ -217,10 +299,44 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     }
   }
 
+  void _ouvirProximaRota() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final now = Timestamp.now();
+    final thirtyMinutesFromNow = Timestamp.fromMillisecondsSinceEpoch(now.millisecondsSinceEpoch + 30 * 60 * 1000);
+
+    _proximaRotaSubscription = FirebaseFirestore.instance
+        .collection('rotas')
+        .where('motoristaId', isEqualTo: user.uid)
+        .where('status', isEqualTo: 'planejada')
+        .where('horaInicio', isLessThanOrEqualTo: thirtyMinutesFromNow)
+        .orderBy('horaInicio')
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.docs.isNotEmpty) {
+        final proximaRota = Rota.fromSnapshot(snapshot.docs.first);
+        if (mounted) {
+          setState(() {
+            _rotaProxima = proximaRota;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _rotaProxima = null;
+          });
+        }
+      }
+    });
+  }
+
   void _startLocationUpdates() {
     _positionStreamSubscription =
         Geolocator.getPositionStream().listen((Position position) async {
       final driverLatLng = LatLng(position.latitude, position.longitude);
+      _ultimaPosicaoMotorista = driverLatLng;
 
       setState(() {
         _driverMarker = Marker(
@@ -233,7 +349,11 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         _markers.add(_driverMarker!);
       });
 
-      mapController.animateCamera(CameraUpdate.newLatLng(driverLatLng));
+      if (_directionsInfo != null) {
+        _animateCameraToNavigation(driverLatLng, _directionsInfo!.polylinePoints);
+      } else {
+        mapController.animateCamera(CameraUpdate.newLatLng(driverLatLng));
+      }
       if (_rotaEmAndamentoId != null) {
         try {
           await FirebaseFirestore.instance
@@ -266,6 +386,32 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     );
   }
 
+  void _addStyledPolyline(String id, List<LatLng> points, Color color) {
+    if (points.isEmpty) return;
+    _polylines.add(
+      Polyline(
+        polylineId: PolylineId('${id}_background'),
+        color: color.withOpacity(0.25),
+        width: 14,
+        points: points,
+        zIndex: 1,
+        startCap: Cap.roundCap,
+        endCap: Cap.roundCap,
+      ),
+    );
+    _polylines.add(
+      Polyline(
+        polylineId: PolylineId(id),
+        color: color,
+        width: 7,
+        points: points,
+        zIndex: 2,
+        startCap: Cap.roundCap,
+        endCap: Cap.roundCap,
+      ),
+    );
+  }
+
   GeoPoint? _parseGeoPoint(dynamic value) {
     if (value is GeoPoint) {
       return value;
@@ -280,25 +426,110 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     return null;
   }
 
-  Future<List<QueryDocumentSnapshot>> _fetchAlunosInBatches(
+  Widget _buildNavigationBanner() {
+    final info = _directionsInfo;
+    if (info == null) return const SizedBox.shrink();
+
+    final leg = info.legs.isNotEmpty ? info.legs.first : null;
+    final instruction = (leg?.instructions?.isNotEmpty ?? false)
+        ? leg!.instructions!.first
+        : 'Siga em frente';
+    final duration = leg?.duration ?? info.totalDuration ?? '';
+    final distance = leg?.distance ?? info.totalDistance ?? '';
+
+    final theme = Theme.of(context);
+    return Card(
+      color: Colors.black.withOpacity(0.8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.straighten, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    instruction,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              [duration, distance].where((text) => text.isNotEmpty).join(' • '),
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<List<DocumentSnapshot>> _fetchAlunosInBatches(
       List<String> alunosIds) async {
     if (alunosIds.isEmpty) {
       return [];
     }
 
-    final List<QueryDocumentSnapshot> allAlunos = [];
+    final List<Future<DocumentSnapshot>> futures = [];
     final firestore = FirebaseFirestore.instance;
 
-    for (var i = 0; i < alunosIds.length; i += 10) {
-      final sublist =
-          alunosIds.sublist(i, i + 10 > alunosIds.length ? alunosIds.length : i + 10);
-      final snapshot = await firestore
-          .collection('alunos')
-          .where(FieldPath.documentId, whereIn: sublist)
-          .get();
-      allAlunos.addAll(snapshot.docs);
+    for (final alunoId in alunosIds) {
+      futures.add(firestore.collection('alunos').doc(alunoId).get());
     }
-    return allAlunos;
+    final snapshots = await Future.wait(futures);
+    return snapshots.where((s) => s.exists).toList();
+  }
+
+  void _animateCameraToNavigation(
+      LatLng focus, List<LatLng> polylinePoints) {
+    if (polylinePoints.isEmpty) return;
+    LatLng directionTarget;
+    if (polylinePoints.length > 1) {
+      directionTarget = polylinePoints[1];
+    } else {
+      directionTarget = polylinePoints.first;
+    }
+    final bearing = _calculateBearing(focus, directionTarget);
+    mapController.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: focus,
+          zoom: 16.5,
+          tilt: 60,
+          bearing: bearing,
+        ),
+      ),
+    );
+  }
+
+  double _calculateBearing(LatLng start, LatLng end) {
+    final lat1 = start.latitude * math.pi / 180;
+    final lat2 = end.latitude * math.pi / 180;
+    final dLon = (end.longitude - start.longitude) * math.pi / 180;
+    final y = math.sin(dLon) * math.cos(lat2);
+    final x = math.cos(lat1) * math.sin(lat2) -
+        math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+    final brng = math.atan2(y, x);
+    return (brng * 180 / math.pi + 360) % 360;
+  }
+
+  Future<void> _iniciarRota(Rota rota) async {
+    await FirebaseFirestore.instance.collection('rotas').doc(rota.id).update({
+      'status': StatusRota.emAndamento.name,
+    });
+    await _exibirRota(rota.id);
+    setState(() {
+      _rotaProxima = null;
+      _rotaEmAndamentoId = rota.id;
+    });
   }
 
   Future<void> _exibirRota(String rotaId) async {
@@ -406,18 +637,10 @@ class _TelaMotoristaState extends State<TelaMotorista> {
           ..addAll(orderedStops.map((entry) => entry.value))
           ..add(rota.localDestinoNome);
         _polylines.clear();
-        if (directionsInfo.polylinePoints.isNotEmpty) {
-          _polylines.add(
-            Polyline(
-              polylineId: const PolylineId('rota_coleta'),
-              color: Colors.blue,
-              width: 5,
-              points: directionsInfo.polylinePoints,
-            ),
-          );
-        }
+        _addStyledPolyline('rota_coleta', directionsInfo.polylinePoints, Colors.blueAccent);
         _calculandoRota = false;
       });
+      _animateCameraToNavigation(motoristaLocation, directionsInfo.polylinePoints);
     } catch (e) {
       if (mounted) {
         setState(() => _calculandoRota = false);
@@ -430,43 +653,11 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     }
   }
 
-  Future<void> _iniciarRotaFinal() async {
-    if (_rotaAtual == null) return;
-    
-    final directionsService = DirectionsService(apiKey: _apiKey);
-    final position = await Geolocator.getCurrentPosition();
-    final motoristaLocation = LatLng(position.latitude, position.longitude);
-
-    final LatLng destinoFinal = LatLng(
-      (_rotaAtual!.localDestino as GeoPoint).latitude,
-      (_rotaAtual!.localDestino as GeoPoint).longitude);
-
-    final directionsInfo = await directionsService.getDirections(
-      origin: motoristaLocation,
-      destination: destinoFinal,
-    );
-
-    setState(() {
-      _polylines.clear();
-      if (directionsInfo != null && directionsInfo.polylinePoints.isNotEmpty) {
-        _polylines.add(
-          Polyline(
-            polylineId: const PolylineId('rota_final'),
-            color: Colors.purple,
-            width: 5,
-            points: directionsInfo.polylinePoints,
-          ),
-        );
-      }
-       _emModoViagemFinal = true;
-    });
-  }
-
   Future<void> _finalizarViagem() async {
     if (_rotaAtual == null) return;
     
     await FirebaseFirestore.instance.collection('rotas').doc(_rotaAtual!.id).update({
-      'status': StatusRota.concluida.name
+      'status': StatusRota.planejada.name
     });
 
     setState(() {
@@ -474,7 +665,6 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       _markers.clear();
       _rotaEmAndamentoId = null;
       _rotaAtual = null;
-      _emModoViagemFinal = false;
       _directionsInfo = null;
       _rotaSequenciaParadas.clear();
       _carregarAlunosNoMapa();
@@ -533,7 +723,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       await FirebaseAuth.instance.signOut();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const TelaLogin()),
+          MaterialPageRoute(builder: (_) => const TelaSelecao()),
           (route) => false,
         );
       }
@@ -565,26 +755,17 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   }
 
   Future<void> _navigateToPerfil() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const PerfilScreen(
-          collectionPath: 'motoristas',
-          showAppBar: true,
-          themeColor: Colors.red,
-        ),
-      ),
-    );
-    _handlePerfilNavResult(result);
+    if (_selectedIndex == 4) return;
+    setState(() {
+      _selectedIndex = 4;
+    });
   }
 
-  void _handlePerfilNavResult(dynamic result) {
-    if (result is! PerfilNavResult || !result.isDriver) return;
-    final target = result.targetIndex;
-
-    if (target >= 0 && target <= 3 && _selectedIndex != target) {
-      setState(() => _selectedIndex = target);
-    }
+  Future<void> _navigateToSettings() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TelaConfiguracoes()),
+    );
   }
 
   void _openNotifications() {
@@ -681,7 +862,16 @@ class _TelaMotoristaState extends State<TelaMotorista> {
           polylines: _polylines,
           myLocationEnabled: true,
           myLocationButtonEnabled: true,
+          buildingsEnabled: false,
+          mapType: MapType.normal,
         ),
+        if (_directionsInfo != null)
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 16,
+            child: _buildNavigationBanner(),
+          ),
         if (_calculandoRota)
           const Positioned(
             top: 16,
@@ -691,10 +881,16 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         Positioned(
           left: 16,
           right: 16,
-          bottom: 16,
+          top: 16,
           child: _RouteSummaryPanel(
             directionsInfo: _directionsInfo,
             stops: _rotaSequenciaParadas,
+            isExpanded: _mostrarResumoRota,
+            onToggle: () {
+              setState(() {
+                _mostrarResumoRota = !_mostrarResumoRota;
+              });
+            },
           ),
         ),
       ],
@@ -705,32 +901,53 @@ class _TelaMotoristaState extends State<TelaMotorista> {
           ? NeonAppBar(
               title: _getAppBarTitle(_selectedIndex),
               onNotificationsPressed: _openNotifications,
+              notificationAction: NotificationsBell(
+                role: UserRole.motorista,
+                userId: user!.uid,
+                onPressed: _openNotifications,
+              ),
             )
           : null,
       drawer: isLoggedIn
           ? NeonDrawer(
               title: 'Menu do Motorista',
-              onSettings: _navigateToPerfil,
+              onSettings: _navigateToSettings,
               onLogout: _logout,
             )
           : null,
       floatingActionButton: _rotaEmAndamentoId == null
           ? null
           : FloatingActionButton.extended(
-              onPressed: _emModoViagemFinal ? _finalizarViagem : _iniciarRotaFinal,
-              label: Text(_emModoViagemFinal ? 'Finalizar Viagem' : 'Ir para o Destino Final'),
-              icon: Icon(_emModoViagemFinal ? Icons.done_all : Icons.flag),
+              onPressed: _finalizarViagem,
+              label: const Text('Finalizar Viagem'),
+              icon: const Icon(Icons.done_all),
             ),
       body: IndexedStack(
         index: _selectedIndex,
         children: [
           mapaWidget,
-          isLoggedIn ? const TelaViagem() : _buildLoginPromptWidget(context),
+          if (isLoggedIn)
+            TelaViagem(
+              onNavigateToGerenciarAlunos: () {
+                if (!mounted) return;
+                setState(() => _selectedIndex = 2);
+              },
+            )
+          else
+            _buildLoginPromptWidget(context),
+          if (isLoggedIn)
+            const TelaGerenciarAlunos(showAppBar: false)
+          else
+            _buildLoginPromptWidget(context),
           isLoggedIn
-              ? const TelaGerenciarAlunos(showAppBar: false)
+              ? const TelaListaChats(showAppBar: false)
               : _buildLoginPromptWidget(context),
-          isLoggedIn ? const TelaListaChats() : _buildLoginPromptWidget(context),
-          _buildLoginPromptWidget(context),
+          isLoggedIn
+              ? const PerfilScreen(
+                  collectionPath: 'motoristas',
+                  showAppBar: false,
+                )
+              : _buildLoginPromptWidget(context),
         ],
       ),
       bottomNavigationBar: NeonBottomNavBar(

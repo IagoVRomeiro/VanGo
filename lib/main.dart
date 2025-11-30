@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
+import 'package:vango/services/theme_service.dart';
 import 'firebase_options.dart';
 
 import 'screens/tela_selecao.dart';
@@ -26,76 +27,148 @@ class VanGoApp extends StatelessWidget {
     const deepBlack = Color(0xFF0F0F0F);
     const darkGrey = Color(0xFF1D1D1D);
 
-    final baseTextTheme = ThemeData(brightness: Brightness.dark).textTheme.apply(
-          bodyColor: Colors.white,
-          displayColor: Colors.white,
-        );
-
-    return MaterialApp(
-      title: 'VanGo',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: deepBlack,
-        colorScheme: const ColorScheme.dark(
-          primary: neonGreen,
-          secondary: Color(0xFF7462FF),
-          surface: darkGrey,
-          background: deepBlack,
-        ),
-        textTheme: baseTextTheme,
-        cardTheme: CardThemeData(
-          color: darkGrey,
-          elevation: 4,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+    final darkTheme = ThemeData(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: deepBlack,
+      colorScheme: const ColorScheme.dark(
+        primary: neonGreen,
+        secondary: Color(0xFF7462FF),
+        surface: darkGrey,
+        background: deepBlack,
+        onPrimary: Colors.black,
+        onSecondary: Colors.white,
+        onSurface: Colors.white,
+        onBackground: Colors.white,
+      ),
+      textTheme: ThemeData(brightness: Brightness.dark).textTheme.apply(
+            bodyColor: Colors.white,
+            displayColor: Colors.white,
           ),
+      cardTheme: CardThemeData(
+        color: darkGrey,
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
         ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: darkGrey,
-          foregroundColor: Colors.white,
-          centerTitle: true,
-          elevation: 0,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: neonGreen,
-            foregroundColor: Colors.black,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(30),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
-            textStyle: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.08),
-          contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: darkGrey,
-          selectedItemColor: neonGreen,
-          unselectedItemColor: Colors.white70,
-          showUnselectedLabels: false,
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: darkGrey,
+        foregroundColor: Colors.white,
+        centerTitle: true,
+        elevation: 0,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
           backgroundColor: neonGreen,
           foregroundColor: Colors.black,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const TelaSelecao(),
-        '/aluno': (context) => TelaAluno(),
- 
-        '/login': (context) => const TelaLogin(),
-       '/motorista': (context) => TelaMotorista(), 
+      inputDecorationTheme: InputDecorationTheme(
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide.none,
+        ),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.08),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: darkGrey,
+        selectedItemColor: neonGreen,
+        unselectedItemColor: Colors.white70,
+        showUnselectedLabels: false,
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: neonGreen,
+        foregroundColor: Colors.black,
+      ),
+      visualDensity: VisualDensity.adaptivePlatformDensity,
+    );
+
+    final lightTheme = ThemeData(
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: Colors.white,
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFF7462FF),
+        secondary: neonGreen,
+        surface: Colors.white,
+        background: Color(0xFFF0F0F0),
+        onPrimary: Colors.white,
+        onSecondary: Colors.black,
+        onSurface: Colors.black,
+        onBackground: Colors.black,
+      ),
+      textTheme: ThemeData(brightness: Brightness.light).textTheme,
+      cardTheme: CardThemeData(
+        color: Colors.white,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: Colors.grey[200]!),
+        ),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        centerTitle: true,
+        elevation: 0,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF7462FF),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide.none,
+        ),
+        filled: true,
+        fillColor: Colors.black.withOpacity(0.05),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: Colors.white,
+        selectedItemColor: Color(0xFF7462FF),
+        unselectedItemColor: Colors.black54,
+        showUnselectedLabels: false,
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: Color(0xFF7462FF),
+        foregroundColor: Colors.white,
+      ),
+      visualDensity: VisualDensity.adaptivePlatformDensity,
+    );
+
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeService,
+      builder: (context, currentMode, child) {
+        return MaterialApp(
+          title: 'VanGo',
+          theme: lightTheme,
+          darkTheme: darkTheme,
+          themeMode: currentMode,
+          initialRoute: '/',
+          routes: {
+            '/': (context) => const TelaSelecao(),
+            '/aluno': (context) => TelaAluno(),
+            '/login': (context) => const TelaLogin(),
+            '/motorista': (context) => const TelaMotorista(),
+          },
+        );
       },
     );
   }

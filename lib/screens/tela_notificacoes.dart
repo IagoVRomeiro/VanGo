@@ -18,6 +18,7 @@ class TelaNotificacoes extends StatefulWidget {
 class _TelaNotificacoesState extends State<TelaNotificacoes> {
   User? _currentUser;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Set<String> _notificacoesOcultas = {};
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
   Future<UserRole>? _userRoleFuture;
 
@@ -60,6 +61,11 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
           motoristaId: motoristaId,
           activate: true,
         );
+        if (mounted) {
+          setState(() {
+            _notificacoesOcultas.add(contratoId);
+          });
+        }
 
         if (mounted) {
           final message =
@@ -96,7 +102,17 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
      final theme = Theme.of(context);
      try {
       await _firestore.collection('contratos').doc(contratoId).delete();
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Recusado.'), backgroundColor: theme.colorScheme.surfaceVariant));
+      if (mounted) {
+        setState(() {
+          _notificacoesOcultas.add(contratoId);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Convite recusado.'),
+            backgroundColor: theme.colorScheme.surfaceVariant,
+          ),
+        );
+      }
     } catch (e) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: theme.colorScheme.error));
     }
@@ -120,17 +136,27 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
           motoristaId: motoristaId,
           activate: true,
         );
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Aceito!'), backgroundColor: theme.colorScheme.primary));
+        if(mounted) {
+          setState(() {
+            _notificacoesOcultas.add(contratoId);
+          });
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Aceito!'), backgroundColor: theme.colorScheme.primary));
+        }
       } catch (e) {
         if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: theme.colorScheme.error));
       }
   }
 
-   Future<void> _recusarSolicitacaoMotorista(String contratoId) async {
+  Future<void> _recusarSolicitacaoMotorista(String contratoId) async {
       final theme = Theme.of(context);
       try {
         await _firestore.collection('contratos').doc(contratoId).delete();
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Recusado.'), backgroundColor: theme.colorScheme.surfaceVariant));
+        if(mounted) {
+          setState(() {
+            _notificacoesOcultas.add(contratoId);
+          });
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Recusado.'), backgroundColor: theme.colorScheme.surfaceVariant));
+        }
       } catch (e) {
         if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: theme.colorScheme.error));
       }
@@ -198,9 +224,12 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
             padding: const EdgeInsets.all(8.0),
             itemCount: notificationSnapshot.data!.docs.length,
             itemBuilder: (context, index) {
-              final contrato = notificationSnapshot.data!.docs[index];
-              final data = contrato.data() as Map<String, dynamic>;
-              final contratoId = contrato.id;
+            final contrato = notificationSnapshot.data!.docs[index];
+            final data = contrato.data() as Map<String, dynamic>;
+            final contratoId = contrato.id;
+            if (_notificacoesOcultas.contains(contratoId)) {
+              return const SizedBox.shrink();
+            }
 
               return AnimationConfiguration.staggeredList(
                 position: index,

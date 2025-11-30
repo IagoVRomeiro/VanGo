@@ -275,6 +275,8 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final proximoHorario = _calcularProximoHorario(_horarioInicio!, _diasSemana);
+
       final rotaData = Rota(
         id: _isEditMode ? widget.rotaId! : '',
         nome: _nomeController.text.trim(),
@@ -286,6 +288,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
         diasSemana: _diasSemana,
         horarioInicioPrevisto: _horarioInicio!.to24HourString(),
         horarioFimPrevisto: _horarioFim!.to24HourString(),
+        horaInicio: proximoHorario != null ? Timestamp.fromDate(proximoHorario) : null,
         status: StatusRota.planejada,
         criadoEm: _criadoEm,
       );
@@ -321,6 +324,63 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
       }
     }
   }
+
+  DateTime? _calcularProximoHorario(TimeOfDay time, Map<String, bool> dias) {
+    if (dias.values.every((d) => !d)) return null;
+
+    final now = DateTime.now();
+    final int todayWeekday = now.weekday; // 1 (Monday) to 7 (Sunday)
+
+    // Map your string days to DateTime weekday constants
+    const dayMapping = {
+      'Seg': DateTime.monday,
+      'Ter': DateTime.tuesday,
+      'Qua': DateTime.wednesday,
+      'Qui': DateTime.thursday,
+      'Sex': DateTime.friday,
+      'Sab': DateTime.saturday,
+      'Dom': DateTime.sunday,
+    };
+
+    for (int i = 0; i < 7; i++) {
+      int weekday = (todayWeekday + i - 1) % 7 + 1; // Check from today onwards
+      String dayKey = dayMapping.entries.firstWhere((e) => e.value == weekday).key;
+
+      if (dias[dayKey] == true) {
+        DateTime nextDay = DateTime(now.year, now.month, now.day + i);
+        DateTime nextOccurrence = DateTime(
+          nextDay.year,
+          nextDay.month,
+          nextDay.day,
+          time.hour,
+          time.minute,
+        );
+
+        if (nextOccurrence.isAfter(now)) {
+          return nextOccurrence;
+        }
+      }
+    }
+
+    // If no time this week is in the future, find the first available day next week
+    for (int i = 0; i < 7; i++) {
+      int weekday = (todayWeekday + i - 1) % 7 + 1;
+      String dayKey = dayMapping.entries.firstWhere((e) => e.value == weekday).key;
+      if (dias[dayKey] == true) {
+        DateTime nextDay = DateTime(now.year, now.month, now.day + i + 7);
+        return DateTime(
+          nextDay.year,
+          nextDay.month,
+          nextDay.day,
+          time.hour,
+          time.minute,
+        );
+      }
+    }
+
+    return null;
+  }
+
 
   Future<TimeOfDay?> _selecionarHora(TimeOfDay? initialTime) async {
     final hora = await showTimePicker(

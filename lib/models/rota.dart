@@ -26,6 +26,7 @@ class Rota {
   final Map<String, bool> diasSemana;
   final String horarioInicioPrevisto;
   final String horarioFimPrevisto;
+  final Timestamp? horaInicio; // Novo campo
   final StatusRota status;
   final Timestamp? criadoEm;
 
@@ -40,6 +41,7 @@ class Rota {
     required this.diasSemana,
     required this.horarioInicioPrevisto,
     required this.horarioFimPrevisto,
+    this.horaInicio, // Novo campo
     required this.status,
     this.criadoEm,
   });
@@ -55,6 +57,7 @@ class Rota {
       'diasSemana': diasSemana,
       'horarioInicioPrevisto': horarioInicioPrevisto,
       'horarioFimPrevisto': horarioFimPrevisto,
+      'horaInicio': horaInicio, // Novo campo
       'status': status.name,
       'criadoEm': criadoEm ?? FieldValue.serverTimestamp(),
     };
@@ -71,6 +74,7 @@ class Rota {
       'diasSemana': diasSemana,
       'horarioInicioPrevisto': horarioInicioPrevisto,
       'horarioFimPrevisto': horarioFimPrevisto,
+      'horaInicio': horaInicio, // Novo campo
       'status': status.name,
     };
   }
@@ -104,6 +108,7 @@ class Rota {
       diasSemana: (data['diasSemana'] as Map?)?.cast<String, bool>() ?? {},
       horarioInicioPrevisto: data['horarioInicioPrevisto'] ?? '00:00',
       horarioFimPrevisto: data['horarioFimPrevisto'] ?? '00:00',
+      horaInicio: data['horaInicio'] as Timestamp?, // Novo campo
       status: StatusRota.fromString(data['status']),
       criadoEm: data['criadoEm'],
     );

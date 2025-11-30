@@ -76,17 +76,14 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
 
   @override
   Widget build(BuildContext context) {
-    const Color corVermelhaPrincipal = Color(0xFFE53935);
-    const Color fundoEscuro = Color(0xFF2d2d2d);
-    const Color amareloBotao = Color(0xFFFFB300);
-    const Color branco = Colors.white;
+    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: corVermelhaPrincipal,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Recuperar Senha', style: TextStyle(color: branco)),
-        backgroundColor: corVermelhaPrincipal,
-        foregroundColor: branco,
+        title: Text('Recuperar Senha', style: TextStyle(color: theme.appBarTheme.foregroundColor)),
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        foregroundColor: theme.appBarTheme.foregroundColor,
         elevation: 0,
       ),
       body: SafeArea(
@@ -98,22 +95,19 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
               child: Column(
                 children: [
                   const SizedBox(height: 40),
-                  const Text(
+                  Text(
                     'Esqueceu a senha?',
-                    style: TextStyle(
-                      color: branco,
-                      fontSize: 26,
+                    style: theme.textTheme.headlineLarge?.copyWith(
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 1,
+                      color: theme.colorScheme.onBackground,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 10),
-                  const Text(
+                  Text(
                     'Informe o e-mail cadastrado para receber o link de redefinição.',
-                    style: TextStyle(
-                      color: branco,
-                      fontSize: 16,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onBackground,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -129,8 +123,6 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
                     width: double.infinity,
                     child: _botaoPrincipal(
                       texto: _isLoading ? 'ENVIANDO...' : 'ENVIAR LINK',
-                      corDeFundo: amareloBotao,
-                      corDoTexto: fundoEscuro,
                       aoPressionar: _isLoading ? () {} : _enviarEmailDeRecuperacao,
                     ),
                   ),
@@ -150,18 +142,19 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
     required IconData icone,
     TextInputType? keyboardType,
   }) {
+    final theme = Theme.of(context);
     return TextFormField(
       controller: controller,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: theme.colorScheme.onSurface),
       keyboardType: keyboardType,
       decoration: InputDecoration(
         filled: true,
-        fillColor: const Color(0xFF2d2d2d),
+        fillColor: theme.colorScheme.surfaceVariant,
         hintText: dica,
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+        hintStyle: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.5)),
         prefixIcon: Padding(
           padding: const EdgeInsets.only(left: 20, right: 15),
-          child: Icon(icone, color: Colors.white, size: 22),
+          child: Icon(icone, color: theme.colorScheme.onSurface, size: 22),
         ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
         contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
@@ -176,14 +169,13 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
 
   Widget _botaoPrincipal({
     required String texto,
-    required Color corDeFundo,
-    required Color corDoTexto,
     required VoidCallback aoPressionar,
   }) {
+    final theme = Theme.of(context);
     return ElevatedButton(
       onPressed: aoPressionar,
       style: ElevatedButton.styleFrom(
-        backgroundColor: corDeFundo,
+        backgroundColor: theme.colorScheme.primary,
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         elevation: 5,
@@ -191,7 +183,7 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
       child: Text(
         texto,
         style: TextStyle(
-          color: corDoTexto,
+          color: theme.colorScheme.onPrimary,
           fontSize: 16,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.1,
