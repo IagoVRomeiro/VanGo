@@ -41,6 +41,13 @@ class TelaMotorista extends StatefulWidget {
   State<TelaMotorista> createState() => _TelaMotoristaState();
 }
 
+class _AlunosBatchResult {
+  final List<DocumentSnapshot<Map<String, dynamic>>> docs;
+  final bool hadPermissionErrors;
+
+  const _AlunosBatchResult(this.docs, this.hadPermissionErrors);
+}
+
 class _RouteStatusChip extends StatelessWidget {
   const _RouteStatusChip();
 
@@ -426,66 +433,33 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     return null;
   }
 
-  Widget _buildNavigationBanner() {
-    final info = _directionsInfo;
-    if (info == null) return const SizedBox.shrink();
-
-    final leg = info.legs.isNotEmpty ? info.legs.first : null;
-    final instruction = (leg?.instructions?.isNotEmpty ?? false)
-        ? leg!.instructions!.first
-        : 'Siga em frente';
-    final duration = leg?.duration ?? info.totalDuration ?? '';
-    final distance = leg?.distance ?? info.totalDistance ?? '';
-
-    final theme = Theme.of(context);
-    return Card(
-      color: Colors.black.withOpacity(0.8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.straighten, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    instruction,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              [duration, distance].where((text) => text.isNotEmpty).join(' • '),
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<List<DocumentSnapshot>> _fetchAlunosInBatches(
+  Future<_AlunosBatchResult> _fetchAlunosInBatches(
       List<String> alunosIds) async {
     if (alunosIds.isEmpty) {
-      return [];
+      return const _AlunosBatchResult([], false);
     }
 
-    final List<Future<DocumentSnapshot>> futures = [];
     final firestore = FirebaseFirestore.instance;
+    final List<DocumentSnapshot<Map<String, dynamic>>> snapshots = [];
+    var hadPermissionErrors = false;
 
     for (final alunoId in alunosIds) {
-      futures.add(firestore.collection('alunos').doc(alunoId).get());
+      try {
+        final snapshot = await firestore.collection('alunos').doc(alunoId).get();
+        if (snapshot.exists) {
+          snapshots.add(snapshot);
+        }
+      } on FirebaseException catch (e) {
+        if (e.code == 'permission-denied') {
+          debugPrint('Sem permissão para acessar dados do aluno $alunoId');
+          hadPermissionErrors = true;
+        } else {
+          rethrow;
+        }
+      }
     }
-    final snapshots = await Future.wait(futures);
-    return snapshots.where((s) => s.exists).toList();
+
+    return _AlunosBatchResult(snapshots, hadPermissionErrors);
   }
 
   void _animateCameraToNavigation(
@@ -559,7 +533,16 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         return;
       }
 
-      final alunosDocs = await _fetchAlunosInBatches(alunosIds);
+      final alunosResult = await _fetchAlunosInBatches(alunosIds);
+      if (mounted && alunosResult.hadPermissionErrors) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Alguns passageiros não puderam ser carregados. Verifique se estão vinculados ao motorista.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      final alunosDocs = alunosResult.docs;
       final alunosComLocalizacao = <MapEntry<GeoPoint, String>>[];
       for (final doc in alunosDocs) {
         final data = doc.data() as Map<String, dynamic>;
@@ -685,7 +668,16 @@ class _TelaMotoristaState extends State<TelaMotorista> {
 
       if (alunosIds.isEmpty) return;
       
-      final alunosDocs = await _fetchAlunosInBatches(alunosIds);
+      final alunosResult = await _fetchAlunosInBatches(alunosIds);
+      if (mounted && alunosResult.hadPermissionErrors) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Alguns passageiros não puderam ser carregados. Verifique se estão vinculados ao motorista.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      final alunosDocs = alunosResult.docs;
 
       for (var doc in alunosDocs) {
         final alunoData = doc.data() as Map<String, dynamic>;
@@ -865,13 +857,6 @@ class _TelaMotoristaState extends State<TelaMotorista> {
           buildingsEnabled: false,
           mapType: MapType.normal,
         ),
-        if (_directionsInfo != null)
-          Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: _buildNavigationBanner(),
-          ),
         if (_calculandoRota)
           const Positioned(
             top: 16,
@@ -927,12 +912,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         children: [
           mapaWidget,
           if (isLoggedIn)
-            TelaViagem(
-              onNavigateToGerenciarAlunos: () {
-                if (!mounted) return;
-                setState(() => _selectedIndex = 2);
-              },
-            )
+            const TelaViagem()
           else
             _buildLoginPromptWidget(context),
           if (isLoggedIn)

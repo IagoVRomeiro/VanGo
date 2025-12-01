@@ -182,23 +182,48 @@ class _TelaListaChatsState extends State<TelaListaChats> {
       stream: _firestore
           .collection('chats')
           .where('participants', arrayContains: motoristaId)
-          .where('status',
-              whereIn: [ChatStatus.inquiry.name, ChatStatus.active.name])
-          .orderBy('lastMessage.timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        if (snapshot.hasError) {
+          return _buildEmptyState(
+            title: 'Erro ao carregar conversas.',
+            subtitle: 'Tente novamente mais tarde.',
+          );
+        }
+
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return _buildEmptyState(title: 'Nenhuma nova solicitação de contato.');
         }
 
         final chats = snapshot.data!.docs.where((chat) {
-          final participants = List<String>.from(chat['participants'] ?? []);
-          final otherUserId = participants.firstWhere((id) => id != motoristaId);
-          return !alunosVinculados.contains(otherUserId);
-        }).toList();
+          final participantsRaw = chat['participants'];
+          final participants = participantsRaw is List
+              ? List<String>.from(participantsRaw)
+              : <String>[];
+          final otherUserId = participants.firstWhere(
+            (id) => id != motoristaId,
+            orElse: () => (chat['alunoId'] as String?) ?? '',
+          );
+          if (otherUserId.isEmpty) return false;
+          final status = ChatStatus.fromString(chat['status'] as String?);
+          final isAlunoVinculado = alunosVinculados.contains(otherUserId);
+          final statusElegivel =
+              status == ChatStatus.inquiry || status == ChatStatus.active;
+          return !isAlunoVinculado && statusElegivel;
+        }).toList()
+          ..sort((a, b) {
+            final lastA =
+                ((a['lastMessage'] as Map<String, dynamic>?)?['timestamp'] as Timestamp?)
+                    ?.toDate();
+            final lastB =
+                ((b['lastMessage'] as Map<String, dynamic>?)?['timestamp'] as Timestamp?)
+                    ?.toDate();
+            return (lastB ?? DateTime.fromMillisecondsSinceEpoch(0))
+                .compareTo(lastA ?? DateTime.fromMillisecondsSinceEpoch(0));
+          });
 
         if (chats.isEmpty) {
           return _buildEmptyState(title: 'Nenhuma nova solicitação de contato.');
@@ -212,8 +237,15 @@ class _TelaListaChatsState extends State<TelaListaChats> {
             itemCount: chats.length,
             itemBuilder: (context, index) {
               final chat = chats[index];
-              final participants = List<String>.from(chat['participants']);
-              final otherUserId = participants.firstWhere((id) => id != motoristaId);
+              final participantsRaw = chat['participants'];
+              final participants = participantsRaw is List
+                  ? List<String>.from(participantsRaw)
+                  : <String>[];
+              final otherUserId = participants.firstWhere(
+                (id) => id != motoristaId,
+                orElse: () => (chat['alunoId'] as String?) ?? '',
+              );
+              if (otherUserId.isEmpty) return const SizedBox.shrink();
               final lastMessage = chat['lastMessage'] as Map<String, dynamic>? ?? {};
               final status = ChatStatus.fromString(chat['status'] as String?);
 

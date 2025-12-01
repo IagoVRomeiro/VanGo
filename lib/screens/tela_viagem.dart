@@ -1,29 +1,23 @@
 // lib/screens/tela_viagem.dart
 
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 // Imports dos modelos
-import '../models/aluno.dart';
 import '../models/motorista.dart';
 import '../models/van.dart';
 import '../models/rota.dart';
-import '../models/usuario.dart';
-import '../services/chat_service.dart';
 import 'tela_motorista.dart';
 
 // Imports das telas de destino
 import 'tela_criar_rota.dart';
 import 'tela_criar_van.dart';
-import 'tela_gerenciar_alunos.dart';
 import 'tela_cadastro.dart';
-import 'tela_chat.dart';
 
 class TelaViagem extends StatefulWidget {
-  final VoidCallback? onNavigateToGerenciarAlunos;
-
-  const TelaViagem({super.key, this.onNavigateToGerenciarAlunos});
+  const TelaViagem({super.key});
 
   @override
   State<TelaViagem> createState() => _TelaViagemState();
@@ -32,29 +26,88 @@ class TelaViagem extends StatefulWidget {
 class _TelaViagemState extends State<TelaViagem> {
   final User? _currentUser = FirebaseAuth.instance.currentUser;
 
-  Future<Map<String, Usuario>> _buscarUsuariosPorIds(List<String> ids) async {
-    if (ids.isEmpty) return {};
+  Motorista? _motoristaAtual;
+  List<Van> _vans = [];
+  bool _carregandoMotorista = true;
+  bool _carregandoVans = true;
+  String? _erroMotorista;
+  String? _erroVans;
 
-    const chunkSize = 10;
-    final futures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
-    for (var i = 0; i < ids.length; i += chunkSize) {
-      final end = (i + chunkSize) > ids.length ? ids.length : i + chunkSize;
-      futures.add(
-        FirebaseFirestore.instance
-            .collection('users')
-            .where(FieldPath.documentId, whereIn: ids.sublist(i, end))
-            .get(),
-      );
-    }
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _motoristaSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _vansSubscription;
 
-    final snapshots = await Future.wait(futures);
-    final usuarios = <String, Usuario>{};
-    for (final snapshot in snapshots) {
-      for (final doc in snapshot.docs) {
-        usuarios[doc.id] = Usuario.fromSnapshot(doc);
-      }
+  @override
+  void initState() {
+    super.initState();
+    if (_currentUser != null) {
+      _ouvirMotorista(_currentUser!.uid);
+      _ouvirVans(_currentUser!.uid);
     }
-    return usuarios;
+  }
+
+  @override
+  void dispose() {
+    _motoristaSubscription?.cancel();
+    _vansSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _ouvirMotorista(String motoristaId) {
+    _motoristaSubscription = FirebaseFirestore.instance
+        .collection('motoristas')
+        .doc(motoristaId)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        if (!mounted) return;
+        if (!snapshot.exists) {
+          setState(() {
+            _motoristaAtual = null;
+            _erroMotorista = 'Não foi possível encontrar o perfil do motorista.';
+            _carregandoMotorista = false;
+          });
+          return;
+        }
+        setState(() {
+          _motoristaAtual =
+              Motorista.fromMap(snapshot.id, snapshot.data() ?? {});
+          _erroMotorista = null;
+          _carregandoMotorista = false;
+        });
+      },
+      onError: (error) {
+        if (!mounted) return;
+        setState(() {
+          _erroMotorista = 'Erro ao carregar motorista: $error';
+          _carregandoMotorista = false;
+        });
+      },
+    );
+  }
+
+  void _ouvirVans(String motoristaId) {
+    _vansSubscription = FirebaseFirestore.instance
+        .collection('vans')
+        .where('motoristaId', isEqualTo: motoristaId)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        if (!mounted) return;
+        setState(() {
+          _vans = snapshot.docs.map((doc) => Van.fromSnapshot(doc)).toList();
+          _erroVans = null;
+          _carregandoVans = false;
+        });
+      },
+      onError: (error) {
+        if (!mounted) return;
+        setState(() {
+          _erroVans = 'Erro ao carregar vans: $error';
+          _carregandoVans = false;
+        });
+      },
+    );
   }
 
   Widget _buildSectionTitle(BuildContext context, String title) {
@@ -172,9 +225,8 @@ class _TelaViagemState extends State<TelaViagem> {
               );
             } else if (rota.status == StatusRota.emAndamento) {
               trailingWidget = ElevatedButton(
-                onPressed: () => _pararRota(rota.id),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('Parar'),
+                onPressed: () => _abrirMapaDaRota(rota.id),
+                child: const Text('Andamento'),
               );
             }
             
@@ -204,14 +256,7 @@ class _TelaViagemState extends State<TelaViagem> {
       await FirebaseFirestore.instance.collection('rotas').doc(rotaId).update({
         'status': StatusRota.emAndamento.name,
       });
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => TelaMotorista(rotaParaExibirId: rotaId),
-          ),
-        );
-      }
+      _abrirMapaDaRota(rotaId);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -224,59 +269,16 @@ class _TelaViagemState extends State<TelaViagem> {
     }
   }
 
-  Future<void> _pararRota(String rotaId) async {
-    try {
-      await FirebaseFirestore.instance.collection('rotas').doc(rotaId).update({
-        'status': StatusRota.planejada.name,
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Rota concluída.'),
-            backgroundColor: Colors.blue,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao parar a rota: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+  void _abrirMapaDaRota(String rotaId) {
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TelaMotorista(rotaParaExibirId: rotaId),
+      ),
+    );
   }
 
-  Future<void> _abrirChatComAluno(String alunoId, String motoristaId) async {
-    try {
-      final chatId = await ChatService.ensureChat(
-        alunoId: alunoId,
-        motoristaId: motoristaId,
-        activate: true,
-      );
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => TelaChat(
-            chatId: chatId,
-            recipientId: alunoId,
-          ),
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao abrir chat: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
   Widget _buildCriarRotaTile(BuildContext context, bool possuiVan) {
     return ListTile(
       leading: Icon(
@@ -305,111 +307,6 @@ class _TelaViagemState extends State<TelaViagem> {
     );
   }
 
-  Widget _buildGerenciamentoAlunos(Motorista motorista) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ListTile(
-          leading: const Icon(Icons.people_outline, color: Color(0xFFE53935), size: 40),
-          title: const Text("Alunos Vinculados"),
-          subtitle: const Text("Ver lista de passageiros e solicitações"),
-          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-          onTap: () {
-            if (widget.onNavigateToGerenciarAlunos != null) {
-              widget.onNavigateToGerenciarAlunos!.call();
-            } else {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const TelaGerenciarAlunos(showAppBar: true)),
-              );
-            }
-          },
-        ),
-        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection('alunos')
-                .where('motoristaId', isEqualTo: motorista.id)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                    child: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text("Carregando passageiros..."),
-                ));
-              }
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Center(child: Text("Nenhum passageiro encontrado.")),
-                );
-              }
-
-              final alunos = snapshot.data!.docs
-                  .map((doc) => Aluno.fromMap(doc.id, doc.data()))
-                  .toList();
-
-              if (alunos.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Center(child: Text("Nenhum passageiro encontrado.")),
-                );
-              }
-
-              return FutureBuilder<Map<String, Usuario>>(
-                future: _buscarUsuariosPorIds(alunos.map((a) => a.id).toList()),
-                builder: (context, usuariosSnapshot) {
-                  if (usuariosSnapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  final usuarios = usuariosSnapshot.data ?? {};
-
-                  alunos.sort((a, b) {
-                    final nomeA = usuarios[a.id]?.nome ?? '';
-                    final nomeB = usuarios[b.id]?.nome ?? '';
-                    return nomeA.compareTo(nomeB);
-                  });
-
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: alunos.length,
-                    itemBuilder: (context, index) {
-                      final aluno = alunos[index];
-                      final usuario = usuarios[aluno.id];
-                      final nome = usuario?.nome ?? 'Nome não informado';
-                      final endereco =
-                          usuario?.endereco ?? 'Endereço não informado';
-
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.red.shade100,
-                          child: Text(nome.isNotEmpty ? nome[0] : 'A'),
-                        ),
-                        title: Text(nome),
-                        subtitle: Text(endereco),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.chat_bubble_outline),
-                          tooltip: 'Conversar',
-                          onPressed: () => _abrirChatComAluno(aluno.id, motorista.id),
-                        ),
-                        onTap: () => _abrirChatComAluno(aluno.id, motorista.id),
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_currentUser == null) {
@@ -435,45 +332,50 @@ class _TelaViagemState extends State<TelaViagem> {
       );
     }
 
+    final motorista = _motoristaAtual;
+    final bool carregando = _carregandoMotorista || _carregandoVans;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
-      child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('motoristas').doc(_currentUser!.uid).snapshots(),
-        builder: (context, motoristaSnapshot) {
-          final isMotoristaLoading = motoristaSnapshot.connectionState == ConnectionState.waiting && !motoristaSnapshot.hasData;
-          if (isMotoristaLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!motoristaSnapshot.hasData || !motoristaSnapshot.data!.exists) {
-            return const Center(child: Text('Erro: Não foi possível carregar o perfil.'));
-          }
-
-          final motorista = Motorista.fromMap(
-            motoristaSnapshot.data!.id,
-            motoristaSnapshot.data!.data()!,
-          );
-
-          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection('vans')
-                .where('motoristaId', isEqualTo: motorista.id)
-                .snapshots(),
-            builder: (context, vansSnapshot) {
-              final isVansLoading = vansSnapshot.connectionState == ConnectionState.waiting && !vansSnapshot.hasData;
-              if (isVansLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              final vans = vansSnapshot.hasData
-                  ? vansSnapshot.data!.docs
-                      .map((doc) => Van.fromSnapshot(doc))
-                      .toList()
-                  : <Van>[];
-
-              return _buildDriverDashboard(motorista, vans);
-            },
-          );
-        },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (carregando)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12.0),
+              child: LinearProgressIndicator(),
+            ),
+          if (_erroMotorista != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: Text(
+                _erroMotorista!,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          if (_erroVans != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Text(
+                _erroVans!,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          if (!_carregandoMotorista && motorista == null && _erroMotorista == null)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 24.0),
+                child: Text('Perfil de motorista não encontrado.'),
+              ),
+            ),
+          if (motorista != null) _buildDriverDashboard(motorista, _vans),
+        ],
       ),
     );
   }
@@ -500,12 +402,6 @@ class _TelaViagemState extends State<TelaViagem> {
               _buildCriarRotaTile(context, vans.isNotEmpty),
             ],
           ),
-        ),
-        _buildSectionTitle(context, 'Alunos'),
-        Card(
-          clipBehavior: Clip.antiAlias,
-          margin: const EdgeInsets.symmetric(vertical: 8.0),
-          child: _buildGerenciamentoAlunos(motorista),
         ),
         const SizedBox(height: 80),
       ],

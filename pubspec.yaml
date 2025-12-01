@@ -56,11 +56,14 @@ flutter_launcher_icons:
   image_path: "assets/icon.png"
 
 flutter_native_splash:
-  color: "#FFFFFF"
-  image: assets/splash.png
+  color: "#B5FF2A" # mesmo verde do ícone
+  image: assets/icon.png
   android: true
   ios: true
   web: false
+  android_12:
+    color: "#B5FF2A"
+    image: assets/icon.png
 
 flutter:
   uses-material-design: true

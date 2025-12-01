@@ -26,6 +26,9 @@ class NeonAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final titleColor = isDark ? Colors.white : Colors.black;
+    final subtitleColor = isDark ? Colors.white70 : Colors.black54;
 
     return AppBar(
       backgroundColor: Colors.transparent,
@@ -34,6 +37,7 @@ class NeonAppBar extends StatelessWidget implements PreferredSizeWidget {
       centerTitle: true,
       titleSpacing: 0,
       leadingWidth: 72,
+      iconTheme: IconThemeData(color: titleColor),
       leading: showBackButton
           ? IconButton(
               icon: const Icon(Icons.arrow_back),
@@ -98,14 +102,14 @@ class NeonAppBar extends StatelessWidget implements PreferredSizeWidget {
             textAlign: TextAlign.center,
             style: textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: titleColor,
             ),
           ),
           if (subtitle != null)
             Text(
               subtitle!,
               textAlign: TextAlign.center,
-              style: textTheme.bodySmall?.copyWith(color: Colors.white70),
+              style: textTheme.bodySmall?.copyWith(color: subtitleColor),
             ),
         ],
       ),

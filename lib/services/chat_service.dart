@@ -45,15 +45,24 @@ class ChatService {
     }
 
     if (existingDoc != null) {
-      await existingDoc.reference.set({
+      final existingStatus = existingDoc.data()?['status'] as String?;
+      final dataToMerge = <String, dynamic>{
         'pairKey': pairKey,
         'alunoId': alunoId,
         'motoristaId': motoristaId,
-        if (activate) ...{
+        'participants': FieldValue.arrayUnion([alunoId, motoristaId]),
+      };
+
+      if (activate) {
+        dataToMerge.addAll({
           'status': ChatStatus.active.name,
           'updatedAt': FieldValue.serverTimestamp(),
-        },
-      }, SetOptions(merge: true));
+        });
+      } else if (existingStatus == null || existingStatus.isEmpty) {
+        dataToMerge['status'] = ChatStatus.inquiry.name;
+      }
+
+      await existingDoc.reference.set(dataToMerge, SetOptions(merge: true));
       return existingDoc.id;
     }
 
