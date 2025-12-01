@@ -25,6 +25,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
   Future<UserRole>? _userRoleFuture;
   Future<_MotoristaVinculadoInfo?>? _motoristaVinculadoFuture;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Map<String, Future<DocumentSnapshot<Map<String, dynamic>>>> _userDocCache = {};
 
   @override
   void initState() {
@@ -34,6 +35,13 @@ class _TelaListaChatsState extends State<TelaListaChats> {
       _userRoleFuture = _getUserRole(_currentUser!.uid);
       _motoristaVinculadoFuture = _buscarMotoristaVinculado(_currentUser!.uid);
     }
+  }
+
+  Future<DocumentSnapshot<Map<String, dynamic>>> _getUserDoc(String userId) {
+    return _userDocCache.putIfAbsent(
+      userId,
+      () => _firestore.collection('users').doc(userId).get(),
+    );
   }
 
   Future<UserRole> _getUserRole(String userId) async {
@@ -256,7 +264,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                   verticalOffset: 50.0,
                   child: FadeInAnimation(
                     child: FutureBuilder<DocumentSnapshot>(
-                      future: _firestore.collection('users').doc(otherUserId).get(),
+                      future: _getUserDoc(otherUserId),
                       builder: (context, userSnapshot) {
                         if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
                           return const SizedBox.shrink();
@@ -442,7 +450,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
 
                 children.add(
                   FutureBuilder<DocumentSnapshot>(
-                    future: _firestore.collection('users').doc(motoristaId).get(),
+                    future: _getUserDoc(motoristaId),
                     builder: (context, userSnapshot) {
                       if (!userSnapshot.hasData ||
                           !(userSnapshot.data?.exists ?? false)) {
