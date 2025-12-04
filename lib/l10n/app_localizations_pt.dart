@@ -199,4 +199,16 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get chatHint => 'Digite uma mensagem...';
+
+  @override
+  String get functionsMissing =>
+      'Função do servidor não encontrada. Verifique a configuração das Cloud Functions.';
+
+  @override
+  String get unlinkSuccess => 'Desvinculado com sucesso.';
+
+  @override
+  String unlinkError(Object erro) {
+    return 'Erro ao desvincular: $erro';
+  }
 }

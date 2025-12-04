@@ -56,5 +56,8 @@
   "studentUnknown": "Student not identified",
   "chatInquiryDriver": "Chatting with a student not yet linked. Only link when you want to add them to your route.",
   "chatInquiryStudent": "You are not linked to this driver yet, but you can chat normally.",
-  "chatHint": "Type a message..."
+  "chatHint": "Type a message...",
+  "functionsMissing": "Server function not found. Check your Cloud Functions deployment.",
+  "unlinkSuccess": "Unlinked successfully.",
+  "unlinkError": "Error unlinking: {erro}"
 }

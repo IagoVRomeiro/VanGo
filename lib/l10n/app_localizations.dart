@@ -447,6 +447,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Type a message...'**
   String get chatHint;
+
+  /// No description provided for @functionsMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Server function not found. Check your Cloud Functions deployment.'**
+  String get functionsMissing;
+
+  /// No description provided for @unlinkSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlinked successfully.'**
+  String get unlinkSuccess;
+
+  /// No description provided for @unlinkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error unlinking: {erro}'**
+  String unlinkError(Object erro);
 }
 
 class _AppLocalizationsDelegate

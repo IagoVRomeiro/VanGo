@@ -200,4 +200,16 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatHint => 'Écrire un message...';
+
+  @override
+  String get functionsMissing =>
+      'Fonction serveur introuvable. Vérifiez le déploiement des Cloud Functions.';
+
+  @override
+  String get unlinkSuccess => 'Déliaison effectuée avec succès.';
+
+  @override
+  String unlinkError(Object erro) {
+    return 'Erreur lors de la déliaison : $erro';
+  }
 }

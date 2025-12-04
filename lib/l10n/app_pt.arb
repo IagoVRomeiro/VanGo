@@ -56,5 +56,8 @@
   "studentUnknown": "Aluno não identificado",
   "chatInquiryDriver": "Conversando com um aluno ainda não vinculado. Use o vínculo apenas quando desejar adicioná-lo à sua rota.",
   "chatInquiryStudent": "Você ainda não está vinculado a este motorista, mas pode conversar normalmente.",
-  "chatHint": "Digite uma mensagem..."
+  "chatHint": "Digite uma mensagem...",
+  "functionsMissing": "Função do servidor não encontrada. Verifique a configuração das Cloud Functions.",
+  "unlinkSuccess": "Desvinculado com sucesso.",
+  "unlinkError": "Erro ao desvincular: {erro}"
 }

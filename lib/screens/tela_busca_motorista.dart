@@ -14,6 +14,7 @@ import '../widgets/neon_drawer.dart';
 import '../widgets/neon_bottom_nav_bar.dart';
 import '../widgets/notifications_bell.dart';
 import 'package:vango/services/functions_service.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class TelaBuscaMotorista extends StatefulWidget {
   final bool showScaffold;
@@ -260,13 +261,25 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Desvinculado com sucesso.')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.unlinkSuccess)),
+        );
+      }
+    } on FirebaseFunctionsException catch (e) {
+      final code = e.code;
+      if (!mounted) return;
+      if (code == 'unimplemented' || code == 'not-found') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.functionsMissing)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.unlinkError(e.message ?? e.code))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao desvincular: $e')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.unlinkError(e.toString()))),
         );
       }
     } finally {

@@ -3,11 +3,13 @@ import * as admin from "firebase-admin";
 
 admin.initializeApp();
 const db = admin.firestore();
+const functionsUs = functions.region("us-central1");
+type CallableCtx = functions.https.CallableContext;
 
 /**
  * Cloud Function para um motorista convidar um aluno.
  */
-export const enviarConvite = functions.https.onCall(async (data, context) => {
+export const enviarConvite = functionsUs.https.onCall(async (data, context) => {
     // 1. Autenticação e validação de entrada
     if (!context.auth) {
         throw new functions.https.HttpsError(
@@ -119,7 +121,7 @@ export const enviarConvite = functions.https.onCall(async (data, context) => {
 /**
  * Cloud Function para o aluno aceitar um convite enviado por um motorista.
  */
-export const aceitarConviteAluno = functions.https.onCall(async (data, context) => {
+export const aceitarConviteAluno = functionsUs.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError(
             "unauthenticated",
@@ -206,7 +208,7 @@ export const aceitarConviteAluno = functions.https.onCall(async (data, context) 
 /**
  * Cloud Function para o aluno se desvincular de um motorista.
  */
-export const desvincularMotoristaAluno = functions.https.onCall(async (data, context) => {
+export const desvincularMotoristaAluno = functionsUs.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError(
             "unauthenticated",
@@ -256,7 +258,7 @@ export const desvincularMotoristaAluno = functions.https.onCall(async (data, con
 /**
  * Cloud Function para alunos avaliarem motoristas.
  */
-export const avaliarMotorista = functions.https.onCall(async (data, context) => {
+export const avaliarMotorista = functionsUs.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError(
             "unauthenticated",
@@ -342,7 +344,7 @@ export const avaliarMotorista = functions.https.onCall(async (data, context) => 
 /**
  * Cloud Function para um motorista desvincular um aluno.
  */
-export const desvincularAluno = functions.https.onCall(async (data, context) => {
+export const desvincularAluno = functionsUs.https.onCall(async (data: any, context: CallableCtx) => {
     // 1. Autenticação e validação de entrada
     if (!context.auth) {
         throw new functions.https.HttpsError(
@@ -404,9 +406,9 @@ export const desvincularAluno = functions.https.onCall(async (data, context) => 
     }
 });
 
-export const notificarAlunosRotaIniciada = functions.firestore
+export const notificarAlunosRotaIniciada = functionsUs.firestore
     .document("rotas/{rotaId}")
-    .onUpdate(async (change, context) => {
+    .onUpdate(async (change: any, context: functions.EventContext) => {
         const dadosAntes = change.before.data();
         const dadosDepois = change.after.data();
 
@@ -480,9 +482,9 @@ export const notificarAlunosRotaIniciada = functions.firestore
 /**
  * Cloud Function para notificar um motorista sobre um novo chat de um aluno.
  */
-export const notificarNovoChat = functions.firestore
+export const notificarNovoChat = functionsUs.firestore
     .document("chats/{chatId}")
-    .onCreate(async (snapshot, context) => {
+    .onCreate(async (snapshot: any, context: functions.EventContext) => {
         const chatData = snapshot.data();
 
         if (!chatData) {
@@ -545,13 +547,13 @@ export const notificarNovoChat = functions.firestore
         }
     });
 
-export const sendWelcomeEmail = functions.https.onCall(async (data, context) => {
+export const sendWelcomeEmail = functionsUs.https.onCall(async (data: any, context: CallableCtx) => {
   // TODO: Implement actual email sending logic
   console.log("sendWelcomeEmail called with data:", data);
   return { success: true, message: "Welcome email sent (not really)!" };
 });
 
-export const notificarAlunosProximidadeInicioRota = functions.pubsub.schedule("every 5 minutes").onRun(async (context) => {
+export const notificarAlunosProximidadeInicioRota = functionsUs.pubsub.schedule("every 5 minutes").onRun(async (context: any) => {
     console.log("Executando verificação de rotas prestes a iniciar...");
 
     const now = admin.firestore.Timestamp.now();

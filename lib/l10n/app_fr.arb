@@ -56,5 +56,8 @@
   "studentUnknown": "Étudiant non identifié",
   "chatInquiryDriver": "Vous discutez avec un étudiant non encore lié. Liez uniquement si vous souhaitez l'ajouter à votre trajet.",
   "chatInquiryStudent": "Vous n'êtes pas encore lié à ce chauffeur, mais vous pouvez discuter normalement.",
-  "chatHint": "Écrire un message..."
+  "chatHint": "Écrire un message...",
+  "functionsMissing": "Fonction serveur introuvable. Vérifiez le déploiement des Cloud Functions.",
+  "unlinkSuccess": "Déliaison effectuée avec succès.",
+  "unlinkError": "Erreur lors de la déliaison : {erro}"
 }

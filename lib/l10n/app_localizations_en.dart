@@ -198,4 +198,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatHint => 'Type a message...';
+
+  @override
+  String get functionsMissing =>
+      'Server function not found. Check your Cloud Functions deployment.';
+
+  @override
+  String get unlinkSuccess => 'Unlinked successfully.';
+
+  @override
+  String unlinkError(Object erro) {
+    return 'Error unlinking: $erro';
+  }
 }
