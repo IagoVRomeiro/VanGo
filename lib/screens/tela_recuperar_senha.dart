@@ -99,7 +99,7 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
                     'Esqueceu a senha?',
                     style: theme.textTheme.headlineLarge?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onBackground,
+                      color: theme.colorScheme.onSurface,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -107,7 +107,7 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
                   Text(
                     'Informe o e-mail cadastrado para receber o link de redefinição.',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onBackground,
+                      color: theme.colorScheme.onSurface,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -149,9 +149,9 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
       keyboardType: keyboardType,
       decoration: InputDecoration(
         filled: true,
-        fillColor: theme.colorScheme.surfaceVariant,
+        fillColor: theme.colorScheme.surfaceContainerHighest,
         hintText: dica,
-        hintStyle: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.5)),
+        hintStyle: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
         prefixIcon: Padding(
           padding: const EdgeInsets.only(left: 20, right: 15),
           child: Icon(icone, color: theme.colorScheme.onSurface, size: 22),

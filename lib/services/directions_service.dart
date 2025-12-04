@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
@@ -34,14 +35,14 @@ class DirectionsService {
       final response = await http.get(url);
 
       if (response.statusCode != 200) {
-        print("HTTP Error: ${response.statusCode}");
+        debugPrint("HTTP Error: ${response.statusCode}");
         return null;
       }
 
       final jsonResponse = json.decode(response.body);
       final routes = jsonResponse['routes'] as List<dynamic>?;
       if (routes == null || routes.isEmpty) {
-        print("Directions API Error: ${jsonResponse['error_message']}");
+        debugPrint("Directions API Error: ${jsonResponse['error_message']}");
         return null;
       }
 
@@ -84,9 +85,9 @@ class DirectionsService {
         final hours = duration.inHours;
         final minutes = duration.inMinutes % 60;
         if (hours > 0) {
-          totalDurationText = '${hours}h ${minutes}m';
+          totalDurationText = '$hours h $minutes m';
         } else {
-          totalDurationText = '${minutes} min';
+          totalDurationText = '$minutes min';
         }
       }
 
@@ -103,7 +104,7 @@ class DirectionsService {
         waypointOrder: waypointOrder,
       );
     } catch (e) {
-      print("Error getting directions: $e");
+      debugPrint("Error getting directions: $e");
       return null;
     }
   }

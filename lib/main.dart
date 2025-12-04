@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
 import 'package:vango/services/theme_service.dart';
+import 'package:vango/services/local_cache.dart';
+import 'package:vango/services/locale_service.dart';
+import 'package:vango/l10n/app_localizations.dart';
 import 'firebase_options.dart';
 
 import 'screens/tela_selecao.dart';
@@ -12,6 +16,7 @@ import 'screens/tela_login.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: "assets/.env"); // Load .env file
+  await LocalCacheService.instance.init();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -34,11 +39,9 @@ class VanGoApp extends StatelessWidget {
         primary: neonGreen,
         secondary: Color(0xFF7462FF),
         surface: darkGrey,
-        background: deepBlack,
         onPrimary: Colors.black,
         onSecondary: Colors.white,
         onSurface: Colors.white,
-        onBackground: Colors.white,
       ),
       textTheme: ThemeData(brightness: Brightness.dark).textTheme.apply(
             bodyColor: Colors.white,
@@ -74,7 +77,7 @@ class VanGoApp extends StatelessWidget {
           borderSide: BorderSide.none,
         ),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.08),
+        fillColor: const Color.fromARGB(20, 255, 255, 255),
         contentPadding:
             const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
       ),
@@ -98,11 +101,9 @@ class VanGoApp extends StatelessWidget {
         primary: Color(0xFF7462FF),
         secondary: neonGreen,
         surface: Colors.white,
-        background: Color(0xFFF0F0F0),
         onPrimary: Colors.white,
         onSecondary: Colors.black,
         onSurface: Colors.black,
-        onBackground: Colors.black,
       ),
       textTheme: ThemeData(brightness: Brightness.light).textTheme,
       cardTheme: CardThemeData(
@@ -136,7 +137,7 @@ class VanGoApp extends StatelessWidget {
           borderSide: BorderSide.none,
         ),
         filled: true,
-        fillColor: Colors.black.withOpacity(0.05),
+        fillColor: const Color.fromARGB(13, 0, 0, 0),
         contentPadding:
             const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
       ),
@@ -156,17 +157,30 @@ class VanGoApp extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeService,
       builder: (context, currentMode, child) {
-        return MaterialApp(
-          title: 'VanGo',
-          theme: lightTheme,
-          darkTheme: darkTheme,
-          themeMode: currentMode,
-          initialRoute: '/',
-          routes: {
-            '/': (context) => const TelaSelecao(),
-            '/aluno': (context) => TelaAluno(),
-            '/login': (context) => const TelaLogin(),
-            '/motorista': (context) => const TelaMotorista(),
+        return ValueListenableBuilder<Locale>(
+          valueListenable: localeService,
+          builder: (context, localeAtual, _) {
+            return MaterialApp(
+              title: 'VanGo',
+              theme: lightTheme,
+              darkTheme: darkTheme,
+              themeMode: currentMode,
+              locale: localeAtual,
+              supportedLocales: AppLocalizations.supportedLocales,
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              initialRoute: '/',
+              routes: {
+                '/': (context) => const TelaSelecao(),
+                '/aluno': (context) => TelaAluno(),
+                '/login': (context) => const TelaLogin(),
+                '/motorista': (context) => const TelaMotorista(),
+              },
+            );
           },
         );
       },

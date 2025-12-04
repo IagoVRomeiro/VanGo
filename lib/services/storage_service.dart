@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:image_picker/image_picker.dart';
 
 class StorageService {
@@ -17,7 +17,7 @@ class StorageService {
       return await _uploadFile(ref, imageFile);
     } catch (e) {
       // Em um app real, você poderia usar um logger mais robusto aqui.
-      print('Erro ao fazer upload da imagem de perfil: $e');
+      debugPrint('Erro ao fazer upload da imagem de perfil: $e');
       rethrow;
     }
   }
@@ -37,7 +37,7 @@ class StorageService {
           .child('$motoristaId/$placa.jpg');
       return await _uploadFile(ref, imageFile);
     } catch (e) {
-      print('Erro ao fazer upload da imagem da van: $e');
+      debugPrint('Erro ao fazer upload da imagem da van: $e');
       rethrow;
     }
   }

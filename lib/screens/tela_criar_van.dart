@@ -13,7 +13,8 @@ import 'package:vango/services/storage_service.dart'; // Import do novo serviço
 import 'tela_notificacoes.dart';
 
 class CadastrarVanScreen extends StatefulWidget {
-  const CadastrarVanScreen({super.key});
+  final Van? van;
+  const CadastrarVanScreen({super.key, this.van});
 
   @override
   State<CadastrarVanScreen> createState() => _CadastrarVanScreenState();
@@ -33,6 +34,9 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
   XFile? _imageFile;
   bool _isUploading = false;
   bool _isLoading = false;
+  bool _isEditMode = false;
+  String? _vanId;
+  String? _fotoUrlExistente;
 
   @override
   void dispose() {
@@ -43,6 +47,12 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     _capacidadeController.dispose();
     _corController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _popularDadosSeEdicao();
   }
 
   Future<bool> _requestGalleryPermission() async {
@@ -97,6 +107,20 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     }
   }
 
+  void _popularDadosSeEdicao() {
+    final van = widget.van;
+    if (van == null) return;
+    _isEditMode = true;
+    _vanId = van.id;
+    _placaController.text = van.placa;
+    _modeloController.text = van.modelo;
+    _marcaController.text = van.marca;
+    _anoController.text = van.ano.toString();
+    _capacidadeController.text = van.capacidade.toString();
+    _corController.text = van.cor;
+    _fotoUrlExistente = van.vanFotoUrl;
+  }
+
   Future<void> _salvarVan() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -117,7 +141,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
       _isUploading = _imageFile != null;
     });
 
-    String? fotoUrl;
+    String? fotoUrl = _fotoUrlExistente;
     try {
       // 1. Faz o upload da foto, se uma foi escolhida
       if (_imageFile != null) {
@@ -128,35 +152,44 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
         );
       }
 
-      // 2. Cria o objeto Van com os dados
-      final van = Van(
-        id: '', // Firestore irá gerar
-        placa: _placaController.text.trim(),
-        marca: _marcaController.text.trim(),
-        modelo: _modeloController.text.trim(),
-        ano: int.parse(_anoController.text),
-        capacidade: int.parse(_capacidadeController.text),
-        cor: _corController.text.trim(),
-        status: StatusVan.disponivel,
-        motoristaId: motoristaId,
-        vanFotoUrl: fotoUrl,
-      );
+      if (_isEditMode && _vanId != null) {
+        await FirebaseFirestore.instance.collection('vans').doc(_vanId).update({
+          'placa': _placaController.text.trim(),
+          'marca': _marcaController.text.trim(),
+          'modelo': _modeloController.text.trim(),
+          'ano': int.parse(_anoController.text),
+          'capacidade': int.parse(_capacidadeController.text),
+          'cor': _corController.text.trim(),
+          'vanFotoUrl': fotoUrl,
+        });
+      } else {
+        final van = Van(
+          id: '',
+          placa: _placaController.text.trim(),
+          marca: _marcaController.text.trim(),
+          modelo: _modeloController.text.trim(),
+          ano: int.parse(_anoController.text),
+          capacidade: int.parse(_capacidadeController.text),
+          cor: _corController.text.trim(),
+          status: StatusVan.disponivel,
+          motoristaId: motoristaId,
+          vanFotoUrl: fotoUrl,
+        );
 
-      // 3. Salva a van no Firestore
-      final vanDoc = await FirebaseFirestore.instance.collection('vans').add(van.toMap());
+        final vanDoc = await FirebaseFirestore.instance.collection('vans').add(van.toMap());
 
-      // 4. Atualiza (ou cria, se necessário) o documento do motorista com o ID da nova van
-      await FirebaseFirestore.instance
-          .collection('motoristas')
-          .doc(motoristaId)
-          .set({
-            'vansIds': FieldValue.arrayUnion([vanDoc.id]),
-          }, SetOptions(merge: true));
+        await FirebaseFirestore.instance
+            .collection('motoristas')
+            .doc(motoristaId)
+            .set({
+              'vansIds': FieldValue.arrayUnion([vanDoc.id]),
+            }, SetOptions(merge: true));
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Van cadastrada com sucesso!'),
+              content: Text('Van salva com sucesso!'),
               backgroundColor: Colors.green),
         );
         Navigator.of(context).pop();
@@ -183,7 +216,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
         appBar: NeonAppBar(
-          title: 'Cadastrar Nova Van',
+          title: _isEditMode ? 'Editar Van' : 'Cadastrar Nova Van',
           showMenuButton: false,
           showBackButton: true,
           onNotificationsPressed: () {
@@ -227,7 +260,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
                         ElevatedButton.icon(
                           onPressed: _salvarVan,
                           icon: const Icon(Icons.save),
-                          label: const Text('SALVAR VAN'),
+                          label: Text(_isEditMode ? 'ATUALIZAR VAN' : 'SALVAR VAN'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Theme.of(context).colorScheme.primary,
                             foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -275,6 +308,17 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
                     return const Center(child: CircularProgressIndicator());
                   },
                 )
+              else if (_fotoUrlExistente != null && _fotoUrlExistente!.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    _fotoUrlExistente!,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.airport_shuttle_outlined, size: 40),
+                  ),
+                )
               else
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -289,7 +333,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
               if (_isUploading)
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
+                    color: const Color.fromARGB(128, 0, 0, 0),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Center(child: CircularProgressIndicator()),

@@ -1,10 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import '../models/usuario.dart';
 import '../widgets/neon_app_bar.dart';
 import 'tela_notificacoes.dart';
+import 'package:vango/services/functions_service.dart';
 
 /// Tela para o motorista gerenciar alunos vinculados, convites e solicitações.
 class TelaGerenciarAlunos extends StatefulWidget {
@@ -18,7 +19,6 @@ class TelaGerenciarAlunos extends StatefulWidget {
 class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
   String? _motoristaId;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   final TextEditingController _emailController = TextEditingController();
   bool _isConvidando = false;
@@ -27,8 +27,6 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
   void initState() {
     super.initState();
     _motoristaId = FirebaseAuth.instance.currentUser?.uid;
-    // Defina a região se suas funções não estiverem em us-central1
-    // _functions.useFunctionsEmulator('localhost', 5001); // Para testes locais
   }
 
   @override
@@ -62,8 +60,10 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
     setState(() => _isConvidando = true);
 
     try {
-      final HttpsCallable callable = _functions.httpsCallable('enviarConvite');
-      final result = await callable.call<Map<String, dynamic>>({'email': email});
+      final result = await FunctionsService.instance.call<Map<String, dynamic>>(
+        'enviarConvite',
+        data: {'email': email},
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -124,8 +124,10 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
     if (confirmado != true) return;
 
     try {
-      final HttpsCallable callable = _functions.httpsCallable('desvincularAluno');
-      final result = await callable.call<Map<String, dynamic>>({'alunoId': alunoId});
+      final result = await FunctionsService.instance.call<Map<String, dynamic>>(
+        'desvincularAluno',
+        data: {'alunoId': alunoId},
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

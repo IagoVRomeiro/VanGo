@@ -1,17 +1,12 @@
-// lib/screens/tela_viagem.dart
-
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-// Imports dos modelos
 import '../models/motorista.dart';
 import '../models/van.dart';
 import '../models/rota.dart';
 import 'tela_motorista.dart';
-
-// Imports das telas de destino
 import 'tela_criar_rota.dart';
 import 'tela_criar_van.dart';
 import 'tela_cadastro.dart';
@@ -166,7 +161,7 @@ class _TelaViagemState extends State<TelaViagem> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const CadastrarVanScreen()),
+                MaterialPageRoute(builder: (_) => CadastrarVanScreen(van: van)),
               );
             },
           ),

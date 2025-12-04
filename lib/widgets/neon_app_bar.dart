@@ -81,7 +81,7 @@ class NeonAppBar extends StatelessWidget implements PreferredSizeWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              theme.colorScheme.surface.withOpacity(0.95),
+              theme.colorScheme.surface.withValues(alpha: 0.95),
               theme.scaffoldBackgroundColor,
             ],
             begin: Alignment.topLeft,

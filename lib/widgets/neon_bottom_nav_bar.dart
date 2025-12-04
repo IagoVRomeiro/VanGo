@@ -29,7 +29,7 @@ class NeonBottomNavBar extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: const Color.fromARGB(102, 0, 0, 0),
             blurRadius: 20,
             offset: const Offset(0, -6),
           ),

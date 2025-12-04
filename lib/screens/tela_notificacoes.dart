@@ -1,15 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:vango/services/chat_service.dart';
+import 'package:vango/services/functions_service.dart';
 import '../models/usuario.dart'; // Importa Usuario para pegar o Role
 import 'package:vango/widgets/neon_app_bar.dart';
 
 class TelaNotificacoes extends StatefulWidget {
-   // OK: Removido 'const' no construtor da classe anterior
-   TelaNotificacoes({super.key});
+  const TelaNotificacoes({super.key});
 
   @override
   State<TelaNotificacoes> createState() => _TelaNotificacoesState();
@@ -19,7 +19,6 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
   User? _currentUser;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final Set<String> _notificacoesOcultas = {};
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
   Future<UserRole>? _userRoleFuture;
 
   @override
@@ -39,7 +38,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
       }
       return UserRole.indefinido;
     } catch (e) {
-      print("Erro ao buscar role: $e");
+      debugPrint("Erro ao buscar role: $e");
       return UserRole.indefinido;
     }
   }
@@ -50,11 +49,13 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
      final alunoId = _currentUser?.uid;
      if (alunoId == null) return;
       try {
-        final callable = _functions.httpsCallable('aceitarConviteAluno');
-        final result = await callable.call<Map<String, dynamic>>({
-          'contratoId': contratoId,
-          'motoristaId': motoristaId,
-        });
+        final result = await FunctionsService.instance.call<Map<String, dynamic>>(
+          'aceitarConviteAluno',
+          data: {
+            'contratoId': contratoId,
+            'motoristaId': motoristaId,
+          },
+        );
 
         await ChatService.ensureChat(
           alunoId: alunoId,
@@ -109,7 +110,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Convite recusado.'),
-            backgroundColor: theme.colorScheme.surfaceVariant,
+            backgroundColor: theme.colorScheme.surfaceContainerHighest,
           ),
         );
       }
@@ -122,29 +123,41 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
     final theme = Theme.of(context);
     final motoristaId = _currentUser?.uid;
     if (motoristaId == null) return;
-      try {
-        await _firestore.runTransaction((transaction) async {
-          final contratoRef = _firestore.collection('contratos').doc(contratoId);
-          transaction.update(contratoRef, {'status': 'aprovado'});
-          final motoristaRef = _firestore.collection('motoristas').doc(motoristaId);
-          transaction.update(motoristaRef, {'alunosIds': FieldValue.arrayUnion([alunoId])});
-          final alunoRef = _firestore.collection('alunos').doc(alunoId);
-          transaction.update(alunoRef, {'motoristaId': motoristaId});
-        });
-        await ChatService.ensureChat(
-          alunoId: alunoId,
-          motoristaId: motoristaId,
-          activate: true,
-        );
-        if(mounted) {
-          setState(() {
-            _notificacoesOcultas.add(contratoId);
-          });
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Aceito!'), backgroundColor: theme.colorScheme.primary));
-        }
-      } catch (e) {
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: theme.colorScheme.error));
+    try {
+      final usuarioRef = _firestore.collection('users').doc(alunoId);
+      final usuarioSnap = await usuarioRef.get();
+      final rawNome = (usuarioSnap.data()?['nome'] as String?)?.trim();
+
+      await _firestore.runTransaction((transaction) async {
+        final contratoRef = _firestore.collection('contratos').doc(contratoId);
+        transaction.update(contratoRef, {'status': 'aprovado'});
+        final motoristaRef = _firestore.collection('motoristas').doc(motoristaId);
+        transaction.update(motoristaRef, {'alunosIds': FieldValue.arrayUnion([alunoId])});
+        final alunoRef = _firestore.collection('alunos').doc(alunoId);
+        transaction.update(alunoRef, {'motoristaId': motoristaId});
+      });
+
+      // Garante nome no documento do aluno, se não existir ou estiver vazio
+      if (rawNome == null || rawNome.isEmpty) {
+        await usuarioRef.set({'nome': 'Aluno'}, SetOptions(merge: true));
       }
+
+      await ChatService.ensureChat(
+        alunoId: alunoId,
+        motoristaId: motoristaId,
+        activate: true,
+      );
+      if (mounted) {
+        setState(() {
+          _notificacoesOcultas.add(contratoId);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('Aceito!'), backgroundColor: theme.colorScheme.primary),
+        );
+      }
+    } catch (e) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: theme.colorScheme.error));
+    }
   }
 
   Future<void> _recusarSolicitacaoMotorista(String contratoId) async {
@@ -155,7 +168,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
           setState(() {
             _notificacoesOcultas.add(contratoId);
           });
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Recusado.'), backgroundColor: theme.colorScheme.surfaceVariant));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Recusado.'), backgroundColor: theme.colorScheme.surfaceContainerHighest));
         }
       } catch (e) {
         if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: theme.colorScheme.error));
@@ -278,18 +291,16 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
   }
 
   Widget _buildAlunoNotificationCard(String contratoId, String motoristaId) {
-     return FutureBuilder<DocumentSnapshot>(
-      future: _firestore.collection('motoristas').doc(motoristaId).get(),
-      builder: (context, motoristaSnapshot) {
-        if (!motoristaSnapshot.hasData || !motoristaSnapshot.data!.exists) {
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      future: _firestore.collection('users').doc(motoristaId).get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || !snapshot.data!.exists) {
           return const ListTile(title: Text('Carregando convite...'));
         }
-        // 🚨 ATENÇÃO: É necessário que a classe Motorista.fromMap e Motorista estejam disponíveis
-        // Como não as temos, vou usar um placeholder para Motorista.
-        // O código original dependia delas, mas aqui está a lógica funcional:
-        final data = motoristaSnapshot.data!.data() as Map<String, dynamic>;
-        final nomeMotorista = data['nome'] ?? 'Motorista Desconhecido';
-        final fotoUrl = data['fotoUrl'] as String?;
+        final data = snapshot.data!.data();
+        final rawNome = (data?['nome'] ?? data?['displayName'] ?? data?['email'] ?? 'Motorista') as String;
+        final nome = rawNome.trim().isNotEmpty ? rawNome.trim() : 'Motorista';
+        final fotoUrl = data?['fotoUrl'] as String?;
 
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
@@ -298,7 +309,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
               backgroundImage: fotoUrl != null ? NetworkImage(fotoUrl) : null,
               child: fotoUrl == null ? const Icon(Icons.person) : null,
             ),
-            title: Text(nomeMotorista),
+            title: Text(nome),
             subtitle: const Text('Enviou um convite para ser seu motorista.'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -329,9 +340,11 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
           return const ListTile(title: Text('Carregando solicitação...'));
         }
 
-        final usuario = Usuario.fromSnapshot(userSnapshot.data!);
-        final fotoUrl = usuario.fotoUrl;
-        final primeiraLetra = usuario.nome.isNotEmpty ? usuario.nome[0] : 'A';
+        final data = userSnapshot.data!.data();
+        final rawNome = (data?['nome'] ?? data?['displayName'] ?? data?['email'] ?? 'Aluno') as String;
+        final nome = rawNome.trim().isNotEmpty ? rawNome.trim() : 'Aluno';
+        final fotoUrl = data?['fotoUrl'] as String?;
+        final primeiraLetra = nome.isNotEmpty ? nome[0].toUpperCase() : 'A';
 
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
@@ -340,7 +353,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
               backgroundImage: fotoUrl != null ? NetworkImage(fotoUrl) : null,
               child: fotoUrl == null ? Text(primeiraLetra) : null,
             ),
-            title: Text(usuario.nome),
+            title: Text(nome),
             subtitle: const Text('Enviou uma solicitação de vínculo.'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,

@@ -1,12 +1,11 @@
-// lib/screens/tela_chat.dart
-
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:vango/l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
-import 'package:vango/models/chat.dart'; // Import ChatStatus
+import 'package:vango/models/chat.dart'; 
 import 'package:vango/models/mensagem.dart';
 import 'package:vango/models/usuario.dart';
 import '../widgets/neon_app_bar.dart';
@@ -67,15 +66,15 @@ class _TelaChatState extends State<TelaChat> {
 
     try {
       // Fetch current user's role and recipient's name in parallel
-      final results = await Future.wait([
+      final List<DocumentSnapshot<Map<String, dynamic>>> results = await Future.wait([
         FirebaseFirestore.instance.collection('users').doc(_meuId).get(),
         FirebaseFirestore.instance.collection('users').doc(widget.recipientId).get(),
         FirebaseFirestore.instance.collection('chats').doc(widget.chatId).get(),
       ]);
 
-      final userDoc = results[0] as DocumentSnapshot<Map<String, dynamic>>;
-      final recipientDoc = results[1] as DocumentSnapshot<Map<String, dynamic>>;
-      final chatDoc = results[2] as DocumentSnapshot<Map<String, dynamic>>;
+      final userDoc = results[0];
+      final recipientDoc = results[1];
+      final chatDoc = results[2];
       
       if (mounted) {
         setState(() {
@@ -279,22 +278,21 @@ class _TelaChatState extends State<TelaChat> {
                                                   : currentTheme.colorScheme.onSurfaceVariant, // Use new theme
                                             ),
                                           ),
-                                          if (mensagem.timestamp != null)
-                                            Padding(
-                                              padding: const EdgeInsets.only(top: 4.0),
-                                              child: Text(
-                                                DateFormat('HH:mm')
-                                                    .format(mensagem.timestamp!.toDate()),
-                                                style: TextStyle(
-                                                  color: eMinhaMensagem
-                                                      ? currentTheme.colorScheme.onPrimary // Use new theme
-                                                          .withOpacity(0.7)
-                                                      : currentTheme.colorScheme.onSurfaceVariant // Use new theme
-                                                          .withOpacity(0.7),
-                                                  fontSize: 10,
-                                                ),
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 4.0),
+                                            child: Text(
+                                              DateFormat('HH:mm')
+                                                  .format(mensagem.timestamp.toDate()),
+                                              style: TextStyle(
+                                                color: eMinhaMensagem
+                                                    ? currentTheme.colorScheme.onPrimary // Use new theme
+                                                        .withOpacity(0.7)
+                                                    : currentTheme.colorScheme.onSurfaceVariant // Use new theme
+                                                        .withOpacity(0.7),
+                                                fontSize: 10,
                                               ),
                                             ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -355,7 +353,7 @@ class _TelaChatState extends State<TelaChat> {
               child: TextField(
                 controller: _controller,
                 decoration: InputDecoration(
-                  hintText: 'Digite uma mensagem...',
+                  hintText: AppLocalizations.of(context)!.chatHint,
                   hintStyle: TextStyle(
                     color: theme.colorScheme.onSurface.withOpacity(0.7),
                   ),
@@ -385,23 +383,24 @@ class _TelaChatState extends State<TelaChat> {
   }
 
   Widget _buildInquiryInfoBar(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     final text = _isCurrentUserDriver
-        ? 'Conversando com um aluno ainda não vinculado. Use o vínculo apenas quando desejar adicioná-lo à sua rota.'
-        : 'Você ainda não está vinculado a este motorista, mas pode conversar normalmente.';
+        ? l10n.chatInquiryDriver
+        : l10n.chatInquiryStudent;
     return Container(
-      color: theme.colorScheme.tertiaryContainer,
+      color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
           Icon(
             _isCurrentUserDriver ? Icons.info_outline : Icons.chat_bubble_outline,
-            color: theme.colorScheme.onTertiaryContainer,
+            color: theme.colorScheme.onSurface,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               text,
-              style: TextStyle(color: theme.colorScheme.onTertiaryContainer),
+              style: TextStyle(color: theme.colorScheme.onSurface),
             ),
           ),
         ],

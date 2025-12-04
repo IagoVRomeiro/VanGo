@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:vango/l10n/app_localizations.dart';
 
 import 'tela_aluno.dart';
 import 'tela_cadastro.dart';
@@ -31,6 +32,7 @@ class _TelaLoginState extends State<TelaLogin> {
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
+    final l10n = AppLocalizations.of(context)!;
 
     showDialog(
       context: context,
@@ -57,6 +59,7 @@ class _TelaLoginState extends State<TelaLogin> {
         
         final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
 
+        if (!mounted) return;
         Navigator.pop(context); // fecha o progress dialog
 
         if (userDoc.exists) {
@@ -73,18 +76,20 @@ class _TelaLoginState extends State<TelaLogin> {
               (route) => false,
             );
           } else {
-            _mostrarErro('Não foi possível determinar o tipo de usuário.');
+            _mostrarErro(l10n.errorUnknownRole);
           }
         } else {
-          _mostrarErro('Dados do usuário não encontrados.');
+          _mostrarErro(l10n.errorUserDataMissing);
         }
       }
     } on FirebaseAuthException catch (e) {
-      if (mounted) Navigator.pop(context);
-      _mostrarErro(e.message ?? 'Ocorreu um erro de autenticação.');
+      if (!mounted) return;
+      Navigator.pop(context);
+      _mostrarErro(e.message ?? l10n.authErrorFallback);
     } catch (e) {
-      if (mounted) Navigator.pop(context);
-      _mostrarErro('Ocorreu um erro inesperado: $e');
+      if (!mounted) return;
+      Navigator.pop(context);
+      _mostrarErro(l10n.unexpectedError(e.toString()));
     }
   }
 
@@ -100,6 +105,7 @@ class _TelaLoginState extends State<TelaLogin> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -118,7 +124,7 @@ class _TelaLoginState extends State<TelaLogin> {
                   ),
                   const SizedBox(height: 40),
                   Text(
-                    'Login', 
+                    l10n.loginTitle, 
                     style: theme.textTheme.headlineLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -126,14 +132,14 @@ class _TelaLoginState extends State<TelaLogin> {
                   const SizedBox(height: 30),
                   _campoTexto(
                     controller: _emailController,
-                    dica: 'Seu e-mail',
+                    dica: l10n.emailHint,
                     icone: Icons.email_outlined,
                     keyboardType: TextInputType.emailAddress,
                   ),
                   const SizedBox(height: 16),
                   _campoTexto(
                     controller: _senhaController,
-                    dica: 'Sua senha',
+                    dica: l10n.passwordHint,
                     icone: Icons.lock_outline,
                     isPassword: true,
                   ),
@@ -150,7 +156,7 @@ class _TelaLoginState extends State<TelaLogin> {
                           );
                         },
                         child: Text(
-                          'Esqueceu a senha?',
+                          l10n.forgotPassword,
                           style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -161,7 +167,7 @@ class _TelaLoginState extends State<TelaLogin> {
                   SizedBox(
                     width: double.infinity,
                     child: _botaoPrincipal(
-                      texto: 'ENTRAR',
+                      texto: l10n.enterButton,
                       aoPressionar: _login,
                     ),
                   ),
@@ -171,9 +177,9 @@ class _TelaLoginState extends State<TelaLogin> {
                     text: TextSpan(
                       style: theme.textTheme.bodyMedium,
                       children: [
-                        const TextSpan(text: 'Não tem uma conta? '),
+                        TextSpan(text: l10n.noAccount),
                         TextSpan(
-                          text: 'Cadastre-se',
+                          text: l10n.signupLink,
                           style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
                           recognizer: TapGestureRecognizer()
                             ..onTap = () {
@@ -219,7 +225,7 @@ class _TelaLoginState extends State<TelaLogin> {
             ? IconButton(
                 icon: Icon(
                   _senhaVisivel ? Icons.visibility_off : Icons.visibility, 
-                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7)
+                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7)
                 ),
                 onPressed: () => setState(() => _senhaVisivel = !_senhaVisivel),
               )

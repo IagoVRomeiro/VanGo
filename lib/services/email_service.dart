@@ -1,4 +1,4 @@
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:vango/services/functions_service.dart';
 
 /// Serviço simples para encapsular chamadas relacionadas a emails.
 /// Atualmente delega para a Cloud Function `sendWelcomeEmail`, mas
@@ -9,15 +9,16 @@ class EmailService {
   static final EmailService instance = EmailService._();
 
   factory EmailService() => instance;
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   /// Envia um email de boas-vindas ao usuário recém-cadastrado.
   /// Caso a função HTTPS não esteja disponível, o erro é capturado
   /// para evitar quebrar o processo de cadastro.
   Future<void> sendWelcomeEmail(String email, String nome) async {
     try {
-      final callable = _functions.httpsCallable('sendWelcomeEmail');
-      await callable.call(<String, dynamic>{'email': email, 'nome': nome});
+      await FunctionsService.instance.call<void>(
+        'sendWelcomeEmail',
+        data: <String, dynamic>{'email': email, 'nome': nome},
+      );
     } catch (e) {
       // No momento o envio de email é apenas um extra, então logamos o erro.
       // Use um logger se quiser rastrear melhor no futuro.

@@ -1,4 +1,3 @@
-// lib/screens/tela_cadastro.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/gestures.dart';
@@ -135,6 +134,21 @@ class _TelaCadastroState extends State<TelaCadastro> {
       criadoEm: Timestamp.now(),
     );
     batch.set(userDocRef, novoUsuario.toMap());
+
+    // Também garante que a collection motoristas/alunos tenha nome, se aplicável
+    if (_tipoUsuarioSelecionado == TipoUsuario.motorista) {
+      batch.set(
+        FirebaseFirestore.instance.collection('motoristas').doc(user.uid),
+        {'nome': nome},
+        SetOptions(merge: true),
+      );
+    } else {
+      batch.set(
+        FirebaseFirestore.instance.collection('alunos').doc(user.uid),
+        {'nome': nome},
+        SetOptions(merge: true),
+      );
+    }
   }
 
   void _salvarMotorista(WriteBatch batch, User user) {
@@ -286,7 +300,7 @@ class _TelaCadastroState extends State<TelaCadastro> {
     final theme = Theme.of(context);
     final borderRadius = BorderRadius.circular(10);
     final baseBorderColor =
-        theme.colorScheme.onSurface.withOpacity(0.2); // visível em fundos claros/escuros
+        theme.colorScheme.onSurface.withValues(alpha: 0.2); // visível em fundos claros/escuros
     return TextFormField(
       controller: controller,
       obscureText: isPassword ? !_senhaVisivel : false,
@@ -294,9 +308,9 @@ class _TelaCadastroState extends State<TelaCadastro> {
       keyboardType: keyboardType,
       decoration: InputDecoration(
         filled: true,
-        fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+        fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         hintText: dica,
-        hintStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+        hintStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
         prefixIcon: Padding(
           padding: const EdgeInsets.only(left: 20, right: 15),
           child: Icon(icone, color: theme.colorScheme.onSurfaceVariant, size: 22),
@@ -305,7 +319,7 @@ class _TelaCadastroState extends State<TelaCadastro> {
             ? IconButton(
                 icon: Icon(
                     _senhaVisivel ? Icons.visibility_off : Icons.visibility,
-                    color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7)),
+                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
                 onPressed: () => setState(() => _senhaVisivel = !_senhaVisivel),
               )
             : null,
@@ -326,8 +340,9 @@ class _TelaCadastroState extends State<TelaCadastro> {
       ),
       validator: (v) {
         if (v == null || v.isEmpty) return 'Campo obrigatório';
-        if (keyboardType == TextInputType.emailAddress && !v.contains('@'))
+        if (keyboardType == TextInputType.emailAddress && !v.contains('@')) {
           return 'E-mail inválido';
+        }
         return null;
       },
     );

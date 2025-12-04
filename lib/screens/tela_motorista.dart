@@ -1,5 +1,3 @@
-// lib/screens/tela_motorista.dart
-
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -12,9 +10,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:vango/models/directions_info.dart';
 import 'package:vango/models/rota.dart';
 import 'package:vango/services/directions_service.dart';
+import 'package:vango/services/local_cache.dart';
 import 'package:vango/services/permission_service.dart';
-
-// Imports relativos
+import 'package:vango/l10n/app_localizations.dart';
 import '../models/usuario.dart';
 import 'package:vango/screens/tela_configuracoes.dart';
 import 'tela_cadastro.dart';
@@ -48,6 +46,32 @@ class _AlunosBatchResult {
   const _AlunosBatchResult(this.docs, this.hadPermissionErrors);
 }
 
+class _AlunoDisplayInfo {
+  final String id;
+  final String nome;
+  final String? fotoUrl;
+  final GeoPoint geoPoint;
+
+  const _AlunoDisplayInfo({
+    required this.id,
+    required this.nome,
+    required this.geoPoint,
+    this.fotoUrl,
+  });
+}
+
+class _AlunoMarkerData {
+  final String id;
+  final String nome;
+  final String? fotoUrl;
+
+  const _AlunoMarkerData({
+    required this.id,
+    required this.nome,
+    this.fotoUrl,
+  });
+}
+
 class _RouteStatusChip extends StatelessWidget {
   const _RouteStatusChip();
 
@@ -55,7 +79,7 @@ class _RouteStatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
-      color: theme.colorScheme.surfaceVariant.withOpacity(0.95),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.95),
       elevation: 4,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -104,7 +128,7 @@ class _RouteSummaryPanel extends StatelessWidget {
 
     final theme = Theme.of(context);
     return Card(
-      color: theme.colorScheme.surfaceVariant.withOpacity(0.95),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.95),
       elevation: 6,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -148,7 +172,7 @@ class _RouteSummaryPanel extends StatelessWidget {
                         children: [
                           CircleAvatar(
                             radius: 14,
-                            backgroundColor: theme.colorScheme.primary.withOpacity(0.8),
+                            backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.8),
                             child: Text(
                               index == stops.length - 1 ? 'D' : '${index + 1}',
                               style: theme.textTheme.labelLarge?.copyWith(
@@ -187,64 +211,11 @@ class _RouteSummaryPanel extends StatelessWidget {
   }
 }
 
-class _ProximaRotaCard extends StatelessWidget {
-  final Rota rota;
-  final VoidCallback onStart;
-
-  const _ProximaRotaCard({required this.rota, required this.onStart});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      color: theme.colorScheme.secondary,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Próxima Rota',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSecondary),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    rota.nome,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: theme.colorScheme.onSecondary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Início às ${rota.horarioInicioPrevisto}',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSecondary.withOpacity(0.8)),
-                  ),
-                ],
-              ),
-            ),
-            ElevatedButton(
-              onPressed: onStart,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: theme.colorScheme.onSecondary,
-                foregroundColor: theme.colorScheme.secondary,
-              ),
-              child: const Text('Iniciar Rota'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 class _TelaMotoristaState extends State<TelaMotorista> {
-  late GoogleMapController mapController;
+  GoogleMapController? _mapController;
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
+  final Map<String, _AlunoMarkerData> _alunoMarkersData = {};
   late int _selectedIndex;
   String _apiKey = "";
 
@@ -255,29 +226,23 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   final List<String> _rotaSequenciaParadas = [];
   bool _calculandoRota = false;
   bool _mostrarResumoRota = true;
-  LatLng? _ultimaPosicaoMotorista;
 
   // State for Live Location
   final PermissionService _permissionService = PermissionService();
   StreamSubscription<Position>? _positionStreamSubscription;
   Marker? _driverMarker;
 
-  // State for upcoming route
-  Rota? _rotaProxima;
-  StreamSubscription? _proximaRotaSubscription;
-
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
     _loadApiKeyAndData();
-    _ouvirProximaRota();
   }
 
   @override
   void dispose() {
     _positionStreamSubscription?.cancel();
-    _proximaRotaSubscription?.cancel();
+    _mapController?.dispose();
     super.dispose();
   }
 
@@ -306,44 +271,10 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     }
   }
 
-  void _ouvirProximaRota() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final now = Timestamp.now();
-    final thirtyMinutesFromNow = Timestamp.fromMillisecondsSinceEpoch(now.millisecondsSinceEpoch + 30 * 60 * 1000);
-
-    _proximaRotaSubscription = FirebaseFirestore.instance
-        .collection('rotas')
-        .where('motoristaId', isEqualTo: user.uid)
-        .where('status', isEqualTo: 'planejada')
-        .where('horaInicio', isLessThanOrEqualTo: thirtyMinutesFromNow)
-        .orderBy('horaInicio')
-        .limit(1)
-        .snapshots()
-        .listen((snapshot) {
-      if (snapshot.docs.isNotEmpty) {
-        final proximaRota = Rota.fromSnapshot(snapshot.docs.first);
-        if (mounted) {
-          setState(() {
-            _rotaProxima = proximaRota;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _rotaProxima = null;
-          });
-        }
-      }
-    });
-  }
-
   void _startLocationUpdates() {
     _positionStreamSubscription =
         Geolocator.getPositionStream().listen((Position position) async {
       final driverLatLng = LatLng(position.latitude, position.longitude);
-      _ultimaPosicaoMotorista = driverLatLng;
 
       setState(() {
         _driverMarker = Marker(
@@ -359,7 +290,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       if (_directionsInfo != null) {
         _animateCameraToNavigation(driverLatLng, _directionsInfo!.polylinePoints);
       } else {
-        mapController.animateCamera(CameraUpdate.newLatLng(driverLatLng));
+        _mapController?.animateCamera(CameraUpdate.newLatLng(driverLatLng));
       }
       if (_rotaEmAndamentoId != null) {
         try {
@@ -380,16 +311,110 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   }
 
   void _addMarker(
-      LatLng position, String title, String snippet, double hue) {
+      LatLng position, String title, String snippet, double hue,
+      {String? markerId,
+      String? alunoNome,
+      String? alunoFotoUrl,
+      String? alunoId}) {
     if (title == 'Sua Posição') return;
+
+    final id = markerId ?? title;
+    if (alunoNome != null || alunoFotoUrl != null || alunoId != null) {
+      _alunoMarkersData[id] = _AlunoMarkerData(
+        id: alunoId ?? id,
+        nome: alunoNome ?? title,
+        fotoUrl: alunoFotoUrl,
+      );
+    }
 
     _markers.add(
       Marker(
-        markerId: MarkerId(title),
+        markerId: MarkerId(id),
         position: position,
         infoWindow: InfoWindow(title: title, snippet: snippet),
         icon: BitmapDescriptor.defaultMarkerWithHue(hue),
+        onTap: () => _onAlunoMarkerTap(id),
       ),
+    );
+  }
+
+  void _onAlunoMarkerTap(String markerId) {
+    final data = _alunoMarkersData[markerId];
+    if (data == null || !mounted) return;
+
+    Future<List<String>> rotasDoAluno() async {
+      final motoristaId = FirebaseAuth.instance.currentUser?.uid;
+      if (motoristaId == null) return [];
+      final snapshot = await FirebaseFirestore.instance
+          .collection('rotas')
+          .where('motoristaId', isEqualTo: motoristaId)
+          .where('listaAlunosIds', arrayContains: data.id)
+          .limit(5)
+          .get();
+      return snapshot.docs
+          .map((doc) =>
+              (doc.data()['nome'] as String?)?.trim().isNotEmpty == true
+                  ? (doc.data()['nome'] as String)
+                  : 'Rota sem nome')
+          .toList();
+    }
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundImage:
+                      data.fotoUrl != null && data.fotoUrl!.isNotEmpty ? NetworkImage(data.fotoUrl!) : null,
+                  child: (data.fotoUrl == null || data.fotoUrl!.isEmpty)
+                      ? const Icon(Icons.person)
+                      : null,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        data.nome,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 6),
+                      FutureBuilder<List<String>>(
+                        future: rotasDoAluno(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return Text(AppLocalizations.of(context)!.loadingRoutes);
+                          }
+                          final rotas = snapshot.data ?? [];
+                          if (rotas.isEmpty) {
+                            return Text(AppLocalizations.of(context)!.noRoutesLinked);
+                          }
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: rotas
+                                .map((rotaNome) => Text(
+                                      AppLocalizations.of(context)!.routeLabel(rotaNome),
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ))
+                                .toList(),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -398,7 +423,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     _polylines.add(
       Polyline(
         polylineId: PolylineId('${id}_background'),
-        color: color.withOpacity(0.25),
+        color: color.withValues(alpha: 0.25),
         width: 14,
         points: points,
         zIndex: 1,
@@ -433,6 +458,92 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     return null;
   }
 
+  LatLng? _parseLatLng(dynamic value) {
+    final geo = _parseGeoPoint(value);
+    if (geo != null) return LatLng(geo.latitude, geo.longitude);
+    if (value is Map<String, dynamic>) {
+      final lat = value['lat'];
+      final lng = value['lng'];
+      if (lat is num && lng is num) {
+        return LatLng(lat.toDouble(), lng.toDouble());
+      }
+    }
+    return null;
+  }
+
+  Future<Map<String, Usuario?>> _fetchUsuarios(List<String> ids) async {
+    final futures = ids.map((id) async {
+      final snap =
+          await FirebaseFirestore.instance.collection('users').doc(id).get();
+      return MapEntry(id, snap.exists ? Usuario.fromSnapshot(snap) : null);
+    });
+    final entries = await Future.wait(futures);
+    return Map<String, Usuario?>.fromEntries(entries);
+  }
+
+  Future<List<_AlunoDisplayInfo>> _fetchAlunosComUsuario(
+      List<String> alunosIds) async {
+    final alunosResult = await _fetchAlunosInBatches(alunosIds);
+    if (mounted && alunosResult.hadPermissionErrors) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Alguns passageiros não puderam ser carregados. Verifique se estão vinculados ao motorista.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+    final alunosDocs = alunosResult.docs;
+    final usuarios = await _fetchUsuarios(alunosIds);
+
+    final alunosComDados = <_AlunoDisplayInfo>[];
+    for (final doc in alunosDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final geoPoint = _parseGeoPoint(data['localizacao']);
+      if (geoPoint == null) {
+        continue;
+      }
+      final usuario = usuarios[doc.id];
+      final usuarioNome = (usuario?.nome ?? '').trim();
+      final nomeAluno = (usuarioNome.isNotEmpty)
+          ? usuarioNome
+          : ((data['nome'] as String?)?.trim().isNotEmpty ?? false
+              ? data['nome']
+              : 'Aluno');
+      alunosComDados.add(
+        _AlunoDisplayInfo(
+          id: doc.id,
+          nome: nomeAluno,
+          fotoUrl: usuario?.fotoUrl,
+          geoPoint: geoPoint,
+        ),
+      );
+    }
+    return alunosComDados;
+  }
+
+  void _pintarAlunosCacheados() {
+    final cached = LocalCacheService.instance.getCachedAlunos();
+    if (cached.isEmpty) return;
+    _alunoMarkersData.clear();
+    for (final aluno in cached) {
+      final lat = aluno['lat'];
+      final lng = aluno['lng'];
+      if (lat is num && lng is num) {
+        _addMarker(
+          LatLng(lat.toDouble(), lng.toDouble()),
+          aluno['nome'] as String? ?? 'Aluno',
+          "",
+          BitmapDescriptor.hueGreen,
+          markerId: 'aluno_${aluno['id']}',
+          alunoNome: aluno['nome'] as String?,
+          alunoFotoUrl: aluno['fotoUrl'] as String?,
+          alunoId: aluno['id'] as String?,
+        );
+      }
+    }
+    setState(() {});
+  }
+
   Future<_AlunosBatchResult> _fetchAlunosInBatches(
       List<String> alunosIds) async {
     if (alunosIds.isEmpty) {
@@ -465,6 +576,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   void _animateCameraToNavigation(
       LatLng focus, List<LatLng> polylinePoints) {
     if (polylinePoints.isEmpty) return;
+    if (_mapController == null) return;
     LatLng directionTarget;
     if (polylinePoints.length > 1) {
       directionTarget = polylinePoints[1];
@@ -472,7 +584,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       directionTarget = polylinePoints.first;
     }
     final bearing = _calculateBearing(focus, directionTarget);
-    mapController.animateCamera(
+    _mapController!.animateCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
           target: focus,
@@ -493,17 +605,6 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
     final brng = math.atan2(y, x);
     return (brng * 180 / math.pi + 360) % 360;
-  }
-
-  Future<void> _iniciarRota(Rota rota) async {
-    await FirebaseFirestore.instance.collection('rotas').doc(rota.id).update({
-      'status': StatusRota.emAndamento.name,
-    });
-    await _exibirRota(rota.id);
-    setState(() {
-      _rotaProxima = null;
-      _rotaEmAndamentoId = rota.id;
-    });
   }
 
   Future<void> _exibirRota(String rotaId) async {
@@ -533,30 +634,9 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         return;
       }
 
-      final alunosResult = await _fetchAlunosInBatches(alunosIds);
-      if (mounted && alunosResult.hadPermissionErrors) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Alguns passageiros não puderam ser carregados. Verifique se estão vinculados ao motorista.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      final alunosDocs = alunosResult.docs;
-      final alunosComLocalizacao = <MapEntry<GeoPoint, String>>[];
-      for (final doc in alunosDocs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final geoPoint = _parseGeoPoint(data['localizacao']);
-        if (geoPoint == null) {
-          continue;
-        }
-        final nome = (data['nome'] as String?)?.trim();
-        alunosComLocalizacao.add(
-          MapEntry(geoPoint, nome?.isNotEmpty == true ? nome! : 'Aluno sem nome'),
-        );
-      }
+      final alunosComDados = await _fetchAlunosComUsuario(alunosIds);
 
-      if (alunosComLocalizacao.isEmpty) {
+      if (alunosComDados.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -573,8 +653,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
 
       final destinoFinal = LatLng(rota.localDestino.latitude, rota.localDestino.longitude);
 
-      final List<LatLng> waypoints = alunosComLocalizacao
-          .map((entry) => LatLng(entry.key.latitude, entry.key.longitude))
+      final List<LatLng> waypoints = alunosComDados
+          .map((entry) => LatLng(entry.geoPoint.latitude, entry.geoPoint.longitude))
           .toList();
 
       final directionsInfo = await directionsService.getDirections(
@@ -597,27 +677,55 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       }
 
       final orderedStops = directionsInfo.waypointOrder
-          ?.map((index) => alunosComLocalizacao[index])
-          .toList() ?? [];
+              ?.map((index) => alunosComDados[index])
+              .toList() ??
+          alunosComDados;
 
       _markers.clear();
+      _alunoMarkersData.clear();
       for (final entry in orderedStops) {
         _addMarker(
-          LatLng(entry.key.latitude, entry.key.longitude),
-          entry.value,
+          LatLng(entry.geoPoint.latitude, entry.geoPoint.longitude),
+          entry.nome,
           "Parada do Aluno",
           BitmapDescriptor.hueGreen,
+          markerId: 'aluno_${entry.id}',
+          alunoNome: entry.nome,
+          alunoFotoUrl: entry.fotoUrl,
+          alunoId: entry.id,
         );
       }
 
       _addMarker(destinoFinal, "Destino Final", rota.nome, BitmapDescriptor.hueRed);
+
+      final polylineData = directionsInfo.polylinePoints
+          .map((p) => {'lat': p.latitude, 'lng': p.longitude})
+          .toList();
+      final paradasData = orderedStops
+          .map((entry) => {
+                'lat': entry.geoPoint.latitude,
+                'lng': entry.geoPoint.longitude,
+              })
+          .toList();
+      // Cache rota atual para uso offline
+      await LocalCacheService.instance.cacheRotaAtual({
+        'rotaId': rota.id,
+        'polyline': polylineData,
+        'paradas': paradasData,
+        'destino': {'lat': destinoFinal.latitude, 'lng': destinoFinal.longitude},
+      });
+      await FirebaseFirestore.instance.collection('rotas').doc(rotaId).update({
+        'polylineRota': polylineData,
+        'paradasOrdenadas': paradasData,
+        'destino': {'lat': destinoFinal.latitude, 'lng': destinoFinal.longitude},
+      });
 
       setState(() {
         _rotaAtual = rota;
         _directionsInfo = directionsInfo;
         _rotaSequenciaParadas
           ..clear()
-          ..addAll(orderedStops.map((entry) => entry.value))
+          ..addAll(orderedStops.map((entry) => entry.nome))
           ..add(rota.localDestinoNome);
         _polylines.clear();
         _addStyledPolyline('rota_coleta', directionsInfo.polylinePoints, Colors.blueAccent);
@@ -625,6 +733,53 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       });
       _animateCameraToNavigation(motoristaLocation, directionsInfo.polylinePoints);
     } catch (e) {
+      final cached = LocalCacheService.instance.getCachedRotaAtual();
+      if (cached != null && cached['polyline'] != null) {
+        final points = (cached['polyline'] as List<dynamic>)
+            .map(_parseLatLng)
+            .whereType<LatLng>()
+            .toList();
+        final paradas = (cached['paradas'] as List<dynamic>?)
+                ?.map(_parseLatLng)
+                .whereType<LatLng>()
+                .toList() ??
+            [];
+        final destino = _parseLatLng(cached['destino']);
+        if (points.isNotEmpty && destino != null && mounted) {
+          setState(() {
+            _polylines
+              ..clear()
+              ..add(Polyline(
+                polylineId: const PolylineId('rota_cache'),
+                color: Colors.blueAccent,
+                width: 6,
+                points: points,
+              ));
+            _markers.removeWhere((m) =>
+                m.markerId.value == 'destino' ||
+                m.markerId.value.startsWith('parada_'));
+            for (var i = 0; i < paradas.length; i++) {
+              _markers.add(
+                Marker(
+                  markerId: MarkerId('parada_$i'),
+                  position: paradas[i],
+                  icon:
+                      BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+                  infoWindow: InfoWindow(
+                    title: AppLocalizations.of(context)!.stopLabel((i + 1).toString()),
+                  ),
+                ),
+              );
+            }
+            _markers.add(Marker(
+              markerId: const MarkerId('destino'),
+              position: destino,
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+              infoWindow: InfoWindow(title: AppLocalizations.of(context)!.destinationCache),
+            ));
+          });
+        }
+      }
       if (mounted) {
         setState(() => _calculandoRota = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -640,7 +795,10 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     if (_rotaAtual == null) return;
     
     await FirebaseFirestore.instance.collection('rotas').doc(_rotaAtual!.id).update({
-      'status': StatusRota.planejada.name
+      'status': StatusRota.planejada.name,
+      'polylineRota': FieldValue.delete(),
+      'paradasOrdenadas': FieldValue.delete(),
+      'destino': FieldValue.delete(),
     });
 
     setState(() {
@@ -667,32 +825,34 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       final alunosIds = List<String>.from(motoristaData?['alunosIds'] ?? []);
 
       if (alunosIds.isEmpty) return;
-      
-      final alunosResult = await _fetchAlunosInBatches(alunosIds);
-      if (mounted && alunosResult.hadPermissionErrors) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Alguns passageiros não puderam ser carregados. Verifique se estão vinculados ao motorista.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      final alunosDocs = alunosResult.docs;
 
-      for (var doc in alunosDocs) {
-        final alunoData = doc.data() as Map<String, dynamic>;
-        final localizacao = _parseGeoPoint(alunoData['localizacao']);
-        if (localizacao == null) {
-          continue;
-        }
-        final nome = (alunoData['nome'] as String?)?.trim();
+      final alunosComDados = await _fetchAlunosComUsuario(alunosIds);
+
+      _alunoMarkersData.clear();
+      for (final aluno in alunosComDados) {
+        final localizacao = aluno.geoPoint;
         _addMarker(
           LatLng(localizacao.latitude, localizacao.longitude),
-          nome?.isNotEmpty == true ? nome! : 'Aluno',
+          aluno.nome,
           "",
           BitmapDescriptor.hueGreen,
+          markerId: 'aluno_${aluno.id}',
+          alunoNome: aluno.nome,
+          alunoFotoUrl: aluno.fotoUrl,
+          alunoId: aluno.id,
         );
       }
+      // cache local para uso offline
+      final cachePayload = alunosComDados
+          .map((a) => {
+                'id': a.id,
+                'nome': a.nome,
+                'fotoUrl': a.fotoUrl,
+                'lat': a.geoPoint.latitude,
+                'lng': a.geoPoint.longitude,
+              })
+          .toList();
+      await LocalCacheService.instance.cacheAlunos(cachePayload);
       if (mounted) {
         setState(() {
           _directionsInfo = null;
@@ -700,6 +860,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         });
       }
     } catch (e) {
+      _pintarAlunosCacheados();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -727,7 +888,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   }
 
   void _onMapCreated(GoogleMapController controller) {
-    mapController = controller;
+    _mapController = controller;
   }
 
   void _onItemTapped(int index) async {
@@ -794,7 +955,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.lock_outline_rounded,
-                size: 90, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                size: 90, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
             const SizedBox(height: 24),
             Text(
               'Funcionalidade Exclusiva para Motoristas',
@@ -841,8 +1002,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    final bool isLoggedIn = user != null;
+    final String userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final bool isLoggedIn = userId.isNotEmpty;
 
     Widget mapaWidget = Stack(
       children: [
@@ -888,7 +1049,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
               onNotificationsPressed: _openNotifications,
               notificationAction: NotificationsBell(
                 role: UserRole.motorista,
-                userId: user!.uid,
+                userId: userId,
                 onPressed: _openNotifications,
               ),
             )

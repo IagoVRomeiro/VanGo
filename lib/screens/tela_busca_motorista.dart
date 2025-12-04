@@ -1,5 +1,3 @@
-// lib/screens/tela_busca_motorista.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -9,11 +7,13 @@ import 'package:vango/screens/tela_aluno.dart';
 import 'package:vango/screens/tela_detalhe_motorista.dart';
 import 'package:vango/screens/tela_notificacoes.dart';
 import 'package:vango/screens/tela_perfil.dart';
-import 'package:vango/screens/tela_selecao.dart'; // Add this line
+import 'package:vango/screens/tela_selecao.dart';
+import 'package:vango/l10n/app_localizations.dart';
 import '../widgets/neon_app_bar.dart';
 import '../widgets/neon_drawer.dart';
 import '../widgets/neon_bottom_nav_bar.dart';
 import '../widgets/notifications_bell.dart';
+import 'package:vango/services/functions_service.dart';
 
 class TelaBuscaMotorista extends StatefulWidget {
   final bool showScaffold;
@@ -24,7 +24,7 @@ class TelaBuscaMotorista extends StatefulWidget {
 }
 
 class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
-  int _selectedIndex = 2;
+  final int _selectedIndex = 2;
   String _filtroNome = '';
   String? _filtroFaculdade;
   List<String> _listaFaculdades = [];
@@ -33,6 +33,7 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
   bool _carregandoVinculo = true;
   Motorista? _motoristaVinculado;
   Usuario? _usuarioMotoristaVinculado;
+  bool _desvinculando = false;
 
   List<Map<String, dynamic>> _motoristasCompletos = [];
   List<Map<String, dynamic>> _motoristasFiltrados = [];
@@ -241,15 +242,42 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erro ao sair: $e")),
+          SnackBar(content: Text(AppLocalizations.of(context)!.logoutError(e.toString()))),
         );
       }
+    }
+  }
+
+  Future<void> _desvincularMotorista() async {
+    if (_currentUser == null || _motoristaVinculado == null) return;
+    if (_desvinculando) return;
+    setState(() => _desvinculando = true);
+    try {
+      await FunctionsService.instance.call('desvincularMotoristaAluno');
+      setState(() {
+        _motoristaVinculado = null;
+        _usuarioMotoristaVinculado = null;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Desvinculado com sucesso.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao desvincular: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _desvinculando = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     
     if (_currentUser == null) {
       return _buildLoginPrompt(theme);
@@ -265,7 +293,7 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             sliver: SliverToBoxAdapter(
-              child: _buildFiltros(theme),
+                child: _buildFiltros(theme, l10n),
             ),
           ),
           SliverPadding(
@@ -318,16 +346,16 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
     );
   }
 
-  Widget _buildFiltros(ThemeData theme) {
+  Widget _buildFiltros(ThemeData theme, AppLocalizations l10n) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         TextField(
           decoration: InputDecoration(
-            hintText: 'Buscar por nome...',
+            hintText: l10n.searchNameHint,
             prefixIcon: const Icon(Icons.search),
             filled: true,
-            fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+            fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
             contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
           ),
@@ -340,26 +368,26 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
         ),
         const SizedBox(height: 10),
         if (_carregando)
-          const Align(
+          Align(
             alignment: Alignment.centerLeft,
             child: Padding(
-              padding: EdgeInsets.only(top: 8.0),
-              child: Text("Carregando faculdades..."),
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text(l10n.loadingColleges),
             ),
           ),
         LayoutBuilder(
           builder: (context, constraints) {
             return DropdownButtonHideUnderline(
               child: DropdownButtonFormField<String?>(
-                value: _filtroFaculdade,
+                initialValue: _filtroFaculdade,
                 icon: const Icon(Icons.arrow_drop_down),
                 isDense: true,
                 isExpanded: true,
-                hint: const Text('Filtrar por faculdade'),
+                hint: Text(l10n.filterByCollege),
                 items: [
-                  const DropdownMenuItem<String?>(
+                  DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('Todas as faculdades'),
+                    child: Text(l10n.allColleges),
                   ),
                   ..._listaFaculdades
                       .map(
@@ -373,8 +401,7 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
                             ),
                           ),
                         ),
-                      )
-                      .toList(),
+                      ),
                 ],
                 onChanged: _carregando
                     ? null
@@ -386,7 +413,7 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
                   },
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                  fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
                   contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
                 ),
@@ -395,13 +422,13 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
           },
         ),
         if (!_carregando && _listaFaculdades.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 8.0),
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                "Nenhuma faculdade cadastrada. Cadastre rotas para liberar filtros.",
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                l10n.noColleges,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ),
           ),
@@ -420,10 +447,10 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
     }
 
     if (_motoristasFiltrados.isEmpty) {
-      return const SliverToBoxAdapter(
+      return SliverToBoxAdapter(
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 48.0),
-          child: Center(child: Text('Nenhum motorista encontrado.')),
+          padding: const EdgeInsets.symmetric(vertical: 48.0),
+          child: Center(child: Text(AppLocalizations.of(context)!.noDriversFound)),
         ),
       );
     }
@@ -464,7 +491,7 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           child: Text(
-            'Seu motorista atual',
+            AppLocalizations.of(context)!.currentDriverTitle,
             style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
         ),
@@ -472,6 +499,24 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
           motorista: _motoristaVinculado!,
           usuario: _usuarioMotoristaVinculado!,
           theme: theme,
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: ElevatedButton.icon(
+            onPressed: _desvinculando ? null : _desvincularMotorista,
+            icon: _desvinculando
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.link_off),
+            label: const Text('Desvincular motorista'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Colors.white,
+            ),
+          ),
         ),
       ],
     );
@@ -488,11 +533,11 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
         child: ListTile(
           leading: CircleAvatar(
             backgroundImage: usuario.fotoUrl != null && usuario.fotoUrl!.isNotEmpty ? NetworkImage(usuario.fotoUrl!) : null,
-            child: usuario.fotoUrl == null || usuario.fotoUrl!.isEmpty ? const Icon(Icons.person) : null,
             radius: 25,
+            child: usuario.fotoUrl == null || usuario.fotoUrl!.isEmpty ? const Icon(Icons.person) : null,
           ),
           title: Text(usuario.nome, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-          subtitle: Text('Avaliação: ${motorista.avaliacao.toStringAsFixed(1)} ★'),
+          subtitle: Text(AppLocalizations.of(context)!.ratingLabel(motorista.avaliacao.toStringAsFixed(1))),
           trailing: const Icon(Icons.arrow_forward_ios, size: 16),
           onTap: () {
             Navigator.push(
@@ -517,8 +562,8 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
 
   Widget _buildLoginPrompt(ThemeData theme) {
     return Scaffold(
-        appBar: const NeonAppBar(
-          title: 'Procurar Motorista',
+        appBar: NeonAppBar(
+          title: AppLocalizations.of(context)!.procurarMotoristaTitle,
           showMenuButton: false,
           showNotificationsButton: false,
         ),
@@ -528,11 +573,11 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
             children: [
               const Icon(Icons.person_off, size: 80, color: Colors.grey),
               const SizedBox(height: 16),
-              Text('Faça login para procurar motoristas.', style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
+              Text(AppLocalizations.of(context)!.loginToSearch, style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () => Navigator.pushNamed(context, '/login'),
-                child: const Text('Fazer Login'),
+                child: Text(AppLocalizations.of(context)!.loginButton),
               ),
             ],
           ),
@@ -544,11 +589,11 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
     return NeonBottomNavBar(
       currentIndex: _selectedIndex,
       onTap: _onItemTapped,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
-        BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
-        BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Procurar'),
-        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+      items: [
+        BottomNavigationBarItem(icon: const Icon(Icons.map), label: AppLocalizations.of(context)!.navMap),
+        BottomNavigationBarItem(icon: const Icon(Icons.chat), label: AppLocalizations.of(context)!.navChat),
+        BottomNavigationBarItem(icon: const Icon(Icons.search), label: AppLocalizations.of(context)!.navSearch),
+        BottomNavigationBarItem(icon: const Icon(Icons.person), label: AppLocalizations.of(context)!.navProfile),
       ],
     );
   }

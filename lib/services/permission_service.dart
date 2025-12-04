@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 class PermissionService {
@@ -12,7 +13,7 @@ class PermissionService {
     if (!serviceEnabled) {
       // Idealmente, aqui você mostraria um diálogo para o usuário ativar os serviços.
       // Por simplicidade, vamos apenas retornar false e logar.
-      print("Serviço de localização desativado.");
+      debugPrint("Serviço de localização desativado.");
       return false;
     }
 
@@ -22,14 +23,14 @@ class PermissionService {
       // 3. Se negada, solicita a permissão
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        print("Permissão de localização negada.");
+        debugPrint("Permissão de localização negada.");
         return false;
       }
     }
 
     // 4. Checa se a permissão foi negada permanentemente
     if (permission == LocationPermission.deniedForever) {
-      print("Permissão de localização negada permanentemente.");
+      debugPrint("Permissão de localização negada permanentemente.");
       // Idealmente, aqui você mostraria um diálogo explicando como
       // habilitar a permissão manualmente nas configurações do app.
       return false;

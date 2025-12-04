@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:vango/l10n/app_localizations.dart';
 
 import 'tela_cadastro.dart';
 import 'tela_sobre_carrossel.dart';
@@ -30,12 +31,12 @@ class TelaSelecao extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Bem-vindo ao VanGo!',
+                  AppLocalizations.of(context)!.welcomeTitle,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  'Sua solução de transporte fácil.',
+                  AppLocalizations.of(context)!.welcomeSubtitle,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleMedium,
                 ),
@@ -43,8 +44,8 @@ class TelaSelecao extends StatelessWidget {
 
                 // Card para Motorista
                 _ProfileSelectionCard(
-                  title: 'MOTORISTA',
-                  description: 'Gerencie suas rotas e alunos.',
+                  title: AppLocalizations.of(context)!.motoristaCardTitle,
+                  description: AppLocalizations.of(context)!.motoristaCardDesc,
                   icon: Icons.drive_eta_outlined,
                   color: theme.colorScheme.error,
                   onTap: () {
@@ -62,8 +63,8 @@ class TelaSelecao extends StatelessWidget {
                 
                 // Card para Aluno
                 _ProfileSelectionCard(
-                  title: 'ALUNO',
-                  description: 'Acompanhe sua van e converse com o motorista.',
+                  title: AppLocalizations.of(context)!.alunoCardTitle,
+                  description: AppLocalizations.of(context)!.alunoCardDesc,
                   icon: Icons.backpack_outlined,
                   color: theme.colorScheme.primary,
                   onTap: () {
@@ -85,9 +86,9 @@ class TelaSelecao extends StatelessWidget {
                     text: TextSpan(
                       style: theme.textTheme.bodyLarge,
                       children: [
-                        const TextSpan(text: 'Já tem uma conta? '),
+                        TextSpan(text: AppLocalizations.of(context)!.alreadyHaveAccount),
                         TextSpan(
-                          text: 'Faça Login',
+                          text: AppLocalizations.of(context)!.loginLink,
                           style: TextStyle(
                             color: theme.colorScheme.primary,
                             fontWeight: FontWeight.bold,
@@ -115,7 +116,7 @@ class TelaSelecao extends StatelessWidget {
                       ),
                     );
                   },
-                  child: const Text('Sobre o App'),
+                  child: Text(AppLocalizations.of(context)!.aboutApp),
                 ),
               ],
             ),
@@ -150,7 +151,7 @@ class _ProfileSelectionCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        splashColor: color.withOpacity(0.2),
+        splashColor: color.withValues(alpha: 0.2),
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(

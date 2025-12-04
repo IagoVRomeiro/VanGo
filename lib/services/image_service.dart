@@ -1,4 +1,4 @@
-// lib/services/image_service.dart
+import 'package:flutter/foundation.dart';
 
 class ImageService {
   /// Retorna a URL de uma imagem redimensionada pela extensão do Firebase.
@@ -30,10 +30,15 @@ class ImageService {
       final webpIndex = decodedUrl.lastIndexOf('.webp?');
 
       int extensionIndex = -1;
-      if (jpgIndex != -1) extensionIndex = jpgIndex;
-      else if (pngIndex != -1) extensionIndex = pngIndex;
-      else if (jpegIndex != -1) extensionIndex = jpegIndex;
-      else if (webpIndex != -1) extensionIndex = webpIndex;
+      if (jpgIndex != -1) {
+        extensionIndex = jpgIndex;
+      } else if (pngIndex != -1) {
+        extensionIndex = pngIndex;
+      } else if (jpegIndex != -1) {
+        extensionIndex = jpegIndex;
+      } else if (webpIndex != -1) {
+        extensionIndex = webpIndex;
+      }
       
       // Se encontrou uma extensão de imagem conhecida antes dos parâmetros
       if (extensionIndex != -1) {
@@ -49,7 +54,7 @@ class ImageService {
 
     } catch (e) {
       // Em caso de erro na manipulação da string, retorna a original.
-      print('Erro ao gerar URL redimensionada: $e');
+      debugPrint('Erro ao gerar URL redimensionada: $e');
       return originalUrl;
     }
   }

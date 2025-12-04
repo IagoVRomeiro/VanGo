@@ -1,18 +1,16 @@
-// lib/screens/tela_detalhe_motorista.dart
-
-// ❗️ Lembrete: A exibição de imagens nesta tela depende da extensão
-// "Resize Images" do Firebase estar instalada e configurada para
-// gerar imagens com o sufixo "_400x400".
+// As imagens desta tela assumem que a extensão "Resize Images" do Firebase
+// gera versões com o sufixo "_400x400".
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:vango/models/motorista.dart';
 import 'package:vango/models/rota.dart';
 import 'package:vango/screens/tela_chat.dart';
 import 'package:vango/services/chat_service.dart';
-import 'package:vango/services/image_service.dart'; // ✨ IMPORTADO
+import 'package:vango/services/image_service.dart';
+import 'package:vango/services/functions_service.dart';
 import '../widgets/neon_app_bar.dart';
 import 'tela_notificacoes.dart';
 import 'tela_avaliacoes_motorista.dart';
@@ -40,7 +38,6 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
   bool _isLoadingRotas = true;
   double _avaliacaoAtual = 0;
   int _avaliacoesQtd = 0;
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   @override
   void initState() {
@@ -84,7 +81,6 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
         _avaliacoesQtd = snapshot.docs.length;
       });
     } catch (_) {
-      // Ignora falhas, já que a avaliação média continua sendo mostrada.
     }
   }
 
@@ -138,10 +134,18 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
     final alunoId = currentUser.uid;
 
     try {
+      final alunoDoc = await FirebaseFirestore.instance
+          .collection('alunos')
+          .doc(alunoId)
+          .get();
+      final alunoData = alunoDoc.data();
+      final estaVinculado =
+          alunoData != null && alunoData['motoristaId'] == motoristaId;
+
       final chatId = await ChatService.ensureChat(
         alunoId: alunoId,
         motoristaId: motoristaId,
-        activate: true,
+        activate: estaVinculado,
       );
 
       if (mounted) {
@@ -185,77 +189,27 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
       return;
     }
 
-    final comentarioController = TextEditingController();
-    double notaSelecionada = 5;
-
+    if (!mounted) return;
     final resultado = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (ctx, setStateDialog) {
-            return AlertDialog(
-              title: const Text('Avaliar motorista'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Nota: ${notaSelecionada.toStringAsFixed(1)}'),
-                  Slider(
-                    min: 1,
-                    max: 5,
-                    divisions: 8,
-                    label: notaSelecionada.toStringAsFixed(1),
-                    value: notaSelecionada,
-                    onChanged: (value) {
-                      setStateDialog(() {
-                        notaSelecionada = value;
-                      });
-                    },
-                    activeColor: theme.colorScheme.primary, // Add this line
-                  ),
-                  TextField(
-                    controller: comentarioController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Comentário (opcional)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop({
-                      'nota': notaSelecionada,
-                      'comentario': comentarioController.text.trim(),
-                    });
-                  },
-                  child: const Text('Enviar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (_) => const _AvaliacaoMotoristaDialog(),
     );
 
-    comentarioController.dispose();
+    if (!mounted) return;
     if (resultado == null) return;
 
     final nota = (resultado['nota'] as double?) ?? 5;
     final comentario = resultado['comentario'] as String? ?? '';
 
     try {
-      final callable = _functions.httpsCallable('avaliarMotorista');
-      final result = await callable.call<Map<String, dynamic>>({
+      final result = await FunctionsService.instance.call<Map<String, dynamic>>(
+        'avaliarMotorista',
+        data: {
         'motoristaId': widget.motorista.id,
         'nota': nota,
         'comentario': comentario,
-      });
+        },
+      );
 
       final data = result.data;
       final media = (data['media'] as num?)?.toDouble() ?? nota;
@@ -308,7 +262,8 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final resizedProfileUrl = ImageService.getResizedUrl(widget.fotoUrl);
+    // Prioriza a foto original para evitar dependência da extensão de resize.
+    final fotoUrl = widget.fotoUrl;
 
     return Scaffold(
       appBar: NeonAppBar(
@@ -328,11 +283,18 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
-              child: CircleAvatar(
-                radius: 50,
-                backgroundImage: resizedProfileUrl != null
-                    ? NetworkImage(resizedProfileUrl)
-                    : const AssetImage('assets/iconSemFundo.png') as ImageProvider,
+              child: ClipOval(
+                child: SizedBox(
+                  width: 100,
+                  height: 100,
+                  child: fotoUrl != null && fotoUrl.isNotEmpty
+                      ? Image.network(
+                          fotoUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Image.asset('assets/iconSemFundo.png', fit: BoxFit.cover),
+                        )
+                      : Image.asset('assets/iconSemFundo.png', fit: BoxFit.cover),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -493,11 +455,79 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
             subtitle: Text('${rota.localDestinoNome}\n$dias | $horario'),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
             onTap: () {
-              // TODO: Navegar para detalhes da rota se necessário
             },
           ),
         );
       },
+    );
+  }
+}
+
+class _AvaliacaoMotoristaDialog extends StatefulWidget {
+  const _AvaliacaoMotoristaDialog();
+
+  @override
+  State<_AvaliacaoMotoristaDialog> createState() => _AvaliacaoMotoristaDialogState();
+}
+
+// Dialog stateful para manter o estado da nota/comentario e descartar o controller no dispose.
+class _AvaliacaoMotoristaDialogState extends State<_AvaliacaoMotoristaDialog> {
+  final TextEditingController _comentarioController = TextEditingController();
+  double _notaSelecionada = 5;
+
+  @override
+  void dispose() {
+    _comentarioController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Avaliar motorista'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Nota: ${_notaSelecionada.toStringAsFixed(1)}'),
+          Slider(
+            min: 1,
+            max: 5,
+            divisions: 8,
+            label: _notaSelecionada.toStringAsFixed(1),
+            value: _notaSelecionada,
+            onChanged: (value) {
+              setState(() {
+                _notaSelecionada = value;
+              });
+            },
+            activeColor: theme.colorScheme.primary,
+          ),
+          TextField(
+            controller: _comentarioController,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Comentário (opcional)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop({
+              'nota': _notaSelecionada,
+              'comentario': _comentarioController.text.trim(),
+            });
+          },
+          child: const Text('Enviar'),
+        ),
+      ],
     );
   }
 }

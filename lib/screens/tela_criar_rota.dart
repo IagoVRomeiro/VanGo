@@ -124,28 +124,28 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
         .collection('motoristas')
         .doc(motoristaId)
         .get();
-    if (motoristaDoc.exists && mounted) {
-      final motorista =
-          Motorista.fromMap(motoristaDoc.id, motoristaDoc.data()!);
-      final List<String> alunosIds = motorista.alunosIds ?? [];
-      if (alunosIds.isNotEmpty) {
-        final alunosSnapshot = await FirebaseFirestore.instance
-            .collection('alunos')
-            .where(FieldPath.documentId, whereIn: alunosIds)
-            .get();
-        if (mounted) {
-          _motoristaAlunosDisponiveis = alunosSnapshot.docs
-              .map((doc) => Aluno.fromMap(doc.id, doc.data()!))
-              .toList();
+      if (motoristaDoc.exists && mounted) {
+        final motorista =
+            Motorista.fromMap(motoristaDoc.id, motoristaDoc.data()!);
+        final List<String> alunosIds = motorista.alunosIds ?? [];
+        if (alunosIds.isNotEmpty) {
+          final alunosSnapshot = await FirebaseFirestore.instance
+              .collection('alunos')
+              .where(FieldPath.documentId, whereIn: alunosIds)
+              .get();
+          if (mounted) {
+            _motoristaAlunosDisponiveis = alunosSnapshot.docs
+                .map((doc) => Aluno.fromMap(doc.id, doc.data()))
+                .toList();
+          }
+          await _carregarUsuariosAlunos(alunosIds);
+        } else {
+          if (mounted) {
+            setState(() {
+              _usuariosAlunos = {};
+            });
+          }
         }
-        await _carregarUsuariosAlunos(alunosIds);
-      } else {
-        if (mounted) {
-          setState(() {
-            _usuariosAlunos = {};
-          });
-        }
-      }
     }
   }
 
@@ -401,7 +401,10 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
             style: Theme.of(context)
                 .textTheme
                 .titleSmall
-                ?.copyWith(color: Colors.black54, fontWeight: FontWeight.bold),
+                ?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
         ),
         Wrap(
@@ -411,6 +414,10 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
             return FilterChip(
               label: Text(key),
               selected: _diasSemana[key]!,
+              labelStyle: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
               onSelected: (bool selected) {
                 setState(() {
                   _diasSemana[key] = selected;
@@ -502,18 +509,33 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
             style: Theme.of(context)
                 .textTheme
                 .titleSmall
-                ?.copyWith(color: Colors.black54, fontWeight: FontWeight.bold),
+                ?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
         ),
         _carregandoDados
-            ? const Center(child: Text("Carregando alunos..."))
+            ? Center(
+                child: Text(
+                  "Carregando alunos...",
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
+                ),
+              )
             : _motoristaAlunosDisponiveis.isEmpty
-                ? const Center(
+                ? Center(
                     child: Padding(
-                      padding: EdgeInsets.all(8.0),
+                      padding: const EdgeInsets.all(8.0),
                       child: Text(
                         "Nenhum aluno vinculado ao seu perfil.\nGerencie seus alunos na tela 'Viagem'.",
                         textAlign: TextAlign.center,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
                       ),
                     ),
                   )
@@ -594,7 +616,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                         const SizedBox(height: 16),
                         DropdownButtonFormField<Van>(
                           isExpanded: true,
-                          value: _vanSelecionada,
+                          initialValue: _vanSelecionada,
                           items: _vansDisponiveis
                               .map((van) => DropdownMenuItem(
                                     value: van,

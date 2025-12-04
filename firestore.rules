@@ -31,15 +31,22 @@ service cloud.firestore {
       }
     }
 
-    // Alunos: Apenas o próprio aluno ou o motorista associado podem ler. Só o aluno pode editar.
+    // Alunos: Apenas o próprio aluno ou o motorista associado podem ler. Só o aluno pode editar,
+    // exceto quando o motorista atualiza o vínculo (campo motoristaId).
     match /alunos/{alunoId} {
-      allow read, list: if isUser(alunoId) ||
-        (isDriver() && alunoId in get(/databases/$(database)/documents/motoristas/$(request.auth.uid)).data.alunosIds);
+      function driverOwnsAluno() {
+        return isDriver() && (
+          alunoId in get(/databases/$(database)/documents/motoristas/$(request.auth.uid)).data.alunosIds ||
+          (resource != null && resource.data.motoristaId == request.auth.uid) ||
+          (request.resource != null && request.resource.data.motoristaId == request.auth.uid)
+        );
+      }
+
+      allow read, list: if isUser(alunoId) || driverOwnsAluno();
       allow create: if isUser(alunoId);
       allow update: if isUser(alunoId) ||
-        (isDriver() &&
-          request.resource.data.diff(resource.data).changedKeys().hasOnly(['motoristaId']) &&
-          request.resource.data.motoristaId == request.auth.uid);
+        (driverOwnsAluno() &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['motoristaId']));
     }
 
     match /contratos/{contratoId} {

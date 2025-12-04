@@ -17,7 +17,6 @@ import '../widgets/neon_app_bar.dart';
 import '../widgets/neon_bottom_nav_bar.dart';
 import '../widgets/neon_drawer.dart';
 import '../widgets/notifications_bell.dart';
-import 'tela_busca_motorista.dart';
 import '../models/usuario.dart';
 import 'tela_selecao.dart';
 
@@ -647,6 +646,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
       if (e.code == 'requires-recent-login') {
         message = "Por segurança, faça login novamente para deletar sua conta.";
         await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(message), duration: const Duration(seconds: 5)),

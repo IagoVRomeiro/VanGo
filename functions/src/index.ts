@@ -204,6 +204,56 @@ export const aceitarConviteAluno = functions.https.onCall(async (data, context) 
 });
 
 /**
+ * Cloud Function para o aluno se desvincular de um motorista.
+ */
+export const desvincularMotoristaAluno = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            "unauthenticated",
+            "A função só pode ser chamada por um usuário autenticado."
+        );
+    }
+
+    const alunoId = context.auth.uid;
+
+    try {
+        const alunoRef = db.collection("alunos").doc(alunoId);
+        const alunoSnap = await alunoRef.get();
+        if (!alunoSnap.exists) {
+            throw new functions.https.HttpsError(
+                "not-found",
+                "Aluno não encontrado."
+            );
+        }
+        const alunoData = alunoSnap.data();
+        const motoristaId = alunoData?.motoristaId as string | undefined;
+        if (!motoristaId) {
+            return { success: true, message: "Aluno já está desvinculado." };
+        }
+
+        const motoristaRef = db.collection("motoristas").doc(motoristaId);
+
+        await db.runTransaction(async (transaction) => {
+          transaction.update(alunoRef, { motoristaId: admin.firestore.FieldValue.delete() });
+          transaction.update(motoristaRef, {
+            alunosIds: admin.firestore.FieldValue.arrayRemove(alunoId),
+          });
+        });
+
+        return { success: true, message: "Desvinculado com sucesso." };
+    } catch (error) {
+        console.error("Erro ao desvincular motorista:", error);
+        if (error instanceof functions.https.HttpsError) {
+            throw error;
+        }
+        throw new functions.https.HttpsError(
+            "unknown",
+            "Ocorreu um erro ao desvincular."
+        );
+    }
+});
+
+/**
  * Cloud Function para alunos avaliarem motoristas.
  */
 export const avaliarMotorista = functions.https.onCall(async (data, context) => {

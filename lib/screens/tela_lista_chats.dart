@@ -82,12 +82,12 @@ class _TelaListaChatsState extends State<TelaListaChats> {
             if (onAction != null && actionText != null) ...[
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: onAction,
-                child: Text(actionText),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 ),
+                onPressed: onAction,
+                child: Text(actionText),
               ),
             ]
           ],
@@ -279,7 +279,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                               ? Theme.of(context)
                                   .colorScheme
                                   .primaryContainer
-                                  .withOpacity(0.5)
+                                  .withValues(alpha: 0.5)
                               : null,
                           margin: const EdgeInsets.symmetric(vertical: 4.0),
                           child: ListTile(
@@ -384,7 +384,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                       color: Theme.of(context)
                           .colorScheme
                           .secondaryContainer
-                          .withOpacity(0.6),
+                          .withValues(alpha: 0.6),
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundImage: motoristaInfo.fotoUrl != null &&
@@ -643,6 +643,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                               onPressed: () => _abrirChatComAluno(usuario.id, motoristaId),
                             ),
                             onTap: () => _abrirChatComAluno(usuario.id, motoristaId),
+                            onLongPress: () => _desvincularMotorista(usuario.id, motoristaId),
                           ),
                         ),
                       ),
@@ -686,6 +687,29 @@ class _TelaListaChatsState extends State<TelaListaChats> {
     } catch (e) {
       debugPrint('Erro ao buscar motorista vinculado: $e');
       return null;
+    }
+  }
+
+  Future<void> _desvincularMotorista(String alunoId, String motoristaId) async {
+    try {
+      await _firestore.collection('alunos').doc(alunoId).update({
+        'motoristaId': FieldValue.delete(),
+      });
+      await _firestore.collection('motoristas').doc(motoristaId).update({
+        'alunosIds': FieldValue.arrayRemove([alunoId]),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Desvinculado com sucesso.')),
+        );
+        setState(() {}); // força rebuild para atualizar seção de motorista vinculado
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao desvincular: $e')),
+        );
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../widgets/neon_app_bar.dart';
+import 'package:vango/l10n/app_localizations.dart';
 
 class TelaAvaliacoesMotorista extends StatelessWidget {
   final String motoristaId;
@@ -23,9 +24,10 @@ class TelaAvaliacoesMotorista extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: NeonAppBar(
-        title: 'Avaliações',
+        title: l10n.avaliacoesTitle,
         subtitle: motoristaNome,
         showMenuButton: false,
         showBackButton: true,
@@ -42,17 +44,17 @@ class TelaAvaliacoesMotorista extends StatelessWidget {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
-                child: Text('Erro ao carregar avaliações: ${snapshot.error}'),
+                child: Text(l10n.errorLoadingRatings('${snapshot.error}')),
               ),
             );
           }
 
           final avaliacoes = snapshot.data?.docs ?? [];
           if (avaliacoes.isEmpty) {
-            return const Center(
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(24.0),
-                child: Text('Nenhuma avaliação registrada para este motorista.'),
+                padding: const EdgeInsets.all(24.0),
+                child: Text(l10n.noRatings),
               ),
             );
           }
@@ -103,8 +105,8 @@ class TelaAvaliacoesMotorista extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         alunoId != null && alunoId.isNotEmpty
-                            ? 'Aluno: ${_formatarAlunoId(alunoId)}'
-                            : 'Aluno não identificado',
+                            ? l10n.studentLabel(_formatarAlunoId(alunoId))
+                            : l10n.studentUnknown,
                         style: Theme.of(context)
                             .textTheme
                             .labelSmall
