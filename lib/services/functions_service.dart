@@ -7,22 +7,34 @@ class FunctionsService {
   static final FunctionsService instance = FunctionsService._();
 
   // Região primária das funções.
-  static const String _region = 'us-central1';
+  static const String _primaryRegion = 'us-central1';
+  static const List<String> _regions = ['us-central1', 'southamerica-east1'];
 
-  FirebaseFunctions get _primary => FirebaseFunctions.instanceFor(region: _region);
-  FirebaseFunctions get _default => FirebaseFunctions.instance;
+
 
   Future<HttpsCallableResult<R>> call<R>(
     String name, {
     Map<String, dynamic>? data,
   }) async {
-    try {
-      return await _primary.httpsCallable(name).call<R>(data ?? <String, dynamic>{});
-    } on FirebaseFunctionsException catch (e) {
-      if (e.code == 'not-found') {
-        return await _default.httpsCallable(name).call<R>(data ?? <String, dynamic>{});
+    FirebaseFunctionsException? notFoundException;
+    for (final region in _regions) {
+      try {
+        final instance = FirebaseFunctions.instanceFor(region: region);
+        return await instance.httpsCallable(name).call<R>(data ?? <String, dynamic>{});
+      } on FirebaseFunctionsException catch (e) {
+        if (e.code == 'not-found') {
+          notFoundException = e;
+          continue; // Try the next region
+        }
+        rethrow; // Re-throw other types of exceptions
       }
-      rethrow;
     }
+    // If we've exhausted all regions and the function was consistently not found
+    if (notFoundException != null) {
+      throw notFoundException;
+    }
+    // This case should ideally not be reached if notFoundException is handled
+    throw FirebaseFunctionsException(
+        code: 'unknown', message: 'Function $name not found in any specified region.');
   }
 }
