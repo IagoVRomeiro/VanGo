@@ -152,7 +152,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get noDriversFound => 'Nenhum motorista encontrado.';
 
   @override
-  String get currentDriverTitle => 'Seu motorista atual';
+  String get currentDriverTitle => 'Seus motoristas vinculados';
 
   @override
   String ratingLabel(Object nota) {

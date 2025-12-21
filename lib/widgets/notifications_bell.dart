@@ -38,7 +38,7 @@ class NotificationsBell extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             IconButton(
-              icon: const Icon(Icons.notifications),
+              icon: const Icon(Icons.mail_outline),
               onPressed: onPressed,
             ),
             if (count > 0)

@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:intl/intl.dart';
 import 'package:vango/models/chat.dart';
+import 'package:vango/models/aluno.dart';
 import 'package:vango/models/usuario.dart';
 import 'package:vango/services/chat_service.dart';
 
 import 'tela_busca_motorista.dart';
 import 'tela_chat.dart';
-import 'tela_notificacoes.dart';
+import 'tela_convites.dart';
 import '../widgets/neon_app_bar.dart';
 
 class TelaListaChats extends StatefulWidget {
@@ -23,7 +24,7 @@ class TelaListaChats extends StatefulWidget {
 class _TelaListaChatsState extends State<TelaListaChats> {
   User? _currentUser;
   Future<UserRole>? _userRoleFuture;
-  Future<_MotoristaVinculadoInfo?>? _motoristaVinculadoFuture;
+  Future<List<_MotoristaVinculadoInfo>>? _motoristasVinculadosFuture;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final Map<String, Future<DocumentSnapshot<Map<String, dynamic>>>> _userDocCache = {};
 
@@ -33,7 +34,8 @@ class _TelaListaChatsState extends State<TelaListaChats> {
     _currentUser = FirebaseAuth.instance.currentUser;
     if (_currentUser != null) {
       _userRoleFuture = _getUserRole(_currentUser!.uid);
-      _motoristaVinculadoFuture = _buscarMotoristaVinculado(_currentUser!.uid);
+      _motoristasVinculadosFuture =
+          _buscarMotoristasVinculados(_currentUser!.uid);
     }
   }
 
@@ -132,7 +134,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
         onNotificationsPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => TelaNotificacoes()),
+            MaterialPageRoute(builder: (_) => TelaConvites()),
           );
         },
       ),
@@ -269,6 +271,12 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                         if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
                           return const SizedBox.shrink();
                         }
+                        final chatModel =
+                            Chat.fromSnapshot(chat as DocumentSnapshot<Map<String, dynamic>>);
+                        final unreadCount =
+                            chatModel.unreadCount[motoristaId] ?? 0;
+                        final hasUnread = unreadCount > 0;
+
                         final userData = userSnapshot.data!.data() as Map<String, dynamic>;
                         final nome = userData['nome'] ?? 'Usuário Desconhecido';
                         final fotoUrl = userData['fotoUrl'] as String?;
@@ -305,11 +313,28 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            trailing: Text(
-                              timestamp != null
-                                  ? DateFormat('HH:mm').format(timestamp.toDate())
-                                  : '',
-                              style: Theme.of(context).textTheme.bodySmall,
+                            trailing: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  timestamp != null
+                                      ? DateFormat('HH:mm').format(timestamp.toDate())
+                                      : '',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                if (hasUnread) ...[
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).primaryColor,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ]
+                              ],
                             ),
                             onTap: () {
                               Navigator.push(
@@ -337,17 +362,18 @@ class _TelaListaChatsState extends State<TelaListaChats> {
   }
 
   Widget _buildAlunoChatView(String alunoId) {
-    final motoristaFuture =
-        _motoristaVinculadoFuture ??= _buscarMotoristaVinculado(alunoId);
+    final motoristasFuture =
+        _motoristasVinculadosFuture ??= _buscarMotoristasVinculados(alunoId);
 
-    return FutureBuilder<_MotoristaVinculadoInfo?>(
-      future: motoristaFuture,
+    return FutureBuilder<List<_MotoristaVinculadoInfo>>(
+      future: motoristasFuture,
       builder: (context, motoristaSnapshot) {
         if (motoristaSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final motoristaInfo = motoristaSnapshot.data;
+        final motoristasInfo =
+            motoristaSnapshot.data ?? const <_MotoristaVinculadoInfo>[];
 
         return StreamBuilder<QuerySnapshot>(
           stream: _firestore
@@ -363,7 +389,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
             final chats = snapshot.data?.docs ?? [];
             final children = <Widget>[];
 
-            if (motoristaInfo != null) {
+            if (motoristasInfo.isNotEmpty) {
               children.add(
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,54 +397,56 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                       child: Text(
-                        'Seu motorista vinculado',
+                        'Seus motoristas vinculados',
                         style: Theme.of(context)
                             .textTheme
                             .titleMedium
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ),
-                    Card.filled(
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 16.0, vertical: 4),
-                      color: Theme.of(context)
-                          .colorScheme
-                          .secondaryContainer
-                          .withValues(alpha: 0.6),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundImage: motoristaInfo.fotoUrl != null &&
-                                  motoristaInfo.fotoUrl!.isNotEmpty
-                              ? NetworkImage(motoristaInfo.fotoUrl!)
-                              : null,
-                          child: motoristaInfo.fotoUrl == null ||
-                                  motoristaInfo.fotoUrl!.isEmpty
-                              ? const Icon(Icons.drive_eta)
-                              : null,
+                    ...motoristasInfo.map((motoristaInfo) {
+                      return Card.filled(
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 16.0, vertical: 4),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .secondaryContainer
+                            .withValues(alpha: 0.6),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundImage: motoristaInfo.fotoUrl != null &&
+                                    motoristaInfo.fotoUrl!.isNotEmpty
+                                ? NetworkImage(motoristaInfo.fotoUrl!)
+                                : null,
+                            child: motoristaInfo.fotoUrl == null ||
+                                    motoristaInfo.fotoUrl!.isEmpty
+                                ? const Icon(Icons.drive_eta)
+                                : null,
+                          ),
+                          title: Text(
+                            motoristaInfo.nome,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: const Text(
+                            'Toque aqui para iniciar ou retomar a conversa.',
+                          ),
+                          trailing: const Icon(Icons.chat_bubble_outline),
+                          onTap: () => _abrirChatComMotorista(
+                            alunoId: alunoId,
+                            motoristaId: motoristaInfo.motoristaId,
+                          ),
                         ),
-                        title: Text(
-                          motoristaInfo.nome,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: const Text(
-                          'Toque aqui para iniciar ou retomar a conversa.',
-                        ),
-                        trailing: const Icon(Icons.chat_bubble_outline),
-                        onTap: () => _abrirChatComMotorista(
-                          alunoId: alunoId,
-                          motoristaId: motoristaInfo.motoristaId,
-                        ),
-                      ),
-                    ),
+                      );
+                    }),
                   ],
                 ),
               );
             }
 
-            if (chats.isEmpty && motoristaInfo == null) {
+            if (chats.isEmpty && motoristasInfo.isEmpty) {
               children.add(
                 Padding(
                   padding: const EdgeInsets.only(top: 24.0),
@@ -463,6 +491,12 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                       final fotoUrl = userData['fotoUrl'] as String?;
                       final timestamp = lastMessage['timestamp'] as Timestamp?;
 
+                      final chatModel =
+                          Chat.fromSnapshot(chat as DocumentSnapshot<Map<String, dynamic>>);
+                      final unreadCount =
+                          chatModel.unreadCount[alunoId] ?? 0;
+                      final hasUnread = unreadCount > 0;
+
                       return Card.filled(
                         margin: const EdgeInsets.symmetric(
                             horizontal: 16.0, vertical: 4.0),
@@ -493,6 +527,7 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                           ),
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
                                 timestamp != null
@@ -502,6 +537,17 @@ class _TelaListaChatsState extends State<TelaListaChats> {
                                 style:
                                     Theme.of(context).textTheme.bodySmall,
                               ),
+                              if (hasUnread) ...[
+                                const SizedBox(height: 4),
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).primaryColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ],
                               if (status == ChatStatus.inquiry)
                                 Text(
                                   'Não vinculado',
@@ -658,41 +704,47 @@ class _TelaListaChatsState extends State<TelaListaChats> {
     );
   }
 
-  Future<_MotoristaVinculadoInfo?> _buscarMotoristaVinculado(
+  Future<List<_MotoristaVinculadoInfo>> _buscarMotoristasVinculados(
       String alunoId) async {
     try {
       final alunoDoc =
           await _firestore.collection('alunos').doc(alunoId).get();
       final alunoData = alunoDoc.data();
       if (alunoData == null) {
-        return null;
+        return const [];
       }
-      final motoristaId = alunoData['motoristaId'] as String?;
-      if (motoristaId == null || motoristaId.isEmpty) {
-        return null;
-      }
-
-      final usuarioDoc =
-          await _firestore.collection('users').doc(motoristaId).get();
-      final usuarioData = usuarioDoc.data();
-      if (usuarioData == null) {
-        return null;
+      final motoristasIds = Aluno.motoristasIdsFromMap(alunoData);
+      if (motoristasIds.isEmpty) {
+        return const [];
       }
 
-      return _MotoristaVinculadoInfo(
-        motoristaId: motoristaId,
-        nome: usuarioData['nome'] ?? 'Motorista vinculado',
-        fotoUrl: usuarioData['fotoUrl'] as String?,
-      );
+      final infos = <_MotoristaVinculadoInfo>[];
+      final uniqueIds = motoristasIds.toSet().toList();
+      for (final motoristaId in uniqueIds) {
+        final usuarioDoc =
+            await _firestore.collection('users').doc(motoristaId).get();
+        final usuarioData = usuarioDoc.data();
+        if (usuarioData == null) {
+          continue;
+        }
+        infos.add(_MotoristaVinculadoInfo(
+          motoristaId: motoristaId,
+          nome: usuarioData['nome'] ?? 'Motorista vinculado',
+          fotoUrl: usuarioData['fotoUrl'] as String?,
+        ));
+      }
+      infos.sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
+      return infos;
     } catch (e) {
       debugPrint('Erro ao buscar motorista vinculado: $e');
-      return null;
+      return const [];
     }
   }
 
   Future<void> _desvincularMotorista(String alunoId, String motoristaId) async {
     try {
       await _firestore.collection('alunos').doc(alunoId).update({
+        'motoristasIds': FieldValue.arrayRemove([motoristaId]),
         'motoristaId': FieldValue.delete(),
       });
       await _firestore.collection('motoristas').doc(motoristaId).update({

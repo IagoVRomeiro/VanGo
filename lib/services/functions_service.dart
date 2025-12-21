@@ -6,8 +6,6 @@ class FunctionsService {
   FunctionsService._();
   static final FunctionsService instance = FunctionsService._();
 
-  // Região primária das funções.
-  static const String _primaryRegion = 'us-central1';
   static const List<String> _regions = ['us-central1', 'southamerica-east1'];
 
 

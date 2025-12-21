@@ -42,6 +42,25 @@ class StorageService {
     }
   }
 
+  /// Deleta a foto de uma van no Firebase Storage.
+  ///
+  /// [motoristaId] O ID do motorista proprietário da van.
+  /// [placa] A placa da van.
+  Future<void> deleteVanImage(String motoristaId, String placa) async {
+    // Se a placa estiver vazia, não há o que deletar.
+    if (placa.isEmpty) return;
+    try {
+      final ref = _storage
+          .ref()
+          .child('vans_pictures')
+          .child('$motoristaId/$placa.jpg');
+      await _deleteFile(ref);
+    } catch (e) {
+      debugPrint('Erro ao deletar a imagem da van: $e');
+      // Não relança o erro para não impedir a exclusão do restante dos dados da van.
+    }
+  }
+
   /// Lida com a lógica de upload real, abstraindo a diferença entre web e mobile.
   ///
   /// [ref] A referência do Firebase Storage para onde o arquivo será enviado.
@@ -65,5 +84,20 @@ class StorageService {
 
     // Retorna a URL de download
     return await ref.getDownloadURL();
+  }
+
+  /// Deleta um arquivo do storage.
+  Future<void> _deleteFile(Reference ref) async {
+    try {
+      await ref.delete();
+    } on FirebaseException catch (e) {
+      // O arquivo não existir é um caso de sucesso esperado ao deletar.
+      if (e.code == 'object-not-found') {
+        debugPrint('Arquivo não encontrado no storage, considerando como sucesso.');
+        return;
+      }
+      // Se for outro erro, loga mas não relança para não quebrar a operação principal.
+      debugPrint('Erro ao deletar arquivo do storage: $e');
+    }
   }
 }

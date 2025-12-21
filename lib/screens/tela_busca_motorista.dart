@@ -2,17 +2,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:vango/models/motorista.dart';
+import 'package:vango/models/aluno.dart';
 import 'package:vango/models/usuario.dart';
 import 'package:vango/screens/tela_aluno.dart';
 import 'package:vango/screens/tela_detalhe_motorista.dart';
-import 'package:vango/screens/tela_notificacoes.dart';
+import 'package:vango/screens/tela_convites.dart';
 import 'package:vango/screens/tela_perfil.dart';
 import 'package:vango/screens/tela_selecao.dart';
+import 'package:vango/screens/tela_historico_viagens.dart';
+import 'package:vango/screens/tela_notificacoes.dart';
 import 'package:vango/l10n/app_localizations.dart';
 import '../widgets/neon_app_bar.dart';
 import '../widgets/neon_drawer.dart';
 import '../widgets/neon_bottom_nav_bar.dart';
 import '../widgets/notifications_bell.dart';
+import '../widgets/messages_badge.dart';
 import 'package:vango/services/functions_service.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
@@ -32,9 +36,8 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
   bool _carregando = true;
   final User? _currentUser = FirebaseAuth.instance.currentUser;
   bool _carregandoVinculo = true;
-  Motorista? _motoristaVinculado;
-  Usuario? _usuarioMotoristaVinculado;
-  bool _desvinculando = false;
+  List<_MotoristaVinculadoInfo> _motoristasVinculados = [];
+  final Set<String> _desvinculandoIds = {};
 
   List<Map<String, dynamic>> _motoristasCompletos = [];
   List<Map<String, dynamic>> _motoristasFiltrados = [];
@@ -61,8 +64,7 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
       if (mounted) {
         setState(() {
           _carregandoVinculo = false;
-          _motoristaVinculado = null;
-          _usuarioMotoristaVinculado = null;
+          _motoristasVinculados = [];
         });
       }
       return;
@@ -70,48 +72,42 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
 
     try {
       final alunoDoc = await FirebaseFirestore.instance.collection('alunos').doc(alunoId).get();
-      final motoristaId = alunoDoc.data()?['motoristaId'] as String?;
+      final motoristaIds = Aluno.motoristasIdsFromMap(alunoDoc.data());
 
-      if (motoristaId == null || motoristaId.isEmpty) {
+      if (motoristaIds.isEmpty) {
         if (mounted) {
           setState(() {
-            _motoristaVinculado = null;
-            _usuarioMotoristaVinculado = null;
+            _motoristasVinculados = [];
             _carregandoVinculo = false;
           });
         }
         return;
       }
 
-      final motoristaDoc = await FirebaseFirestore.instance.collection('motoristas').doc(motoristaId).get();
-      final usuarioDoc = await FirebaseFirestore.instance.collection('users').doc(motoristaId).get();
-
-      if (!motoristaDoc.exists || !usuarioDoc.exists) {
-        if (mounted) {
-          setState(() {
-            _motoristaVinculado = null;
-            _usuarioMotoristaVinculado = null;
-            _carregandoVinculo = false;
-          });
+      final vinculos = <_MotoristaVinculadoInfo>[];
+      final uniqueIds = motoristaIds.toSet().toList();
+      for (final motoristaId in uniqueIds) {
+        final motoristaDoc = await FirebaseFirestore.instance.collection('motoristas').doc(motoristaId).get();
+        final usuarioDoc = await FirebaseFirestore.instance.collection('users').doc(motoristaId).get();
+        if (!motoristaDoc.exists || !usuarioDoc.exists) {
+          continue;
         }
-        return;
+        final motorista = Motorista.fromMap(motoristaDoc.id, motoristaDoc.data()!);
+        final usuario = Usuario.fromSnapshot(usuarioDoc);
+        vinculos.add(_MotoristaVinculadoInfo(motorista: motorista, usuario: usuario));
       }
-
-      final motorista = Motorista.fromMap(motoristaDoc.id, motoristaDoc.data()!);
-      final usuario = Usuario.fromSnapshot(usuarioDoc);
+      vinculos.sort((a, b) => a.usuario.nome.toLowerCase().compareTo(b.usuario.nome.toLowerCase()));
 
       if (mounted) {
         setState(() {
-          _motoristaVinculado = motorista;
-          _usuarioMotoristaVinculado = usuario;
+          _motoristasVinculados = vinculos;
           _carregandoVinculo = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _motoristaVinculado = null;
-          _usuarioMotoristaVinculado = null;
+          _motoristasVinculados = [];
           _carregandoVinculo = false;
         });
       }
@@ -249,15 +245,18 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
     }
   }
 
-  Future<void> _desvincularMotorista() async {
-    if (_currentUser == null || _motoristaVinculado == null) return;
-    if (_desvinculando) return;
-    setState(() => _desvinculando = true);
+  Future<void> _desvincularMotorista(String motoristaId) async {
+    if (_currentUser == null) return;
+    if (_desvinculandoIds.contains(motoristaId)) return;
+    setState(() => _desvinculandoIds.add(motoristaId));
     try {
-      await FunctionsService.instance.call('desvincularMotoristaAluno');
+      await FunctionsService.instance.call(
+        'desvincularMotoristaAluno',
+        data: {'motoristaId': motoristaId},
+      );
       setState(() {
-        _motoristaVinculado = null;
-        _usuarioMotoristaVinculado = null;
+        _motoristasVinculados =
+            _motoristasVinculados.where((info) => info.motorista.id != motoristaId).toList();
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -283,7 +282,9 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
         );
       }
     } finally {
-      if (mounted) setState(() => _desvinculando = false);
+      if (mounted) {
+        setState(() => _desvinculandoIds.remove(motoristaId));
+      }
     }
   }
 
@@ -336,6 +337,8 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
       drawer: NeonDrawer(
         onSettings: _openSettingsFromDrawer,
         onLogout: _logout,
+        onNotifications: _openNotificacoesClimaFromDrawer,
+        onHistory: _openHistoricoFromDrawer,
       ),
       body: body,
       bottomNavigationBar: _buildBottomNavBar(),
@@ -345,7 +348,7 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
   void _openNotifications() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => TelaNotificacoes()),
+      MaterialPageRoute(builder: (context) => TelaConvites()),
     );
   }
 
@@ -355,6 +358,24 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
       MaterialPageRoute(
         builder: (context) =>
             const PerfilScreen(collectionPath: 'alunos', showAppBar: true),
+      ),
+    );
+  }
+
+  Future<void> _openHistoricoFromDrawer() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const TelaHistoricoViagens.aluno(),
+      ),
+    );
+  }
+
+  Future<void> _openNotificacoesClimaFromDrawer() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const TelaNotificacoes(),
       ),
     );
   }
@@ -494,7 +515,7 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
       );
     }
 
-    if (_motoristaVinculado == null || _usuarioMotoristaVinculado == null) {
+    if (_motoristasVinculados.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -508,29 +529,16 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
             style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
         ),
-        _buildMotoristaTile(
-          motorista: _motoristaVinculado!,
-          usuario: _usuarioMotoristaVinculado!,
-          theme: theme,
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: ElevatedButton.icon(
-            onPressed: _desvinculando ? null : _desvincularMotorista,
-            icon: _desvinculando
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.link_off),
-            label: const Text('Desvincular motorista'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ),
+        ..._motoristasVinculados.map((info) {
+          final isDesvinculando = _desvinculandoIds.contains(info.motorista.id);
+          return _buildMotoristaTile(
+            motorista: info.motorista,
+            usuario: info.usuario,
+            theme: theme,
+            onUnlink: () => _desvincularMotorista(info.motorista.id),
+            isUnlinking: isDesvinculando,
+          );
+        }),
       ],
     );
   }
@@ -539,6 +547,8 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
     required Motorista motorista,
     required Usuario usuario,
     required ThemeData theme,
+    VoidCallback? onUnlink,
+    bool isUnlinking = false,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
@@ -551,7 +561,26 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
           ),
           title: Text(usuario.nome, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           subtitle: Text(AppLocalizations.of(context)!.ratingLabel(motorista.avaliacao.toStringAsFixed(1))),
-          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+          trailing: onUnlink == null
+              ? const Icon(Icons.arrow_forward_ios, size: 16)
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Desvincular motorista',
+                      onPressed: isUnlinking ? null : onUnlink,
+                      icon: isUnlinking
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.link_off),
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    const Icon(Icons.arrow_forward_ios, size: 16),
+                  ],
+                ),
           onTap: () {
             Navigator.push(
               context,
@@ -604,10 +633,23 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
       onTap: _onItemTapped,
       items: [
         BottomNavigationBarItem(icon: const Icon(Icons.map), label: AppLocalizations.of(context)!.navMap),
-        BottomNavigationBarItem(icon: const Icon(Icons.chat), label: AppLocalizations.of(context)!.navChat),
+        BottomNavigationBarItem(
+          icon: MessagesBadge(userId: _currentUser?.uid, icon: Icons.chat),
+          label: AppLocalizations.of(context)!.navChat,
+        ),
         BottomNavigationBarItem(icon: const Icon(Icons.search), label: AppLocalizations.of(context)!.navSearch),
         BottomNavigationBarItem(icon: const Icon(Icons.person), label: AppLocalizations.of(context)!.navProfile),
       ],
     );
   }
+}
+
+class _MotoristaVinculadoInfo {
+  final Motorista motorista;
+  final Usuario usuario;
+
+  const _MotoristaVinculadoInfo({
+    required this.motorista,
+    required this.usuario,
+  });
 }

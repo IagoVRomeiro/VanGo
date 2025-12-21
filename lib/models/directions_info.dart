@@ -16,18 +16,34 @@ class RouteLegInfo {
   });
 }
 
+class RouteStepInfo {
+  final LatLng endLocation;
+  final String instruction;
+  final int? distanceMeters;
+
+  RouteStepInfo({
+    required this.endLocation,
+    required this.instruction,
+    this.distanceMeters,
+  });
+}
+
 class DirectionsInfo {
   final List<LatLng> polylinePoints;
   final String? totalDistance;
   final String? totalDuration;
   final List<RouteLegInfo> legs;
+  final List<RouteStepInfo> steps;
   final List<int>? waypointOrder;
+  final bool isTrafficAware;
 
   DirectionsInfo({
     required this.polylinePoints,
     this.totalDistance,
     this.totalDuration,
     required this.legs,
+    required this.steps,
     this.waypointOrder,
+    this.isTrafficAware = false,
   });
 }

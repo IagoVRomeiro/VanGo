@@ -23,6 +23,8 @@ class Chat {
   final Timestamp createdAt;
   final Timestamp updatedAt;
   final Map<String, dynamic> lastMessage;
+  final Map<String, int> unreadCount;
+  final Map<String, Timestamp> lastRead;
 
   Chat({
     required this.id,
@@ -34,10 +36,15 @@ class Chat {
     required this.createdAt,
     required this.updatedAt,
     required this.lastMessage,
+    required this.unreadCount,
+    required this.lastRead,
   });
 
   factory Chat.fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot) {
     final data = snapshot.data()!;
+    final unreadCountData = data['unreadCount'] as Map<String, dynamic>? ?? {};
+    final lastReadData = data['lastRead'] as Map<String, dynamic>? ?? {};
+
     return Chat(
       id: snapshot.id,
       participants: List<String>.from(data['participants'] ?? []),
@@ -48,6 +55,8 @@ class Chat {
       createdAt: data['createdAt'],
       updatedAt: data['updatedAt'],
       lastMessage: Map<String, dynamic>.from(data['lastMessage'] ?? {}),
+      unreadCount: unreadCountData.map((key, value) => MapEntry(key, value as int)),
+      lastRead: lastReadData.map((key, value) => MapEntry(key, value as Timestamp)),
     );
   }
 }

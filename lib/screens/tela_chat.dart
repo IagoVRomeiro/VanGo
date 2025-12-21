@@ -9,7 +9,6 @@ import 'package:vango/models/chat.dart';
 import 'package:vango/models/mensagem.dart';
 import 'package:vango/models/usuario.dart';
 import '../widgets/neon_app_bar.dart';
-import 'tela_notificacoes.dart';
 
 class TelaChat extends StatefulWidget {
   final String chatId;
@@ -112,9 +111,45 @@ class _TelaChatState extends State<TelaChat> {
         _chatExiste = doc.exists;
         _chatStatus = ChatStatus.fromString(doc.data()?['status']);
       });
+      _atualizarLeituraSeNecessario(doc);
     }, onError: (error) {
       debugPrint('Erro ao ouvir status do chat: $error');
     });
+  }
+
+  void _atualizarLeituraSeNecessario(
+      DocumentSnapshot<Map<String, dynamic>> doc) {
+    if (_meuId == null || !doc.exists) return;
+    final data = doc.data();
+    if (data == null) return;
+    final lastMessage = data['lastMessage'] as Map<String, dynamic>?;
+    if (lastMessage == null) return;
+    final senderId = lastMessage['senderId'] as String?;
+    final lastTimestamp = lastMessage['timestamp'] as Timestamp?;
+    if (senderId == null || lastTimestamp == null || senderId == _meuId) {
+      return;
+    }
+    final lastReadMap = data['lastRead'] as Map<String, dynamic>? ?? const {};
+    final lastReadTimestamp = lastReadMap[_meuId] as Timestamp?;
+    if (lastReadTimestamp == null ||
+        lastReadTimestamp.toDate().isBefore(lastTimestamp.toDate())) {
+      _marcarComoLido();
+    }
+  }
+
+  Future<void> _marcarComoLido() async {
+    if (_meuId == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .set({
+        'lastRead.${_meuId!}': FieldValue.serverTimestamp(),
+        'unreadCount.${_meuId!}': 0,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Erro ao marcar leitura: $e');
+    }
   }
 
   bool get _chatLiberadoParaEnvio {
@@ -145,6 +180,8 @@ class _TelaChatState extends State<TelaChat> {
           'timestamp': FieldValue.serverTimestamp(),
         },
         'updatedAt': FieldValue.serverTimestamp(),
+        'lastRead.$meuId': FieldValue.serverTimestamp(),
+        'unreadCount.${widget.recipientId}': FieldValue.increment(1),
       }, SetOptions(merge: true));
 
       // Adiciona a nova mensagem
@@ -174,7 +211,7 @@ class _TelaChatState extends State<TelaChat> {
         _isCurrentUserDriver ? colorScheme.secondary : colorScheme.primary;
     final Color onPrimaryColor =
         _isCurrentUserDriver ? colorScheme.onSecondary : colorScheme.onPrimary;
-    final Color surfaceVariantColor = colorScheme.surfaceVariant;
+    final Color surfaceContainerHighest = colorScheme.surfaceContainerHighest;
     final Color onSurfaceVariantColor = colorScheme.onSurfaceVariant;
 
     return Theme(
@@ -182,9 +219,9 @@ class _TelaChatState extends State<TelaChat> {
         colorScheme: parentTheme.colorScheme.copyWith(
           primary: primaryColor,
           onPrimary: onPrimaryColor,
-          surfaceVariant: surfaceVariantColor,
+          surfaceContainerHighest: surfaceContainerHighest,
           onSurfaceVariant: onSurfaceVariantColor,
-          tertiaryContainer: primaryColor.withOpacity(0.2),
+          tertiaryContainer: primaryColor.withValues(alpha: 0.2),
           onTertiaryContainer: onPrimaryColor,
         ),
       ),
@@ -196,12 +233,7 @@ class _TelaChatState extends State<TelaChat> {
               title: _recipientName,
               showMenuButton: false,
               showBackButton: true,
-              onNotificationsPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => TelaNotificacoes()),
-                );
-              },
+              showNotificationsButton: false,
             ),
             body: _isLoadingDetails
               ? const Center(child: CircularProgressIndicator())
@@ -253,7 +285,7 @@ class _TelaChatState extends State<TelaChat> {
                                       decoration: BoxDecoration(
                                         color: eMinhaMensagem
                                             ? currentTheme.colorScheme.primary // Use new theme
-                                            : currentTheme.colorScheme.surfaceVariant, // Use new theme
+                                            : currentTheme.colorScheme.surfaceContainerHighest, // Use new theme
                                         borderRadius: BorderRadius.only(
                                           topLeft: const Radius.circular(16),
                                           topRight: const Radius.circular(16),
@@ -286,9 +318,9 @@ class _TelaChatState extends State<TelaChat> {
                                               style: TextStyle(
                                                 color: eMinhaMensagem
                                                     ? currentTheme.colorScheme.onPrimary // Use new theme
-                                                        .withOpacity(0.7)
+                                                        .withValues(alpha: 0.7)
                                                     : currentTheme.colorScheme.onSurfaceVariant // Use new theme
-                                                        .withOpacity(0.7),
+                                                        .withValues(alpha: 0.7),
                                                 fontSize: 10,
                                               ),
                                             ),
@@ -322,7 +354,7 @@ class _TelaChatState extends State<TelaChat> {
           : 'Esta conversa não está mais disponível.';
       return Container(
         padding: const EdgeInsets.all(16.0),
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         child: Center(
           child: Text(
             text,
@@ -339,7 +371,7 @@ class _TelaChatState extends State<TelaChat> {
         color: theme.colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             spreadRadius: 1,
             blurRadius: 10,
             offset: const Offset(0, -1),
@@ -355,10 +387,10 @@ class _TelaChatState extends State<TelaChat> {
                 decoration: InputDecoration(
                   hintText: AppLocalizations.of(context)!.chatHint,
                   hintStyle: TextStyle(
-                    color: theme.colorScheme.onSurface.withOpacity(0.7),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                   filled: true,
-                  fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                  fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(30),
                     borderSide: BorderSide.none,
@@ -388,7 +420,7 @@ class _TelaChatState extends State<TelaChat> {
         ? l10n.chatInquiryDriver
         : l10n.chatInquiryStudent;
     return Container(
-      color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [

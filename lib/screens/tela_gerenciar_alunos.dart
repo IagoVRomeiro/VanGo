@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/usuario.dart';
 import '../widgets/neon_app_bar.dart';
-import 'tela_notificacoes.dart';
+import 'tela_convites.dart';
 import 'package:vango/services/functions_service.dart';
 
 /// Tela para o motorista gerenciar alunos vinculados, convites e solicitações.
@@ -240,7 +240,7 @@ class _TelaGerenciarAlunosState extends State<TelaGerenciarAlunos> {
   void _openNotifications() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => TelaNotificacoes()),
+      MaterialPageRoute(builder: (_) => TelaConvites()),
     );
   }
 

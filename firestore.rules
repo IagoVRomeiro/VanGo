@@ -32,13 +32,19 @@ service cloud.firestore {
     }
 
     // Alunos: Apenas o próprio aluno ou o motorista associado podem ler. Só o aluno pode editar,
-    // exceto quando o motorista atualiza o vínculo (campo motoristaId).
+    // exceto quando o motorista atualiza o vínculo (campos motoristasIds/motoristaId).
     match /alunos/{alunoId} {
       function driverOwnsAluno() {
         return isDriver() && (
           alunoId in get(/databases/$(database)/documents/motoristas/$(request.auth.uid)).data.alunosIds ||
-          (resource != null && resource.data.motoristaId == request.auth.uid) ||
-          (request.resource != null && request.resource.data.motoristaId == request.auth.uid)
+          (resource != null && (
+            (resource.data.motoristasIds != null && request.auth.uid in resource.data.motoristasIds) ||
+            (resource.data.motoristaId == request.auth.uid)
+          )) ||
+          (request.resource != null && (
+            (request.resource.data.motoristasIds != null && request.auth.uid in request.resource.data.motoristasIds) ||
+            (request.resource.data.motoristaId == request.auth.uid)
+          ))
         );
       }
 
@@ -46,7 +52,7 @@ service cloud.firestore {
       allow create: if isUser(alunoId);
       allow update: if isUser(alunoId) ||
         (driverOwnsAluno() &&
-          request.resource.data.diff(resource.data).changedKeys().hasOnly(['motoristaId']));
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['motoristasIds', 'motoristaId']));
     }
 
     match /contratos/{contratoId} {

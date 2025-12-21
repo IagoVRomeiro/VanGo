@@ -4,14 +4,17 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:vango/config/api_keys.dart';
 import 'package:vango/models/directions_info.dart';
 import 'package:vango/models/rota.dart';
+import 'package:vango/services/distance_matrix_service.dart';
 import 'package:vango/services/directions_service.dart';
 import 'package:vango/services/local_cache.dart';
 import 'package:vango/services/permission_service.dart';
+import 'package:vango/services/voice_navigation_service.dart';
+import 'package:vango/services/voice_settings_service.dart';
 import 'package:vango/l10n/app_localizations.dart';
 import '../models/usuario.dart';
 import 'package:vango/screens/tela_configuracoes.dart';
@@ -20,13 +23,16 @@ import 'tela_gerenciar_alunos.dart';
 import 'tela_lista_chats.dart';
 import 'tela_login.dart';
 import 'tela_selecao.dart';
+import 'tela_convites.dart';
 import 'tela_notificacoes.dart';
 import 'tela_perfil.dart';
 import 'tela_viagem.dart';
+import 'tela_historico_viagens.dart';
 import '../widgets/neon_app_bar.dart';
 import '../widgets/neon_bottom_nav_bar.dart';
 import '../widgets/neon_drawer.dart';
 import '../widgets/notifications_bell.dart';
+import '../widgets/messages_badge.dart';
 
 class TelaMotorista extends StatefulWidget {
   final int initialIndex;
@@ -69,6 +75,18 @@ class _AlunoMarkerData {
     required this.id,
     required this.nome,
     this.fotoUrl,
+  });
+}
+
+class _NextStopInfo {
+  final String label;
+  final LatLng location;
+  final bool isDestination;
+
+  const _NextStopInfo({
+    required this.label,
+    required this.location,
+    this.isDestination = false,
   });
 }
 
@@ -211,21 +229,223 @@ class _RouteSummaryPanel extends StatelessWidget {
   }
 }
 
+class _NavigationHeader extends StatelessWidget {
+  final String distanceText;
+  final String destinationText;
+
+  const _NavigationHeader({
+    required this.distanceText,
+    required this.destinationText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.navigation, color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  distanceText,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  destinationText,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpeedBadge extends StatelessWidget {
+  final double? speedKmh;
+
+  const _SpeedBadge({required this.speedKmh});
+
+  @override
+  Widget build(BuildContext context) {
+    final speed = (speedKmh ?? 0).clamp(0, 240).toStringAsFixed(0);
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            speed,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: Colors.black,
+            ),
+          ),
+          const Text(
+            'km/h',
+            style: TextStyle(fontSize: 10, color: Colors.black54),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavigationFooter extends StatelessWidget {
+  final String destination;
+  final String? distance;
+  final String? duration;
+  final bool isTrafficAware;
+  final String? nextStopEta;
+  final String? nextStopLabel;
+
+  const _NavigationFooter({
+    required this.destination,
+    required this.distance,
+    required this.duration,
+    required this.isTrafficAware,
+    required this.nextStopEta,
+    required this.nextStopLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final String metricsText;
+    if (nextStopEta != null && nextStopEta!.isNotEmpty) {
+      final label = nextStopLabel?.trim();
+      metricsText =
+          'Próxima: $nextStopEta${label == null || label.isEmpty ? '' : ' · $label'}';
+    } else {
+      metricsText = [
+        if (duration != null && duration!.isNotEmpty) duration!,
+        if (distance != null && distance!.isNotEmpty) distance!,
+      ].join(' · ');
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              metricsText.isNotEmpty ? metricsText : destination,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: Colors.black87,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (isTrafficAware)
+            const Padding(
+              padding: EdgeInsets.only(left: 8.0),
+              child: Icon(Icons.traffic, size: 16, color: Colors.black45),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TelaMotoristaState extends State<TelaMotorista> {
+  static const int _etaMinIntervalSeconds = 45;
+  static const double _etaOriginMoveMeters = 120;
+  static const double _etaDestinationMoveMeters = 40;
+  static const double _stopReachedThresholdMeters = 120;
+  static const double _voicePromptDistanceMeters = 140;
+  static const double _voiceStepCompleteDistanceMeters = 35;
+  static const int _voiceMinIntervalSeconds = 8;
+
   GoogleMapController? _mapController;
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
   final Map<String, _AlunoMarkerData> _alunoMarkersData = {};
   late int _selectedIndex;
-  String _apiKey = "";
+  final String _apiKey = googleApiKey;
 
   // State for Trip Mode
   String? _rotaEmAndamentoId;
   Rota? _rotaAtual;
   DirectionsInfo? _directionsInfo;
   final List<String> _rotaSequenciaParadas = [];
+  final List<_NextStopInfo> _remainingStops = [];
+  final List<RouteStepInfo> _routeSteps = [];
+  int _currentStepIndex = 0;
+  int _lastSpokenStepIndex = -1;
+  DateTime? _lastVoicePromptAt;
+  final VoiceNavigationService _voiceNavigationService =
+      VoiceNavigationService();
+  late final VoidCallback _voiceSettingsListener;
+  DistanceMatrixService? _distanceMatrixService;
+  String? _nextStopEtaText;
+  String? _nextStopLabel;
+  bool _isFetchingNextEta = false;
+  DateTime? _lastNextEtaFetchAt;
+  LatLng? _lastNextEtaOrigin;
+  LatLng? _lastNextEtaDestination;
   bool _calculandoRota = false;
   bool _mostrarResumoRota = true;
+  double? _currentSpeedKmh;
 
   // State for Live Location
   final PermissionService _permissionService = PermissionService();
@@ -236,6 +456,13 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+    _distanceMatrixService = DistanceMatrixService(apiKey: _apiKey);
+    _voiceNavigationService.init();
+    _voiceNavigationService.setEnabled(voiceSettingsService.value);
+    _voiceSettingsListener = () {
+      _voiceNavigationService.setEnabled(voiceSettingsService.value);
+    };
+    voiceSettingsService.addListener(_voiceSettingsListener);
     _loadApiKeyAndData();
   }
 
@@ -243,12 +470,12 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   void dispose() {
     _positionStreamSubscription?.cancel();
     _mapController?.dispose();
+    _voiceNavigationService.stop();
+    voiceSettingsService.removeListener(_voiceSettingsListener);
     super.dispose();
   }
 
   void _loadApiKeyAndData() async {
-    _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? 'CHAVE_NAO_ENCONTRADA';
-
     final hasPermission = await _permissionService.handleLocationPermission();
     if (hasPermission) {
       _startLocationUpdates();
@@ -275,6 +502,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     _positionStreamSubscription =
         Geolocator.getPositionStream().listen((Position position) async {
       final driverLatLng = LatLng(position.latitude, position.longitude);
+      final speedKmh = position.speed.isNaN ? 0.0 : position.speed * 3.6;
 
       setState(() {
         _driverMarker = Marker(
@@ -285,12 +513,19 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         );
         _markers.removeWhere((m) => m.markerId.value == 'driver');
         _markers.add(_driverMarker!);
+        _currentSpeedKmh = speedKmh < 0 ? 0 : speedKmh;
       });
 
       if (_directionsInfo != null) {
         _animateCameraToNavigation(driverLatLng, _directionsInfo!.polylinePoints);
       } else {
         _mapController?.animateCamera(CameraUpdate.newLatLng(driverLatLng));
+      }
+      if (_rotaEmAndamentoId != null && _remainingStops.isNotEmpty) {
+        _updateNextStopProgress(driverLatLng);
+      }
+      if (_rotaEmAndamentoId != null && _routeSteps.isNotEmpty) {
+        _updateVoiceGuidance(driverLatLng);
       }
       if (_rotaEmAndamentoId != null) {
         try {
@@ -423,8 +658,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     _polylines.add(
       Polyline(
         polylineId: PolylineId('${id}_background'),
-        color: color.withValues(alpha: 0.25),
-        width: 14,
+        color: color.withValues(alpha: 0.2),
+        width: 22,
         points: points,
         zIndex: 1,
         startCap: Cap.roundCap,
@@ -435,7 +670,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       Polyline(
         polylineId: PolylineId(id),
         color: color,
-        width: 7,
+        width: 11,
         points: points,
         zIndex: 2,
         startCap: Cap.roundCap,
@@ -577,19 +812,15 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       LatLng focus, List<LatLng> polylinePoints) {
     if (polylinePoints.isEmpty) return;
     if (_mapController == null) return;
-    LatLng directionTarget;
-    if (polylinePoints.length > 1) {
-      directionTarget = polylinePoints[1];
-    } else {
-      directionTarget = polylinePoints.first;
-    }
+    final directionTarget = _pickDirectionTarget(focus, polylinePoints);
     final bearing = _calculateBearing(focus, directionTarget);
+    final target = _offsetLatLng(focus, bearing, 150);
     _mapController!.animateCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
-          target: focus,
-          zoom: 16.5,
-          tilt: 60,
+          target: target,
+          zoom: 18.2,
+          tilt: 70,
           bearing: bearing,
         ),
       ),
@@ -605,6 +836,178 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
     final brng = math.atan2(y, x);
     return (brng * 180 / math.pi + 360) % 360;
+  }
+
+  LatLng _pickDirectionTarget(LatLng focus, List<LatLng> polylinePoints) {
+    if (polylinePoints.length <= 1) return polylinePoints.first;
+
+    var closestIndex = 0;
+    var minDistance = double.infinity;
+    for (var i = 0; i < polylinePoints.length; i++) {
+      final point = polylinePoints[i];
+      final distance = Geolocator.distanceBetween(
+        focus.latitude,
+        focus.longitude,
+        point.latitude,
+        point.longitude,
+      );
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i;
+      }
+    }
+
+    final targetIndex = (closestIndex + 5).clamp(0, polylinePoints.length - 1);
+    return polylinePoints[targetIndex];
+  }
+
+  LatLng _offsetLatLng(LatLng origin, double bearing, double distanceMeters) {
+    const earthRadius = 6378137.0;
+    final bearingRad = bearing * math.pi / 180;
+    final lat1 = origin.latitude * math.pi / 180;
+    final lon1 = origin.longitude * math.pi / 180;
+    final angularDistance = distanceMeters / earthRadius;
+
+    final lat2 = math.asin(
+      math.sin(lat1) * math.cos(angularDistance) +
+          math.cos(lat1) * math.sin(angularDistance) * math.cos(bearingRad),
+    );
+    final lon2 = lon1 +
+        math.atan2(
+          math.sin(bearingRad) * math.sin(angularDistance) * math.cos(lat1),
+          math.cos(angularDistance) - math.sin(lat1) * math.sin(lat2),
+        );
+
+    return LatLng(lat2 * 180 / math.pi, lon2 * 180 / math.pi);
+  }
+
+  void _updateNextStopProgress(LatLng driverLatLng) {
+    if (_remainingStops.isEmpty) return;
+    final nextStop = _remainingStops.first;
+    final distance = Geolocator.distanceBetween(
+      driverLatLng.latitude,
+      driverLatLng.longitude,
+      nextStop.location.latitude,
+      nextStop.location.longitude,
+    );
+    if (distance <= _stopReachedThresholdMeters) {
+      if (nextStop.isDestination) {
+        _voiceNavigationService.speak('Você chegou ao destino.');
+      } else {
+        _voiceNavigationService.speak('Chegando na parada de ${nextStop.label}.');
+      }
+      _remainingStops.removeAt(0);
+      _nextStopEtaText = null;
+      _lastNextEtaFetchAt = null;
+      _lastNextEtaOrigin = null;
+      _lastNextEtaDestination = null;
+      _nextStopLabel = _remainingStops.isNotEmpty ? _remainingStops.first.label : null;
+      if (mounted) {
+        setState(() {});
+      }
+    }
+
+    if (_remainingStops.isEmpty) return;
+    _updateNextStopEta(driverLatLng, _remainingStops.first.location);
+  }
+
+  bool _shouldFetchNextEta(LatLng origin, LatLng destination) {
+    final lastFetch = _lastNextEtaFetchAt;
+    if (lastFetch == null) return true;
+    final elapsed = DateTime.now().difference(lastFetch);
+    if (elapsed.inSeconds >= _etaMinIntervalSeconds) return true;
+    if (_lastNextEtaOrigin == null || _lastNextEtaDestination == null) return true;
+    final movedOrigin = Geolocator.distanceBetween(
+      origin.latitude,
+      origin.longitude,
+      _lastNextEtaOrigin!.latitude,
+      _lastNextEtaOrigin!.longitude,
+    );
+    final movedDestination = Geolocator.distanceBetween(
+      destination.latitude,
+      destination.longitude,
+      _lastNextEtaDestination!.latitude,
+      _lastNextEtaDestination!.longitude,
+    );
+    return movedOrigin >= _etaOriginMoveMeters ||
+        movedDestination >= _etaDestinationMoveMeters;
+  }
+
+  Future<void> _updateNextStopEta(LatLng origin, LatLng destination) async {
+    if (_distanceMatrixService == null || _isFetchingNextEta) return;
+    if (!_shouldFetchNextEta(origin, destination)) return;
+    _isFetchingNextEta = true;
+    _lastNextEtaFetchAt = DateTime.now();
+    _lastNextEtaOrigin = origin;
+    _lastNextEtaDestination = destination;
+
+    final metrics = await _distanceMatrixService!.fetchDriveMetrics(
+      origin: origin,
+      destination: destination,
+    );
+
+    if (!mounted) {
+      _isFetchingNextEta = false;
+      return;
+    }
+
+    final seconds = metrics?.durationInTrafficSeconds ?? metrics?.durationSeconds;
+    setState(() {
+      _nextStopEtaText = _formatDurationSeconds(seconds);
+    });
+    _isFetchingNextEta = false;
+  }
+
+  String? _formatDurationSeconds(int? seconds) {
+    if (seconds == null || seconds <= 0) return null;
+    final minutes = (seconds / 60).round();
+    if (minutes < 60) return '$minutes min';
+    final hours = minutes ~/ 60;
+    final remaining = minutes % 60;
+    if (remaining == 0) return '${hours}h';
+    return '${hours}h ${remaining}m';
+  }
+
+  void _announceInitialStep() {
+    if (_routeSteps.isEmpty) return;
+    final instruction = _routeSteps.first.instruction;
+    if (instruction.isEmpty) return;
+    _voiceNavigationService.speak('Iniciando rota. $instruction');
+    _lastSpokenStepIndex = 0;
+    _lastVoicePromptAt = DateTime.now();
+  }
+
+  void _updateVoiceGuidance(LatLng driverLatLng) {
+    if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) {
+      return;
+    }
+    final now = DateTime.now();
+    final lastPrompt = _lastVoicePromptAt;
+    if (lastPrompt != null &&
+        now.difference(lastPrompt).inSeconds < _voiceMinIntervalSeconds) {
+      return;
+    }
+
+    final step = _routeSteps[_currentStepIndex];
+    final distance = Geolocator.distanceBetween(
+      driverLatLng.latitude,
+      driverLatLng.longitude,
+      step.endLocation.latitude,
+      step.endLocation.longitude,
+    );
+
+    if (_lastSpokenStepIndex != _currentStepIndex &&
+        distance <= _voicePromptDistanceMeters) {
+      _voiceNavigationService.speak(step.instruction);
+      _lastSpokenStepIndex = _currentStepIndex;
+      _lastVoicePromptAt = now;
+    }
+
+    if (distance <= _voiceStepCompleteDistanceMeters) {
+      _currentStepIndex =
+          (_currentStepIndex + 1).clamp(0, _routeSteps.length);
+      _lastSpokenStepIndex = -1;
+    }
   }
 
   Future<void> _exibirRota(String rotaId) async {
@@ -680,6 +1083,19 @@ class _TelaMotoristaState extends State<TelaMotorista> {
               ?.map((index) => alunosComDados[index])
               .toList() ??
           alunosComDados;
+      final nextStops = [
+        ...orderedStops.map(
+          (entry) => _NextStopInfo(
+            label: entry.nome,
+            location: LatLng(entry.geoPoint.latitude, entry.geoPoint.longitude),
+          ),
+        ),
+        _NextStopInfo(
+          label: rota.localDestinoNome.isNotEmpty ? rota.localDestinoNome : 'Destino',
+          location: destinoFinal,
+          isDestination: true,
+        ),
+      ];
 
       _markers.clear();
       _alunoMarkersData.clear();
@@ -727,10 +1143,25 @@ class _TelaMotoristaState extends State<TelaMotorista> {
           ..clear()
           ..addAll(orderedStops.map((entry) => entry.nome))
           ..add(rota.localDestinoNome);
+        _routeSteps
+          ..clear()
+          ..addAll(directionsInfo.steps);
+        _currentStepIndex = 0;
+        _lastSpokenStepIndex = -1;
+        _lastVoicePromptAt = null;
+        _remainingStops
+          ..clear()
+          ..addAll(nextStops);
+        _nextStopLabel = _remainingStops.isNotEmpty ? _remainingStops.first.label : null;
+        _nextStopEtaText = null;
+        _lastNextEtaFetchAt = null;
+        _lastNextEtaOrigin = null;
+        _lastNextEtaDestination = null;
         _polylines.clear();
-        _addStyledPolyline('rota_coleta', directionsInfo.polylinePoints, Colors.blueAccent);
+        _addStyledPolyline('rota_coleta', directionsInfo.polylinePoints, const Color(0xFF6D4CFF));
         _calculandoRota = false;
       });
+      _announceInitialStep();
       _animateCameraToNavigation(motoristaLocation, directionsInfo.polylinePoints);
     } catch (e) {
       final cached = LocalCacheService.instance.getCachedRotaAtual();
@@ -746,12 +1177,24 @@ class _TelaMotoristaState extends State<TelaMotorista> {
             [];
         final destino = _parseLatLng(cached['destino']);
         if (points.isNotEmpty && destino != null && mounted) {
+          final cachedStops = <_NextStopInfo>[
+            for (var i = 0; i < paradas.length; i++)
+              _NextStopInfo(
+                label: 'Parada ${i + 1}',
+                location: paradas[i],
+              ),
+            _NextStopInfo(
+              label: 'Destino',
+              location: destino,
+              isDestination: true,
+            ),
+          ];
           setState(() {
             _polylines
               ..clear()
               ..add(Polyline(
                 polylineId: const PolylineId('rota_cache'),
-                color: Colors.blueAccent,
+                color: const Color(0xFF6D4CFF),
                 width: 6,
                 points: points,
               ));
@@ -777,6 +1220,19 @@ class _TelaMotoristaState extends State<TelaMotorista> {
               icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
               infoWindow: InfoWindow(title: AppLocalizations.of(context)!.destinationCache),
             ));
+            _remainingStops
+              ..clear()
+              ..addAll(cachedStops);
+            _nextStopLabel =
+                _remainingStops.isNotEmpty ? _remainingStops.first.label : null;
+            _routeSteps.clear();
+            _currentStepIndex = 0;
+            _lastSpokenStepIndex = -1;
+            _lastVoicePromptAt = null;
+            _nextStopEtaText = null;
+            _lastNextEtaFetchAt = null;
+            _lastNextEtaOrigin = null;
+            _lastNextEtaDestination = null;
           });
         }
       }
@@ -795,7 +1251,7 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     if (_rotaAtual == null) return;
     
     await FirebaseFirestore.instance.collection('rotas').doc(_rotaAtual!.id).update({
-      'status': StatusRota.planejada.name,
+      'status': StatusRota.concluida.name,
       'polylineRota': FieldValue.delete(),
       'paradasOrdenadas': FieldValue.delete(),
       'destino': FieldValue.delete(),
@@ -808,6 +1264,16 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       _rotaAtual = null;
       _directionsInfo = null;
       _rotaSequenciaParadas.clear();
+      _routeSteps.clear();
+      _currentStepIndex = 0;
+      _lastSpokenStepIndex = -1;
+      _lastVoicePromptAt = null;
+      _remainingStops.clear();
+      _nextStopLabel = null;
+      _nextStopEtaText = null;
+      _lastNextEtaFetchAt = null;
+      _lastNextEtaOrigin = null;
+      _lastNextEtaDestination = null;
       _carregarAlunosNoMapa();
     });
   }
@@ -924,7 +1390,25 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   void _openNotifications() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => TelaNotificacoes()),
+      MaterialPageRoute(builder: (context) => TelaConvites()),
+    );
+  }
+
+  Future<void> _openHistorico() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const TelaHistoricoViagens.motorista(),
+      ),
+    );
+  }
+
+  Future<void> _openNotificacoesClima() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const TelaNotificacoes(),
+      ),
     );
   }
 
@@ -1004,6 +1488,12 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   Widget build(BuildContext context) {
     final String userId = FirebaseAuth.instance.currentUser?.uid ?? '';
     final bool isLoggedIn = userId.isNotEmpty;
+    final bool showNavigationUI =
+        _rotaEmAndamentoId != null && _directionsInfo != null;
+    final String destinationLabel =
+        _rotaAtual?.localDestinoNome ?? _rotaAtual?.nome ?? 'Destino';
+    final String distanceLabel =
+        _directionsInfo?.totalDistance ?? 'Rota em andamento';
 
     Widget mapaWidget = Stack(
       children: [
@@ -1024,21 +1514,45 @@ class _TelaMotoristaState extends State<TelaMotorista> {
             right: 16,
             child: _RouteStatusChip(),
           ),
-        Positioned(
-          left: 16,
-          right: 16,
-          top: 16,
-          child: _RouteSummaryPanel(
-            directionsInfo: _directionsInfo,
-            stops: _rotaSequenciaParadas,
-            isExpanded: _mostrarResumoRota,
-            onToggle: () {
-              setState(() {
-                _mostrarResumoRota = !_mostrarResumoRota;
-              });
-            },
+        if (!showNavigationUI)
+          Positioned(
+            left: 16,
+            right: 16,
+            top: 16,
+            child: _RouteSummaryPanel(
+              directionsInfo: _directionsInfo,
+              stops: _rotaSequenciaParadas,
+              isExpanded: _mostrarResumoRota,
+              onToggle: () {
+                setState(() {
+                  _mostrarResumoRota = !_mostrarResumoRota;
+                });
+              },
+            ),
           ),
-        ),
+        if (showNavigationUI)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 16,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _SpeedBadge(speedKmh: _currentSpeedKmh),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _NavigationFooter(
+                    destination: destinationLabel,
+                    duration: _directionsInfo?.totalDuration,
+                    distance: _directionsInfo?.totalDistance,
+                    isTrafficAware: _directionsInfo?.isTrafficAware ?? false,
+                    nextStopEta: _nextStopEtaText,
+                    nextStopLabel: _nextStopLabel,
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
 
@@ -1059,15 +1573,26 @@ class _TelaMotoristaState extends State<TelaMotorista> {
               title: 'Menu do Motorista',
               onSettings: _navigateToSettings,
               onLogout: _logout,
+              onNotifications: _openNotificacoesClima,
+              onHistory: _openHistorico,
             )
           : null,
       floatingActionButton: _rotaEmAndamentoId == null
           ? null
-          : FloatingActionButton.extended(
-              onPressed: _finalizarViagem,
-              label: const Text('Finalizar Viagem'),
-              icon: const Icon(Icons.done_all),
+          : Padding(
+              padding: const EdgeInsets.only(top: 72),
+              child: FloatingActionButton(
+                onPressed: _finalizarViagem,
+                tooltip: 'Finalizar viagem',
+                mini: true,
+                backgroundColor: const Color(0xFFB5FF2A),
+                foregroundColor: Colors.black,
+                child: const Icon(Icons.done_all),
+              ),
             ),
+      floatingActionButtonLocation: _rotaEmAndamentoId == null
+          ? null
+          : FloatingActionButtonLocation.endTop,
       body: IndexedStack(
         index: _selectedIndex,
         children: [
@@ -1094,12 +1619,15 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       bottomNavigationBar: NeonBottomNavBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
-          BottomNavigationBarItem(icon: Icon(Icons.edit_road_outlined), label: 'Viagem'),
-          BottomNavigationBarItem(icon: Icon(Icons.people_alt_outlined), label: 'Alunos'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+        items: [
+          const BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
+          const BottomNavigationBarItem(icon: Icon(Icons.edit_road_outlined), label: 'Viagem'),
+          const BottomNavigationBarItem(icon: Icon(Icons.people_alt_outlined), label: 'Alunos'),
+          BottomNavigationBarItem(
+            icon: MessagesBadge(userId: userId, icon: Icons.chat),
+            label: 'Chat',
+          ),
+          const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
         ],
         selectedColor: Theme.of(context).colorScheme.primary,
         unselectedColor: Colors.white70,

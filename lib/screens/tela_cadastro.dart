@@ -170,7 +170,7 @@ class _TelaCadastroState extends State<TelaCadastro> {
     // Cria apenas com os campos específicos do aluno
     final novoAluno = Aluno(
       id: user.uid,
-      motoristaId: null,
+      motoristasIds: const [],
       localizacao: const GeoPoint(0, 0),
       statusPresenca: StatusPresenca.ausente,
     );

@@ -10,7 +10,6 @@ import 'dart:typed_data';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:vango/widgets/neon_app_bar.dart';
 import 'package:vango/services/storage_service.dart'; // Import do novo serviço
-import 'tela_notificacoes.dart';
 
 class CadastrarVanScreen extends StatefulWidget {
   final Van? van;
@@ -37,6 +36,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
   bool _isEditMode = false;
   String? _vanId;
   String? _fotoUrlExistente;
+  String? _placaOriginal;
 
   @override
   void dispose() {
@@ -119,6 +119,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     _capacidadeController.text = van.capacidade.toString();
     _corController.text = van.cor;
     _fotoUrlExistente = van.vanFotoUrl;
+    _placaOriginal = van.placa;
   }
 
   Future<void> _salvarVan() async {
@@ -142,19 +143,25 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     });
 
     String? fotoUrl = _fotoUrlExistente;
+    final novaPlaca = _placaController.text.trim();
+
     try {
-      // 1. Faz o upload da foto, se uma foi escolhida
+      // 1. Faz o upload da foto, se uma nova foi escolhida
       if (_imageFile != null) {
+        // Se a placa mudou, deleta a foto antiga.
+        if (_isEditMode && _placaOriginal != null && _placaOriginal != novaPlaca) {
+           await _storageService.deleteVanImage(motoristaId, _placaOriginal!);
+        }
         fotoUrl = await _storageService.uploadVanImage(
           motoristaId,
-          _placaController.text.trim(),
+          novaPlaca,
           _imageFile!,
         );
       }
 
       if (_isEditMode && _vanId != null) {
         await FirebaseFirestore.instance.collection('vans').doc(_vanId).update({
-          'placa': _placaController.text.trim(),
+          'placa': novaPlaca,
           'marca': _marcaController.text.trim(),
           'modelo': _modeloController.text.trim(),
           'ano': int.parse(_anoController.text),
@@ -165,7 +172,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
       } else {
         final van = Van(
           id: '',
-          placa: _placaController.text.trim(),
+          placa: novaPlaca,
           marca: _marcaController.text.trim(),
           modelo: _modeloController.text.trim(),
           ano: int.parse(_anoController.text),
@@ -212,6 +219,60 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
     }
   }
 
+  Future<void> _deletarVan() async {
+    final motoristaId = FirebaseAuth.instance.currentUser?.uid;
+    if (!_isEditMode || _vanId == null || motoristaId == null) return;
+    
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar Exclusão'),
+        content: const Text('Tem certeza que deseja deletar esta van? Esta ação não pode ser desfeita.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('CANCELAR')),
+          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('DELETAR')),
+        ],
+      ),
+    );
+
+    if (confirmou != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Deleta a foto da van
+      if (_placaOriginal != null) {
+        await _storageService.deleteVanImage(motoristaId, _placaOriginal!);
+      }
+
+      // Deleta o documento da van
+      await FirebaseFirestore.instance.collection('vans').doc(_vanId!).delete();
+
+      // Remove o ID da van da lista do motorista
+      await FirebaseFirestore.instance.collection('motoristas').doc(motoristaId).update({
+        'vansIds': FieldValue.arrayRemove([_vanId])
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Van deletada com sucesso!'), backgroundColor: Colors.green),
+        );
+        Navigator.of(context).pop();
+      }
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao deletar van: ${e.toString()}'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -219,12 +280,7 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
           title: _isEditMode ? 'Editar Van' : 'Cadastrar Nova Van',
           showMenuButton: false,
           showBackButton: true,
-          onNotificationsPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => TelaNotificacoes()),
-            );
-          },
+          showNotificationsButton: false,
         ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -267,6 +323,19 @@ class _CadastrarVanScreenState extends State<CadastrarVanScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
                         ),
+                        if (_isEditMode) ...[
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            onPressed: _deletarVan,
+                            icon: const Icon(Icons.delete_forever),
+                            label: const Text('DELETAR VAN'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red.shade700,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

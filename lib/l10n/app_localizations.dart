@@ -373,7 +373,7 @@ abstract class AppLocalizations {
   /// No description provided for @currentDriverTitle.
   ///
   /// In en, this message translates to:
-  /// **'Your current driver'**
+  /// **'Your linked drivers'**
   String get currentDriverTitle;
 
   /// No description provided for @ratingLabel.

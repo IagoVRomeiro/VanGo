@@ -7,14 +7,14 @@ class Aluno {
   final String id;
   final GeoPoint localizacao;
   final StatusPresenca statusPresenca;
-  final String? motoristaId;
+  final List<String> motoristasIds;
   final Timestamp? criadoEm;
 
   Aluno({
     required this.id,
     required this.localizacao,
     required this.statusPresenca,
-    this.motoristaId,
+    this.motoristasIds = const [],
     this.criadoEm,
   });
 
@@ -22,7 +22,7 @@ class Aluno {
     return {
       'localizacao': localizacao,
       'statusPresenca': statusPresenca.name,
-      'motoristaId': motoristaId,
+      'motoristasIds': motoristasIds,
       'criadoEm': criadoEm ?? FieldValue.serverTimestamp(),
     };
   }
@@ -35,9 +35,22 @@ class Aluno {
         (e) => e.name == data['statusPresenca'],
         orElse: () => StatusPresenca.ausente,
       ),
-      motoristaId: data['motoristaId'],
+      motoristasIds: Aluno.motoristasIdsFromMap(data),
       criadoEm: data['criadoEm'],
     );
+  }
+
+  static List<String> motoristasIdsFromMap(Map<String, dynamic>? data) {
+    if (data == null) return const [];
+    final motoristasRaw = data['motoristasIds'];
+    if (motoristasRaw is Iterable) {
+      return motoristasRaw.whereType<String>().toSet().toList();
+    }
+    final motoristaId = data['motoristaId'];
+    if (motoristaId is String && motoristaId.isNotEmpty) {
+      return [motoristaId];
+    }
+    return const [];
   }
 }
 

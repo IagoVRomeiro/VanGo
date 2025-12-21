@@ -1,16 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/place_type.dart';
 import 'package:google_places_flutter/model/prediction.dart';
+import 'package:vango/config/api_keys.dart';
 import '../models/aluno.dart';
 import '../models/motorista.dart';
 import '../models/usuario.dart';
 import '../models/van.dart';
 import '../models/rota.dart';
-import 'package:vango/screens/tela_notificacoes.dart';
 import 'package:vango/widgets/neon_app_bar.dart';
 
 class CriarRotaScreen extends StatefulWidget {
@@ -52,7 +51,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
   @override
   void initState() {
     super.initState();
-    _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
+    _apiKey = googleApiKey;
     if (widget.rotaId != null) {
       _isEditMode = true;
     }
@@ -325,6 +324,48 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
     }
   }
 
+  Future<void> _deletarRota() async {
+    if (!_isEditMode || widget.rotaId == null) return;
+    
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar Exclusão'),
+        content: const Text('Tem certeza que deseja deletar esta rota? Esta ação não pode ser desfeita.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('CANCELAR')),
+          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('DELETAR')),
+        ],
+      ),
+    );
+
+    if (confirmou != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await FirebaseFirestore.instance.collection('rotas').doc(widget.rotaId!).delete();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Rota deletada com sucesso!'), backgroundColor: Colors.green),
+        );
+        Navigator.of(context).pop();
+      }
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao deletar rota: ${e.toString()}'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   DateTime? _calcularProximoHorario(TimeOfDay time, Map<String, bool> dias) {
     if (dias.values.every((d) => !d)) return null;
 
@@ -402,7 +443,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                 .textTheme
                 .titleSmall
                 ?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
                   fontWeight: FontWeight.bold,
                 ),
           ),
@@ -444,13 +485,13 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
             decoration: const InputDecoration(
               labelText: 'Local de Destino (Faculdade)',
               border: OutlineInputBorder(),
-              hintText: 'Configure GOOGLE_MAPS_API_KEY no assets/.env',
+              hintText: 'Configure a chave do Google Maps para continuar.',
             ),
-            validator: (_) => 'Configure GOOGLE_MAPS_API_KEY para usar o autocomplete.',
+            validator: (_) => 'Configure a chave do Google Maps para usar o autocomplete.',
           ),
           const SizedBox(height: 8),
           Text(
-            'É necessário configurar a chave do Google Maps no arquivo assets/.env para habilitar o campo.',
+            'É necessário configurar a chave do Google Maps para habilitar o campo.',
             style: TextStyle(color: Colors.red.shade700, fontSize: 12),
           ),
         ],
@@ -510,7 +551,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                 .textTheme
                 .titleSmall
                 ?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
                   fontWeight: FontWeight.bold,
                 ),
           ),
@@ -586,12 +627,7 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
           title: _isEditMode ? 'Editar Rota' : 'Criar Nova Rota',
           showMenuButton: false,
           showBackButton: true,
-          onNotificationsPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => TelaNotificacoes()),
-            );
-          },
+          showNotificationsButton: false,
         ),
         body: _carregandoDados
             ? const Center(child: CircularProgressIndicator())
@@ -682,6 +718,19 @@ class _CriarRotaScreenState extends State<CriarRotaScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
                         ),
+                        if (_isEditMode) ...[
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            onPressed: _deletarRota,
+                            icon: const Icon(Icons.delete_forever),
+                            label: const Text('DELETAR ROTA'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red.shade700,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

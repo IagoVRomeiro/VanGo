@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:vango/services/theme_service.dart';
 import 'package:vango/services/locale_service.dart';
+import 'package:vango/services/voice_settings_service.dart';
 import 'package:vango/widgets/neon_app_bar.dart';
 import 'package:vango/l10n/app_localizations.dart';
 
@@ -35,6 +36,23 @@ class TelaConfiguracoes extends StatelessWidget {
                     secondary: Icon(
                       currentMode == ThemeMode.dark ? Icons.dark_mode : Icons.light_mode,
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: voiceSettingsService,
+                    builder: (context, enabled, _) {
+                      return SwitchListTile(
+                        title: const Text('Voz de navegação'),
+                        subtitle: const Text('Instruções faladas durante a rota'),
+                        value: enabled,
+                        onChanged: (value) {
+                          voiceSettingsService.setEnabled(value);
+                        },
+                        secondary: Icon(
+                          enabled ? Icons.volume_up : Icons.volume_off,
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 12),
                   ListTile(

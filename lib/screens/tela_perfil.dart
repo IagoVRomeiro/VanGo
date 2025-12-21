@@ -9,14 +9,17 @@ import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:vango/config/api_keys.dart';
 
 import 'tela_login.dart';
+import 'tela_convites.dart';
 import 'tela_notificacoes.dart';
+import 'tela_historico_viagens.dart';
 import '../widgets/neon_app_bar.dart';
 import '../widgets/neon_bottom_nav_bar.dart';
 import '../widgets/neon_drawer.dart';
 import '../widgets/notifications_bell.dart';
+import '../widgets/messages_badge.dart';
 import '../models/usuario.dart';
 import 'tela_selecao.dart';
 
@@ -82,7 +85,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
   @override
   void initState() {
     super.initState();
-    _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
+    _apiKey = googleApiKey;
     _verificarLoginECarregar();
   }
 
@@ -323,7 +326,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   void _goToNotifications() {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => TelaNotificacoes()),
+      MaterialPageRoute(builder: (_) => TelaConvites()),
     );
   }
 
@@ -351,7 +354,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
             readOnly: true,
             decoration: const InputDecoration(
               labelText: "Endereço",
-              hintText: 'Configure GOOGLE_MAPS_API_KEY no arquivo assets/.env',
+              hintText: 'Configure a chave do Google Maps para continuar.',
             ),
           ),
           const SizedBox(height: 8),
@@ -525,12 +528,15 @@ class _PerfilScreenState extends State<PerfilScreen> {
       drawer: NeonDrawer(
         onSettings: _openSettingsFromDrawer,
         onLogout: _logout,
+        onNotifications: _openNotificacoesClima,
+        onHistory: _openHistorico,
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
   Widget _buildBottomNavigationBar() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
     if (_isDriver) {
       return NeonBottomNavBar(
         currentIndex: 4,
@@ -544,14 +550,17 @@ class _PerfilScreenState extends State<PerfilScreen> {
             Navigator.pushReplacementNamed(context, '/motorista');
           }
         },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
-          BottomNavigationBarItem(
+        items: [
+          const BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
+          const BottomNavigationBarItem(
               icon: Icon(Icons.edit_road_outlined), label: 'Viagem'),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
               icon: Icon(Icons.people_alt_outlined), label: 'Alunos'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+          BottomNavigationBarItem(
+            icon: MessagesBadge(userId: userId, icon: Icons.chat),
+            label: 'Chat',
+          ),
+          const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
         ],
       );
     }
@@ -568,11 +577,14 @@ class _PerfilScreenState extends State<PerfilScreen> {
           Navigator.pushReplacementNamed(context, '/aluno');
         }
       },
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
-        BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
-        BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Procurar'),
-        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+      items: [
+        const BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
+        BottomNavigationBarItem(
+          icon: MessagesBadge(userId: userId, icon: Icons.chat),
+          label: 'Chat',
+        ),
+        const BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Procurar'),
+        const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
       ],
     );
   }
@@ -582,6 +594,25 @@ class _PerfilScreenState extends State<PerfilScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Você já está na tela de configurações.')),
+    );
+  }
+
+  Future<void> _openHistorico() async {
+    if (!mounted) return;
+    final screen = _isDriver
+        ? const TelaHistoricoViagens.motorista()
+        : const TelaHistoricoViagens.aluno();
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => screen),
+    );
+  }
+
+  Future<void> _openNotificacoesClima() async {
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const TelaNotificacoes()),
     );
   }
 

@@ -153,7 +153,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get noDriversFound => 'Aucun chauffeur trouvé.';
 
   @override
-  String get currentDriverTitle => 'Votre chauffeur actuel';
+  String get currentDriverTitle => 'Vos chauffeurs associés';
 
   @override
   String ratingLabel(Object nota) {

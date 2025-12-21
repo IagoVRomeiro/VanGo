@@ -75,6 +75,7 @@ class ChatService {
       'senderId': activate ? motoristaId : alunoId,
       'timestamp': serverTimestamp,
     };
+    final recipientId = activate ? alunoId : motoristaId;
 
     await docRef.set({
       'participants': [alunoId, motoristaId],
@@ -85,6 +86,8 @@ class ChatService {
       'createdAt': serverTimestamp,
       'updatedAt': serverTimestamp,
       'lastMessage': lastMessage,
+      'unreadCount': {recipientId: 1},
+      'lastRead': {},
     });
 
     return docRef.id;

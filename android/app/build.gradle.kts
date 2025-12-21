@@ -1,20 +1,9 @@
-import java.util.Properties
-import java.io.FileInputStream
-
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
-
-// Read local.properties
-val localProperties = Properties()
-val localPropertiesFile = rootProject.file("local.properties")
-if (localPropertiesFile.exists()) {
-    localProperties.load(FileInputStream(localPropertiesFile))
-}
-
 
 android {
     namespace = "com.example.vango"
@@ -41,7 +30,8 @@ android {
         versionName = flutter.versionName
 
         // Add API key to manifest
-        manifestPlaceholders["maps.apiKey"] = localProperties.getProperty("maps.apiKey")
+        val mapsApiKey = "REMOVIDO"
+        manifestPlaceholders["maps.apiKey"] = mapsApiKey
     }
 
     buildTypes {

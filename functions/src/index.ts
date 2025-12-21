@@ -187,7 +187,10 @@ export const aceitarConviteAluno = functionsUs.https.onCall(async (data, context
 
             transaction.set(
                 alunoRef,
-                { motoristaId: motoristaId },
+                {
+                    motoristasIds: admin.firestore.FieldValue.arrayUnion(motoristaId),
+                    motoristaId: admin.firestore.FieldValue.delete(),
+                },
                 { merge: true }
             );
         });
@@ -217,6 +220,7 @@ export const desvincularMotoristaAluno = functionsUs.https.onCall(async (data, c
     }
 
     const alunoId = context.auth.uid;
+    const motoristaIdInput = typeof data?.motoristaId === "string" ? data.motoristaId : null;
 
     try {
         const alunoRef = db.collection("alunos").doc(alunoId);
@@ -228,7 +232,20 @@ export const desvincularMotoristaAluno = functionsUs.https.onCall(async (data, c
             );
         }
         const alunoData = alunoSnap.data();
-        const motoristaId = alunoData?.motoristaId as string | undefined;
+        const motoristasIdsRaw = alunoData?.motoristasIds;
+        const motoristasIds = Array.isArray(motoristasIdsRaw)
+            ? motoristasIdsRaw.filter((id: unknown) => typeof id === "string") as string[]
+            : [];
+        const motoristaIdLegacy = alunoData?.motoristaId as string | undefined;
+        const motoristaId =
+            motoristaIdInput ??
+            (motoristasIds.length === 1 ? motoristasIds[0] : motoristaIdLegacy);
+        if (motoristasIds.length > 1 && !motoristaIdInput) {
+            throw new functions.https.HttpsError(
+                "failed-precondition",
+                "Informe o motoristaId para desvincular quando houver múltiplos motoristas."
+            );
+        }
         if (!motoristaId) {
             return { success: true, message: "Aluno já está desvinculado." };
         }
@@ -236,7 +253,10 @@ export const desvincularMotoristaAluno = functionsUs.https.onCall(async (data, c
         const motoristaRef = db.collection("motoristas").doc(motoristaId);
 
         await db.runTransaction(async (transaction) => {
-          transaction.update(alunoRef, { motoristaId: admin.firestore.FieldValue.delete() });
+          transaction.update(alunoRef, {
+            motoristasIds: admin.firestore.FieldValue.arrayRemove(motoristaId),
+            motoristaId: admin.firestore.FieldValue.delete(),
+          });
           transaction.update(motoristaRef, {
             alunosIds: admin.firestore.FieldValue.arrayRemove(alunoId),
           });
@@ -373,8 +393,9 @@ export const desvincularAluno = functionsUs.https.onCall(async (data: any, conte
                 alunosIds: admin.firestore.FieldValue.arrayRemove(alunoId),
             });
 
-            // b. Remover o 'motoristaId' do documento do aluno
+            // b. Remover o motorista atual do documento do aluno
             transaction.update(alunoRef, {
+                motoristasIds: admin.firestore.FieldValue.arrayRemove(motoristaId),
                 motoristaId: admin.firestore.FieldValue.delete(),
             });
 

@@ -229,7 +229,10 @@ class _TelaViagemState extends State<TelaViagem> {
               leading: Icon(Icons.route_outlined,
                   color: Theme.of(context).colorScheme.primary, size: 40),
               title: Text(rota.nome),
-              subtitle: Text(subtitulo),
+              subtitle: Text(
+                '${diasAtivos.isNotEmpty ? "$diasAtivos | " : ""}'
+                '${rota.horarioInicioPrevisto} - ${rota.horarioFimPrevisto}',
+              ),
               trailing: trailingWidget,
               onTap: () {
                 Navigator.push(
@@ -250,6 +253,7 @@ class _TelaViagemState extends State<TelaViagem> {
     try {
       await FirebaseFirestore.instance.collection('rotas').doc(rotaId).update({
         'status': StatusRota.emAndamento.name,
+        'horaInicio': FieldValue.serverTimestamp(),
       });
       _abrirMapaDaRota(rotaId);
     } catch (e) {

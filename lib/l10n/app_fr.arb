@@ -44,7 +44,7 @@
   "allColleges": "Tous les établissements",
   "noColleges": "Aucun établissement enregistré. Créez des trajets pour activer les filtres.",
   "noDriversFound": "Aucun chauffeur trouvé.",
-  "currentDriverTitle": "Votre chauffeur actuel",
+  "currentDriverTitle": "Vos chauffeurs associés",
   "ratingLabel": "Note : {nota} ★",
   "loginToSearch": "Connectez-vous pour chercher des chauffeurs.",
   "loginButton": "Connexion",

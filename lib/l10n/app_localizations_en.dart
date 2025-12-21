@@ -151,7 +151,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noDriversFound => 'No drivers found.';
 
   @override
-  String get currentDriverTitle => 'Your current driver';
+  String get currentDriverTitle => 'Your linked drivers';
 
   @override
   String ratingLabel(Object nota) {

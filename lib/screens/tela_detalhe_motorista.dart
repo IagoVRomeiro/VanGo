@@ -5,14 +5,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:vango/models/aluno.dart';
 import 'package:vango/models/motorista.dart';
 import 'package:vango/models/rota.dart';
 import 'package:vango/screens/tela_chat.dart';
 import 'package:vango/services/chat_service.dart';
-import 'package:vango/services/image_service.dart';
 import 'package:vango/services/functions_service.dart';
 import '../widgets/neon_app_bar.dart';
-import 'tela_notificacoes.dart';
+import 'tela_convites.dart';
 import 'tela_avaliacoes_motorista.dart';
 
 class TelaDetalheMotorista extends StatefulWidget {
@@ -62,7 +62,8 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoadingRotas = false);
+      if (!mounted) return;
+      setState(() => _isLoadingRotas = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erro ao carregar rotas: $e')),
       );
@@ -105,6 +106,7 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
         'dataSolicitacao': FieldValue.serverTimestamp(),
       });
 
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: const Text('Solicitação enviada com sucesso!'),
@@ -112,6 +114,7 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
       );
       Navigator.pop(context);
     } catch (e) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text('Erro ao enviar solicitação: $e'),
@@ -139,8 +142,8 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
           .doc(alunoId)
           .get();
       final alunoData = alunoDoc.data();
-      final estaVinculado =
-          alunoData != null && alunoData['motoristaId'] == motoristaId;
+      final estaVinculado = Aluno.motoristasIdsFromMap(alunoData)
+          .contains(motoristaId);
 
       final chatId = await ChatService.ensureChat(
         alunoId: alunoId,
@@ -273,7 +276,7 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
         onNotificationsPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => TelaNotificacoes()),
+            MaterialPageRoute(builder: (_) => TelaConvites()),
           );
         },
       ),
@@ -311,7 +314,7 @@ class _TelaDetalheMotoristaState extends State<TelaDetalheMotorista> {
                   'Avaliação: ${_avaliacaoAtual.toStringAsFixed(1)} ★ ${_avaliacoesQtd > 0 ? '($_avaliacoesQtd)' : ''}',
                 ),
                 avatar: Icon(Icons.star, color: theme.colorScheme.primary),
-                backgroundColor: theme.colorScheme.surfaceVariant,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
               ),
             ),
             Center(

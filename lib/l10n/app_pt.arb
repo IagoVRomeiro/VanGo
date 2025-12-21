@@ -44,7 +44,7 @@
   "allColleges": "Todas as faculdades",
   "noColleges": "Nenhuma faculdade cadastrada. Cadastre rotas para liberar filtros.",
   "noDriversFound": "Nenhum motorista encontrado.",
-  "currentDriverTitle": "Seu motorista atual",
+  "currentDriverTitle": "Seus motoristas vinculados",
   "ratingLabel": "Avaliação: {nota} ★",
   "loginToSearch": "Faça login para procurar motoristas.",
   "loginButton": "Fazer Login",

@@ -44,7 +44,7 @@
   "allColleges": "All colleges",
   "noColleges": "No colleges registered. Create routes to unlock filters.",
   "noDriversFound": "No drivers found.",
-  "currentDriverTitle": "Your current driver",
+  "currentDriverTitle": "Your linked drivers",
   "ratingLabel": "Rating: {nota} ★",
   "loginToSearch": "Log in to search for drivers.",
   "loginButton": "Log in",
