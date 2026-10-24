@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -29,8 +31,12 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // Add API key to manifest
-        val mapsApiKey = "REMOVIDO"
+        // Chave do Google Maps: MAPS_API_KEY em android/local.properties (fora do Git)
+        val localProperties = Properties().apply {
+            val file = rootProject.file("local.properties")
+            if (file.exists()) file.inputStream().use { load(it) }
+        }
+        val mapsApiKey = localProperties.getProperty("MAPS_API_KEY") ?: ""
         manifestPlaceholders["maps.apiKey"] = mapsApiKey
     }
 

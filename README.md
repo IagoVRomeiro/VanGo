@@ -37,18 +37,16 @@ O VanGo é construído utilizando **Flutter**, garantindo uma experiência nativ
 
 ## 🔑 Configuração de Chaves de API
 
-Para que as funcionalidades de mapa e rota funcionem, você precisa fornecer sua própria chave de API do Google Maps. O projeto está configurado para carregar as chaves de locais seguros que não são enviados para o controle de versão.
+As chaves do Google Maps Platform **não ficam no código**: cada pessoa usa a sua, em arquivos locais que não vão para o Git.
 
-1.  **Chave para o Código Dart (Directions API, Places API):**
-    -   Crie um arquivo na pasta `assets/` chamado `.env`.
-    -   Dentro dele, adicione a seguinte linha, substituindo `SUA_CHAVE_AQUI`:
+1.  **Chave para o código Dart (Directions, Places, Distance Matrix):**
+    -   Copie `env.example.json` para `env.json` e troque `SUA_CHAVE_DO_GOOGLE_MAPS` pela sua chave.
+    -   Rode o app passando o arquivo: `flutter run --dart-define-from-file=env.json`.
+
+2.  **Chave para o mapa nativo no Android (Google Maps SDK):**
+    -   Em `android/local.properties` (criado pelo Flutter), adicione:
         ```
-        GOOGLE_MAPS_API_KEY=SUA_CHAVE_AQUI
+        MAPS_API_KEY=SUA_CHAVE_AQUI
         ```
 
-2.  **Chave para o Módulo Nativo Android (Google Maps SDK):**
-    -   Crie um arquivo na pasta `android/` chamado `local.properties`.
-    -   Dentro dele, adicione a seguinte linha, substituindo `SUA_CHAVE_AQUI`:
-        ```
-        maps.apiKey=SUA_CHAVE_AQUI
-        ```
+**Recomendado:** no Google Cloud Console, restrinja a chave ao app (pacote Android + SHA-1, bundle iOS) e só às APIs usadas. As chaves em `lib/firebase_options.dart` são as de configuração do Firebase, públicas por natureza; a proteção dos dados fica nas regras `firestore.rules` e `storage.rules`.

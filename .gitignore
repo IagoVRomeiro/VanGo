@@ -45,3 +45,12 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 lib/firebase_options.dart
+
+# Chaves locais (Google Maps): nunca no Git
+env.json
+
+# Gerados na compilação (têm caminhos desta máquina)
+android/build/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+.vscode/settings.json
