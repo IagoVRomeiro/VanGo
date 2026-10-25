@@ -137,7 +137,10 @@ class _TelaBuscaMotoristaState extends State<TelaBuscaMotorista> {
   Future<void> _carregarMotoristas() async {
     try {
       final motoristasSnapshot = await FirebaseFirestore.instance.collection('motoristas').get();
-      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+      final usersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'motorista')
+          .get();
       final rotasSnapshot = await FirebaseFirestore.instance.collection('rotas').get();
 
       final usersMap = {for (var doc in usersSnapshot.docs) doc.id: doc};

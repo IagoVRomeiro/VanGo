@@ -22,6 +22,7 @@ class DirectionsService {
     required LatLng origin,
     required LatLng destination,
     List<LatLng> waypoints = const [],
+    bool optimizeWaypoints = true,
   }) async {
     final String originStr = '${origin.latitude},${origin.longitude}';
     final String destStr = '${destination.latitude},${destination.longitude}';
@@ -31,10 +32,12 @@ class DirectionsService {
 
     if (waypoints.isNotEmpty) {
       final waypointsStr = waypoints.map((p) => '${p.latitude},${p.longitude}').join('|');
-      buffer.write('&waypoints=optimize:true|$waypointsStr');
+      final optimize = optimizeWaypoints ? 'optimize:true|' : '';
+      buffer.write('&waypoints=$optimize$waypointsStr');
     }
 
     buffer.write('&alternatives=true');
+    buffer.write('&language=pt-BR');
     buffer.write('&key=$apiKey');
     final url = Uri.parse(buffer.toString());
 
@@ -64,6 +67,8 @@ class DirectionsService {
       num totalDistanceMeters = 0;
       num totalDurationSeconds = 0;
       final routeSteps = <RouteStepInfo>[];
+      // Polyline detalhada (por passo), mais fiel às ruas que a overview.
+      final detailedPoints = <LatLng>[];
       final legs = legsJson.map((leg) {
         final stepsJson = leg['steps'] as List<dynamic>? ?? [];
         final steps = stepsJson
@@ -72,6 +77,17 @@ class DirectionsService {
             .toList();
         for (final rawStep in stepsJson) {
           final step = rawStep as Map<String, dynamic>;
+          final stepPolyline = step['polyline']?['points'] as String?;
+          if (stepPolyline != null && stepPolyline.isNotEmpty) {
+            final decoded = PolylinePoints()
+                .decodePolyline(stepPolyline)
+                .map((PointLatLng p) => LatLng(p.latitude, p.longitude));
+            for (final point in decoded) {
+              if (detailedPoints.isEmpty || detailedPoints.last != point) {
+                detailedPoints.add(point);
+              }
+            }
+          }
           final instruction = _stripHtml(step['html_instructions'] as String? ?? '');
           if (instruction.isEmpty) continue;
           final endLocation = step['end_location'] as Map<String, dynamic>?;
@@ -84,6 +100,7 @@ class DirectionsService {
             endLocation: LatLng(endLat, endLng),
             instruction: instruction,
             distanceMeters: distanceMeters,
+            maneuver: step['maneuver'] as String?,
           ));
         }
         final legDistanceMeters = (leg['distance']?['value'] as num?) ?? 0;
@@ -131,9 +148,13 @@ class DirectionsService {
         isTrafficAware = true;
       }
 
-      final snappedPoints = await _roadsService.snapToRoads(points);
-      if (snappedPoints != null && snappedPoints.isNotEmpty) {
-        points = snappedPoints;
+      if (detailedPoints.length >= 2) {
+        points = detailedPoints;
+      } else {
+        final snappedPoints = await _roadsService.snapToRoads(points);
+        if (snappedPoints != null && snappedPoints.isNotEmpty) {
+          points = snappedPoints;
+        }
       }
 
       return DirectionsInfo(

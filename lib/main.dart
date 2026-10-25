@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:vango/services/theme_service.dart';
 import 'package:vango/services/local_cache.dart';
 import 'package:vango/services/locale_service.dart';
+import 'package:vango/services/push_notification_service.dart';
 import 'package:vango/l10n/app_localizations.dart';
 import 'firebase_options.dart';
 
@@ -18,6 +19,7 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  PushNotificationService.instance.init();
   runApp(const VanGoApp());
 }
 

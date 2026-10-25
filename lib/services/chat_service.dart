@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:vango/models/chat.dart';
 
 /// Serviço utilitário para padronizar a criação/resgate de chats
@@ -27,20 +28,18 @@ class ChatService {
 
     DocumentSnapshot<Map<String, dynamic>>? existingDoc;
 
-    final pairQuery =
-        await chatsRef.where('pairKey', isEqualTo: pairKey).limit(1).get();
-    if (pairQuery.docs.isNotEmpty) {
-      existingDoc = pairQuery.docs.first;
-    } else {
-      final legacyQuery =
-          await chatsRef.where('participants', arrayContains: alunoId).get();
-      for (final doc in legacyQuery.docs) {
-        final participants =
-            List<String>.from(doc.data()['participants'] ?? <String>[]);
-        if (participants.contains(motoristaId)) {
-          existingDoc = doc;
-          break;
-        }
+    // As regras só liberam chats em que o usuário logado participa,
+    // então a busca precisa filtrar por ele.
+    final meuId = FirebaseAuth.instance.currentUser?.uid ?? alunoId;
+    final outroId = meuId == alunoId ? motoristaId : alunoId;
+    final meusChats =
+        await chatsRef.where('participants', arrayContains: meuId).get();
+    for (final doc in meusChats.docs) {
+      final participants =
+          List<String>.from(doc.data()['participants'] ?? <String>[]);
+      if (doc.data()['pairKey'] == pairKey || participants.contains(outroId)) {
+        existingDoc = doc;
+        break;
       }
     }
 

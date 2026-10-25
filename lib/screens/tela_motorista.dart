@@ -3,16 +3,21 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:vango/config/api_keys.dart';
+import 'package:vango/config/map_styles.dart';
 import 'package:vango/models/directions_info.dart';
 import 'package:vango/models/rota.dart';
 import 'package:vango/services/distance_matrix_service.dart';
 import 'package:vango/services/directions_service.dart';
 import 'package:vango/services/local_cache.dart';
+import 'package:vango/services/navigation_marker_factory.dart';
 import 'package:vango/services/permission_service.dart';
+import 'package:vango/services/route_progress.dart';
 import 'package:vango/services/voice_navigation_service.dart';
 import 'package:vango/services/voice_settings_service.dart';
 import 'package:vango/l10n/app_localizations.dart';
@@ -156,7 +161,8 @@ class _RouteSummaryPanel extends StatelessWidget {
           children: [
             Text(
               'Trajeto Planejado',
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             Row(
               children: [
@@ -170,7 +176,8 @@ class _RouteSummaryPanel extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(isExpanded ? Icons.expand_less : Icons.expand_more),
+                  icon:
+                      Icon(isExpanded ? Icons.expand_less : Icons.expand_more),
                   onPressed: onToggle,
                 ),
               ],
@@ -183,14 +190,17 @@ class _RouteSummaryPanel extends StatelessWidget {
                   shrinkWrap: true,
                   itemCount: stops.length,
                   itemBuilder: (context, index) {
-                    final label = index == stops.length - 1 ? 'Destino' : 'Parada ${index + 1}';
+                    final label = index == stops.length - 1
+                        ? 'Destino'
+                        : 'Parada ${index + 1}';
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
                       child: Row(
                         children: [
                           CircleAvatar(
                             radius: 14,
-                            backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.8),
+                            backgroundColor: theme.colorScheme.primary
+                                .withValues(alpha: 0.8),
                             child: Text(
                               index == stops.length - 1 ? 'D' : '${index + 1}',
                               style: theme.textTheme.labelLarge?.copyWith(
@@ -206,7 +216,8 @@ class _RouteSummaryPanel extends StatelessWidget {
                               children: [
                                 Text(
                                   label,
-                                  style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+                                  style: theme.textTheme.labelMedium
+                                      ?.copyWith(fontWeight: FontWeight.w600),
                                 ),
                                 Text(
                                   stops[index],
@@ -229,13 +240,15 @@ class _RouteSummaryPanel extends StatelessWidget {
   }
 }
 
-class _NavigationHeader extends StatelessWidget {
+class _ManeuverBanner extends StatelessWidget {
+  final IconData icon;
   final String distanceText;
-  final String destinationText;
+  final String instruction;
 
-  const _NavigationHeader({
+  const _ManeuverBanner({
+    required this.icon,
     required this.distanceText,
-    required this.destinationText,
+    required this.instruction,
   });
 
   @override
@@ -244,8 +257,8 @@ class _NavigationHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF15171B).withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.35),
@@ -257,15 +270,15 @@ class _NavigationHeader extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 56,
+            height: 56,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFFB5FF2A),
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.navigation, color: Colors.white, size: 22),
+            child: Icon(icon, color: Colors.black, size: 38),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,17 +286,19 @@ class _NavigationHeader extends StatelessWidget {
               children: [
                 Text(
                   distanceText,
-                  style: theme.textTheme.titleMedium?.copyWith(
+                  style: theme.textTheme.headlineSmall?.copyWith(
                     color: Colors.white,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  destinationText,
-                  style: theme.textTheme.bodySmall?.copyWith(
+                  instruction,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
                     color: Colors.white70,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -407,14 +422,24 @@ class _NavigationFooter extends StatelessWidget {
   }
 }
 
-class _TelaMotoristaState extends State<TelaMotorista> {
+class _TelaMotoristaState extends State<TelaMotorista>
+    with SingleTickerProviderStateMixin {
   static const int _etaMinIntervalSeconds = 45;
   static const double _etaOriginMoveMeters = 120;
   static const double _etaDestinationMoveMeters = 40;
   static const double _stopReachedThresholdMeters = 120;
   static const double _voicePromptDistanceMeters = 140;
-  static const double _voiceStepCompleteDistanceMeters = 35;
   static const int _voiceMinIntervalSeconds = 8;
+  static const double _snapToRouteMeters = 30;
+  static const double _offRouteThresholdMeters = 45;
+  static const int _offRouteConfirmations = 3;
+  static const int _rerouteMinIntervalSeconds = 20;
+  static const int _locationSyncMinIntervalSeconds = 4;
+  static const double _locationSyncMinMoveMeters = 25;
+  static const double _gpsHeadingMinSpeedMs = 2.5;
+  static const double _navigationTilt = 55;
+  static const Duration _driverAnimationDuration = Duration(milliseconds: 900);
+  static const Duration _driverFrameInterval = Duration(milliseconds: 40);
 
   GoogleMapController? _mapController;
   final Set<Marker> _markers = {};
@@ -447,10 +472,36 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   bool _mostrarResumoRota = true;
   double? _currentSpeedKmh;
 
+  // Navegação no estilo Waze
+  RouteProgressTracker? _routeTracker;
+  double _distanceToManeuver = 0;
+  double? _distanceToNextStop;
+  int _offRouteCount = 0;
+  bool _isRerouting = false;
+  DateTime? _lastRerouteAt;
+  bool _followDriver = true;
+  BitmapDescriptor? _driverArrowIcon;
+  late final AnimationController _driverAnimation;
+  LatLng? _driverFrom;
+  LatLng? _driverTo;
+  double _headingFrom = 0;
+  double _headingTo = 0;
+  LatLng? _displayedDriverPosition;
+  double _displayedHeading = 0;
+  double _cameraZoom = 17.5;
+  DateTime _lastDriverFrameAt = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _hasCenteredOnDriver = false;
+  DateTime? _lastLocationSyncAt;
+  LatLng? _lastLocationSyncPosition;
+
   // State for Live Location
   final PermissionService _permissionService = PermissionService();
   StreamSubscription<Position>? _positionStreamSubscription;
-  Marker? _driverMarker;
+
+  bool get _isNavigating =>
+      _rotaEmAndamentoId != null &&
+      _directionsInfo != null &&
+      _routeTracker != null;
 
   @override
   void initState() {
@@ -463,12 +514,21 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       _voiceNavigationService.setEnabled(voiceSettingsService.value);
     };
     voiceSettingsService.addListener(_voiceSettingsListener);
+    _driverAnimation = AnimationController(
+      vsync: this,
+      duration: _driverAnimationDuration,
+    )..addListener(_onDriverAnimationTick);
+    NavigationMarkerFactory.driverArrow().then((icon) {
+      if (mounted) setState(() => _driverArrowIcon = icon);
+    });
     _loadApiKeyAndData();
   }
 
   @override
   void dispose() {
     _positionStreamSubscription?.cancel();
+    _driverAnimation.dispose();
+    WakelockPlus.disable();
     _mapController?.dispose();
     _voiceNavigationService.stop();
     voiceSettingsService.removeListener(_voiceSettingsListener);
@@ -498,55 +558,273 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     }
   }
 
-  void _startLocationUpdates() {
-    _positionStreamSubscription =
-        Geolocator.getPositionStream().listen((Position position) async {
-      final driverLatLng = LatLng(position.latitude, position.longitude);
-      final speedKmh = position.speed.isNaN ? 0.0 : position.speed * 3.6;
-
-      setState(() {
-        _driverMarker = Marker(
-          markerId: const MarkerId('driver'),
-          position: driverLatLng,
-          infoWindow: const InfoWindow(title: 'Sua Posição'),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-        );
-        _markers.removeWhere((m) => m.markerId.value == 'driver');
-        _markers.add(_driverMarker!);
-        _currentSpeedKmh = speedKmh < 0 ? 0 : speedKmh;
-      });
-
-      if (_directionsInfo != null) {
-        _animateCameraToNavigation(driverLatLng, _directionsInfo!.polylinePoints);
-      } else {
-        _mapController?.animateCamera(CameraUpdate.newLatLng(driverLatLng));
-      }
-      if (_rotaEmAndamentoId != null && _remainingStops.isNotEmpty) {
-        _updateNextStopProgress(driverLatLng);
-      }
-      if (_rotaEmAndamentoId != null && _routeSteps.isNotEmpty) {
-        _updateVoiceGuidance(driverLatLng);
-      }
-      if (_rotaEmAndamentoId != null) {
-        try {
-          await FirebaseFirestore.instance
-              .collection('rotas')
-              .doc(_rotaEmAndamentoId)
-              .update({
-            'localizacaoAtualMotorista':
-                GeoPoint(position.latitude, position.longitude),
-            'ultimaAtualizacaoMotorista': FieldValue.serverTimestamp(),
-          });
-        } catch (e) {
-          debugPrint(
-              'Erro ao atualizar localização do motorista na rota: $e');
-        }
-      }
-    });
+  LocationSettings _navigationLocationSettings() {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 2,
+        intervalDuration: const Duration(seconds: 1),
+      );
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return AppleSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        activityType: ActivityType.automotiveNavigation,
+        distanceFilter: 2,
+      );
+    }
+    return const LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 2,
+    );
   }
 
-  void _addMarker(
-      LatLng position, String title, String snippet, double hue,
+  void _startLocationUpdates() {
+    _positionStreamSubscription = Geolocator.getPositionStream(
+      locationSettings: _navigationLocationSettings(),
+    ).listen(_onPositionUpdate);
+  }
+
+  void _onPositionUpdate(Position position) {
+    final driverLatLng = LatLng(position.latitude, position.longitude);
+    final speedMs = position.speed.isNaN ? 0.0 : math.max(0.0, position.speed);
+    final gpsHeadingValid = speedMs >= _gpsHeadingMinSpeedMs &&
+        !position.heading.isNaN &&
+        position.heading >= 0;
+
+    var displayPosition = driverLatLng;
+    var heading = gpsHeadingValid ? position.heading : _displayedHeading;
+
+    if (_isNavigating) {
+      final snapshot = _routeTracker!.update(driverLatLng);
+      if (snapshot != null) {
+        if (snapshot.distanceFromRoute <= _snapToRouteMeters) {
+          // Como no Waze: a seta "gruda" na rua enquanto o motorista
+          // estiver na rota.
+          displayPosition = snapshot.projected;
+          heading = snapshot.segmentBearing;
+        }
+        _updateRouteProgress(snapshot, driverLatLng);
+      }
+    }
+
+    setState(() {
+      _currentSpeedKmh = speedMs * 3.6;
+    });
+
+    if (_isNavigating) {
+      _animateDriverTo(displayPosition, heading);
+    } else if (!_hasCenteredOnDriver && _mapController != null) {
+      _hasCenteredOnDriver = true;
+      _mapController!
+          .animateCamera(CameraUpdate.newLatLngZoom(driverLatLng, 15));
+    }
+
+    if (_rotaEmAndamentoId != null && _remainingStops.isNotEmpty) {
+      _updateNextStopProgress(driverLatLng);
+    }
+    if (_rotaEmAndamentoId != null) {
+      _syncDriverLocation(driverLatLng);
+    }
+  }
+
+  void _updateRouteProgress(RouteSnapshot snapshot, LatLng driverLatLng) {
+    final tracker = _routeTracker!;
+    final along = snapshot.distanceAlongRoute;
+    final stepIndex = tracker.stepIndexFor(along);
+    _currentStepIndex = stepIndex.clamp(0, _routeSteps.length);
+    _distanceToManeuver = _currentStepIndex < _routeSteps.length
+        ? tracker.distanceToStepEnd(_currentStepIndex, along)
+        : math.max(0, tracker.totalLength - along);
+
+    _polylines.clear();
+    _addStyledPolyline(
+      'rota_coleta',
+      tracker.remainingPoints(snapshot),
+      const Color(0xFF6D4CFF),
+    );
+
+    _updateVoiceGuidance();
+
+    if (snapshot.distanceFromRoute > _offRouteThresholdMeters) {
+      _offRouteCount++;
+      if (_offRouteCount >= _offRouteConfirmations) {
+        _reroute(driverLatLng);
+      }
+    } else {
+      _offRouteCount = 0;
+    }
+  }
+
+  void _animateDriverTo(LatLng position, double heading) {
+    final from = _displayedDriverPosition ?? position;
+    _driverFrom = from;
+    _driverTo = position;
+    _headingFrom = _displayedHeading;
+    // Gira pelo menor ângulo (ex.: de 350° para 10° passa por 0°).
+    final delta = ((heading - _displayedHeading + 540) % 360) - 180;
+    _headingTo = _displayedHeading + delta;
+
+    final speed = _currentSpeedKmh ?? 0;
+    final targetZoom = speed < 20
+        ? 18.0
+        : speed < 45
+            ? 17.4
+            : speed < 75
+                ? 16.8
+                : 16.2;
+    _cameraZoom += (targetZoom - _cameraZoom) * 0.35;
+
+    _driverAnimation.forward(from: 0);
+  }
+
+  void _onDriverAnimationTick() {
+    final from = _driverFrom;
+    final to = _driverTo;
+    if (from == null || to == null) return;
+
+    final now = DateTime.now();
+    final isLastFrame = _driverAnimation.value >= 1;
+    if (!isLastFrame &&
+        now.difference(_lastDriverFrameAt) < _driverFrameInterval) {
+      return;
+    }
+    _lastDriverFrameAt = now;
+
+    final t = _driverAnimation.value;
+    final position = LatLng(
+      from.latitude + (to.latitude - from.latitude) * t,
+      from.longitude + (to.longitude - from.longitude) * t,
+    );
+    final heading =
+        (_headingFrom + (_headingTo - _headingFrom) * t + 360) % 360;
+
+    setState(() {
+      _displayedDriverPosition = position;
+      _displayedHeading = heading;
+    });
+
+    if (_followDriver && _isNavigating) {
+      _mapController?.moveCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: position,
+            zoom: _cameraZoom,
+            tilt: _navigationTilt,
+            bearing: heading,
+          ),
+        ),
+      );
+    }
+  }
+
+  void _recenterOnDriver() {
+    setState(() => _followDriver = true);
+    final position = _displayedDriverPosition;
+    if (position == null) return;
+    _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: position,
+          zoom: _cameraZoom,
+          tilt: _navigationTilt,
+          bearing: _displayedHeading,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _syncDriverLocation(LatLng position) async {
+    final lastSync = _lastLocationSyncAt;
+    final lastPosition = _lastLocationSyncPosition;
+    if (lastSync != null && lastPosition != null) {
+      final elapsed = DateTime.now().difference(lastSync).inSeconds;
+      final moved = RouteProgressTracker.distanceMeters(lastPosition, position);
+      if (elapsed < _locationSyncMinIntervalSeconds &&
+          moved < _locationSyncMinMoveMeters) {
+        return;
+      }
+    }
+    _lastLocationSyncAt = DateTime.now();
+    _lastLocationSyncPosition = position;
+    try {
+      await FirebaseFirestore.instance
+          .collection('rotas')
+          .doc(_rotaEmAndamentoId)
+          .update({
+        'localizacaoAtualMotorista':
+            GeoPoint(position.latitude, position.longitude),
+        'ultimaAtualizacaoMotorista': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Erro ao atualizar localização do motorista na rota: $e');
+    }
+  }
+
+  Future<void> _reroute(LatLng origin) async {
+    if (_isRerouting || _remainingStops.isEmpty) return;
+    final lastReroute = _lastRerouteAt;
+    if (lastReroute != null &&
+        DateTime.now().difference(lastReroute).inSeconds <
+            _rerouteMinIntervalSeconds) {
+      return;
+    }
+    _isRerouting = true;
+    _lastRerouteAt = DateTime.now();
+    _voiceNavigationService.speak('Recalculando rota.');
+    if (mounted) setState(() {});
+
+    final destination = _remainingStops.last.location;
+    final waypoints = _remainingStops
+        .where((stop) => !stop.isDestination)
+        .map((stop) => stop.location)
+        .toList();
+    final directionsInfo =
+        await DirectionsService(apiKey: _apiKey).getDirections(
+      origin: origin,
+      destination: destination,
+      waypoints: waypoints,
+      optimizeWaypoints: false,
+    );
+
+    _isRerouting = false;
+    _offRouteCount = 0;
+    if (!mounted || directionsInfo == null || _rotaEmAndamentoId == null) {
+      if (mounted) setState(() {});
+      return;
+    }
+
+    setState(() {
+      _directionsInfo = directionsInfo;
+      _routeTracker = RouteProgressTracker(
+        directionsInfo.polylinePoints,
+        directionsInfo.steps.map((step) => step.endLocation).toList(),
+      );
+      _routeSteps
+        ..clear()
+        ..addAll(directionsInfo.steps);
+      _currentStepIndex = 0;
+      _lastSpokenStepIndex = 0;
+      _polylines.clear();
+      _addStyledPolyline('rota_coleta', directionsInfo.polylinePoints,
+          const Color(0xFF6D4CFF));
+    });
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('rotas')
+          .doc(_rotaEmAndamentoId)
+          .update({
+        'polylineRota': directionsInfo.polylinePoints
+            .map((p) => {'lat': p.latitude, 'lng': p.longitude})
+            .toList(),
+      });
+    } catch (e) {
+      debugPrint('Erro ao salvar rota recalculada: $e');
+    }
+  }
+
+  void _addMarker(LatLng position, String title, String snippet, double hue,
       {String? markerId,
       String? alunoNome,
       String? alunoFotoUrl,
@@ -605,7 +883,9 @@ class _TelaMotoristaState extends State<TelaMotorista> {
                 CircleAvatar(
                   radius: 28,
                   backgroundImage:
-                      data.fotoUrl != null && data.fotoUrl!.isNotEmpty ? NetworkImage(data.fotoUrl!) : null,
+                      data.fotoUrl != null && data.fotoUrl!.isNotEmpty
+                          ? NetworkImage(data.fotoUrl!)
+                          : null,
                   child: (data.fotoUrl == null || data.fotoUrl!.isEmpty)
                       ? const Icon(Icons.person)
                       : null,
@@ -618,25 +898,33 @@ class _TelaMotoristaState extends State<TelaMotorista> {
                     children: [
                       Text(
                         data.nome,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 6),
                       FutureBuilder<List<String>>(
                         future: rotasDoAluno(),
                         builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return Text(AppLocalizations.of(context)!.loadingRoutes);
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return Text(
+                                AppLocalizations.of(context)!.loadingRoutes);
                           }
                           final rotas = snapshot.data ?? [];
                           if (rotas.isEmpty) {
-                            return Text(AppLocalizations.of(context)!.noRoutesLinked);
+                            return Text(
+                                AppLocalizations.of(context)!.noRoutesLinked);
                           }
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: rotas
                                 .map((rotaNome) => Text(
-                                      AppLocalizations.of(context)!.routeLabel(rotaNome),
-                                      style: Theme.of(context).textTheme.bodySmall,
+                                      AppLocalizations.of(context)!
+                                          .routeLabel(rotaNome),
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
                                     ))
                                 .toList(),
                           );
@@ -722,7 +1010,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     if (mounted && alunosResult.hadPermissionErrors) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Alguns passageiros não puderam ser carregados. Verifique se estão vinculados ao motorista.'),
+          content: Text(
+              'Alguns passageiros não puderam ser carregados. Verifique se estão vinculados ao motorista.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -791,7 +1080,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
 
     for (final alunoId in alunosIds) {
       try {
-        final snapshot = await firestore.collection('alunos').doc(alunoId).get();
+        final snapshot =
+            await firestore.collection('alunos').doc(alunoId).get();
         if (snapshot.exists) {
           snapshots.add(snapshot);
         }
@@ -808,79 +1098,6 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     return _AlunosBatchResult(snapshots, hadPermissionErrors);
   }
 
-  void _animateCameraToNavigation(
-      LatLng focus, List<LatLng> polylinePoints) {
-    if (polylinePoints.isEmpty) return;
-    if (_mapController == null) return;
-    final directionTarget = _pickDirectionTarget(focus, polylinePoints);
-    final bearing = _calculateBearing(focus, directionTarget);
-    final target = _offsetLatLng(focus, bearing, 150);
-    _mapController!.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: target,
-          zoom: 18.2,
-          tilt: 70,
-          bearing: bearing,
-        ),
-      ),
-    );
-  }
-
-  double _calculateBearing(LatLng start, LatLng end) {
-    final lat1 = start.latitude * math.pi / 180;
-    final lat2 = end.latitude * math.pi / 180;
-    final dLon = (end.longitude - start.longitude) * math.pi / 180;
-    final y = math.sin(dLon) * math.cos(lat2);
-    final x = math.cos(lat1) * math.sin(lat2) -
-        math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
-    final brng = math.atan2(y, x);
-    return (brng * 180 / math.pi + 360) % 360;
-  }
-
-  LatLng _pickDirectionTarget(LatLng focus, List<LatLng> polylinePoints) {
-    if (polylinePoints.length <= 1) return polylinePoints.first;
-
-    var closestIndex = 0;
-    var minDistance = double.infinity;
-    for (var i = 0; i < polylinePoints.length; i++) {
-      final point = polylinePoints[i];
-      final distance = Geolocator.distanceBetween(
-        focus.latitude,
-        focus.longitude,
-        point.latitude,
-        point.longitude,
-      );
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestIndex = i;
-      }
-    }
-
-    final targetIndex = (closestIndex + 5).clamp(0, polylinePoints.length - 1);
-    return polylinePoints[targetIndex];
-  }
-
-  LatLng _offsetLatLng(LatLng origin, double bearing, double distanceMeters) {
-    const earthRadius = 6378137.0;
-    final bearingRad = bearing * math.pi / 180;
-    final lat1 = origin.latitude * math.pi / 180;
-    final lon1 = origin.longitude * math.pi / 180;
-    final angularDistance = distanceMeters / earthRadius;
-
-    final lat2 = math.asin(
-      math.sin(lat1) * math.cos(angularDistance) +
-          math.cos(lat1) * math.sin(angularDistance) * math.cos(bearingRad),
-    );
-    final lon2 = lon1 +
-        math.atan2(
-          math.sin(bearingRad) * math.sin(angularDistance) * math.cos(lat1),
-          math.cos(angularDistance) - math.sin(lat1) * math.sin(lat2),
-        );
-
-    return LatLng(lat2 * 180 / math.pi, lon2 * 180 / math.pi);
-  }
-
   void _updateNextStopProgress(LatLng driverLatLng) {
     if (_remainingStops.isEmpty) return;
     final nextStop = _remainingStops.first;
@@ -890,18 +1107,21 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       nextStop.location.latitude,
       nextStop.location.longitude,
     );
+    _distanceToNextStop = distance;
     if (distance <= _stopReachedThresholdMeters) {
       if (nextStop.isDestination) {
         _voiceNavigationService.speak('Você chegou ao destino.');
       } else {
-        _voiceNavigationService.speak('Chegando na parada de ${nextStop.label}.');
+        _voiceNavigationService
+            .speak('Chegando na parada de ${nextStop.label}.');
       }
       _remainingStops.removeAt(0);
       _nextStopEtaText = null;
       _lastNextEtaFetchAt = null;
       _lastNextEtaOrigin = null;
       _lastNextEtaDestination = null;
-      _nextStopLabel = _remainingStops.isNotEmpty ? _remainingStops.first.label : null;
+      _nextStopLabel =
+          _remainingStops.isNotEmpty ? _remainingStops.first.label : null;
       if (mounted) {
         setState(() {});
       }
@@ -916,7 +1136,9 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     if (lastFetch == null) return true;
     final elapsed = DateTime.now().difference(lastFetch);
     if (elapsed.inSeconds >= _etaMinIntervalSeconds) return true;
-    if (_lastNextEtaOrigin == null || _lastNextEtaDestination == null) return true;
+    if (_lastNextEtaOrigin == null || _lastNextEtaDestination == null) {
+      return true;
+    }
     final movedOrigin = Geolocator.distanceBetween(
       origin.latitude,
       origin.longitude,
@@ -951,7 +1173,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       return;
     }
 
-    final seconds = metrics?.durationInTrafficSeconds ?? metrics?.durationSeconds;
+    final seconds =
+        metrics?.durationInTrafficSeconds ?? metrics?.durationSeconds;
     setState(() {
       _nextStopEtaText = _formatDurationSeconds(seconds);
     });
@@ -977,10 +1200,14 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     _lastVoicePromptAt = DateTime.now();
   }
 
-  void _updateVoiceGuidance(LatLng driverLatLng) {
-    if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) {
-      return;
-    }
+  /// Fala a próxima manobra: enquanto o motorista percorre o passo N,
+  /// a manobra seguinte é a instrução do passo N + 1, no fim do passo N.
+  void _updateVoiceGuidance() {
+    final nextIndex = _currentStepIndex + 1;
+    if (nextIndex >= _routeSteps.length) return;
+    if (_lastSpokenStepIndex >= nextIndex) return;
+    if (_distanceToManeuver > _voicePromptDistanceMeters) return;
+
     final now = DateTime.now();
     final lastPrompt = _lastVoicePromptAt;
     if (lastPrompt != null &&
@@ -988,26 +1215,18 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       return;
     }
 
-    final step = _routeSteps[_currentStepIndex];
-    final distance = Geolocator.distanceBetween(
-      driverLatLng.latitude,
-      driverLatLng.longitude,
-      step.endLocation.latitude,
-      step.endLocation.longitude,
-    );
-
-    if (_lastSpokenStepIndex != _currentStepIndex &&
-        distance <= _voicePromptDistanceMeters) {
-      _voiceNavigationService.speak(step.instruction);
-      _lastSpokenStepIndex = _currentStepIndex;
-      _lastVoicePromptAt = now;
+    final instruction = _routeSteps[nextIndex].instruction;
+    if (_distanceToManeuver >= 50) {
+      final rounded = (_distanceToManeuver / 50).round() * 50;
+      final lowered = instruction.isEmpty
+          ? instruction
+          : instruction[0].toLowerCase() + instruction.substring(1);
+      _voiceNavigationService.speak('Em $rounded metros, $lowered');
+    } else {
+      _voiceNavigationService.speak(instruction);
     }
-
-    if (distance <= _voiceStepCompleteDistanceMeters) {
-      _currentStepIndex =
-          (_currentStepIndex + 1).clamp(0, _routeSteps.length);
-      _lastSpokenStepIndex = -1;
-    }
+    _lastSpokenStepIndex = nextIndex;
+    _lastVoicePromptAt = now;
   }
 
   Future<void> _exibirRota(String rotaId) async {
@@ -1020,7 +1239,10 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         });
       }
       final directionsService = DirectionsService(apiKey: _apiKey);
-      final rotaDoc = await FirebaseFirestore.instance.collection('rotas').doc(rotaId).get();
+      final rotaDoc = await FirebaseFirestore.instance
+          .collection('rotas')
+          .doc(rotaId)
+          .get();
       if (!rotaDoc.exists) {
         if (mounted) setState(() => _calculandoRota = false);
         return;
@@ -1043,7 +1265,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("Nenhum aluno desta rota possui localização cadastrada."),
+              content: Text(
+                  "Nenhum aluno desta rota possui localização cadastrada."),
             ),
           );
           setState(() => _calculandoRota = false);
@@ -1054,10 +1277,12 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       final position = await Geolocator.getCurrentPosition();
       final motoristaLocation = LatLng(position.latitude, position.longitude);
 
-      final destinoFinal = LatLng(rota.localDestino.latitude, rota.localDestino.longitude);
+      final destinoFinal =
+          LatLng(rota.localDestino.latitude, rota.localDestino.longitude);
 
       final List<LatLng> waypoints = alunosComDados
-          .map((entry) => LatLng(entry.geoPoint.latitude, entry.geoPoint.longitude))
+          .map((entry) =>
+              LatLng(entry.geoPoint.latitude, entry.geoPoint.longitude))
           .toList();
 
       final directionsInfo = await directionsService.getDirections(
@@ -1091,7 +1316,9 @@ class _TelaMotoristaState extends State<TelaMotorista> {
           ),
         ),
         _NextStopInfo(
-          label: rota.localDestinoNome.isNotEmpty ? rota.localDestinoNome : 'Destino',
+          label: rota.localDestinoNome.isNotEmpty
+              ? rota.localDestinoNome
+              : 'Destino',
           location: destinoFinal,
           isDestination: true,
         ),
@@ -1112,7 +1339,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         );
       }
 
-      _addMarker(destinoFinal, "Destino Final", rota.nome, BitmapDescriptor.hueRed);
+      _addMarker(
+          destinoFinal, "Destino Final", rota.nome, BitmapDescriptor.hueRed);
 
       final polylineData = directionsInfo.polylinePoints
           .map((p) => {'lat': p.latitude, 'lng': p.longitude})
@@ -1128,12 +1356,18 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         'rotaId': rota.id,
         'polyline': polylineData,
         'paradas': paradasData,
-        'destino': {'lat': destinoFinal.latitude, 'lng': destinoFinal.longitude},
+        'destino': {
+          'lat': destinoFinal.latitude,
+          'lng': destinoFinal.longitude
+        },
       });
       await FirebaseFirestore.instance.collection('rotas').doc(rotaId).update({
         'polylineRota': polylineData,
         'paradasOrdenadas': paradasData,
-        'destino': {'lat': destinoFinal.latitude, 'lng': destinoFinal.longitude},
+        'destino': {
+          'lat': destinoFinal.latitude,
+          'lng': destinoFinal.longitude
+        },
       });
 
       setState(() {
@@ -1146,23 +1380,40 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         _routeSteps
           ..clear()
           ..addAll(directionsInfo.steps);
+        _routeTracker = RouteProgressTracker(
+          directionsInfo.polylinePoints,
+          directionsInfo.steps.map((step) => step.endLocation).toList(),
+        );
         _currentStepIndex = 0;
         _lastSpokenStepIndex = -1;
         _lastVoicePromptAt = null;
+        _offRouteCount = 0;
+        _followDriver = true;
         _remainingStops
           ..clear()
           ..addAll(nextStops);
-        _nextStopLabel = _remainingStops.isNotEmpty ? _remainingStops.first.label : null;
+        _nextStopLabel =
+            _remainingStops.isNotEmpty ? _remainingStops.first.label : null;
         _nextStopEtaText = null;
         _lastNextEtaFetchAt = null;
         _lastNextEtaOrigin = null;
         _lastNextEtaDestination = null;
         _polylines.clear();
-        _addStyledPolyline('rota_coleta', directionsInfo.polylinePoints, const Color(0xFF6D4CFF));
+        _addStyledPolyline('rota_coleta', directionsInfo.polylinePoints,
+            const Color(0xFF6D4CFF));
         _calculandoRota = false;
       });
       _announceInitialStep();
-      _animateCameraToNavigation(motoristaLocation, directionsInfo.polylinePoints);
+      if (_rotaEmAndamentoId != null) {
+        WakelockPlus.enable();
+        _displayedDriverPosition = null;
+        _displayedHeading = RouteProgressTracker.bearingDegrees(
+          directionsInfo.polylinePoints.first,
+          directionsInfo.polylinePoints[
+              math.min(5, directionsInfo.polylinePoints.length - 1)],
+        );
+        _animateDriverTo(motoristaLocation, _displayedHeading);
+      }
     } catch (e) {
       final cached = LocalCacheService.instance.getCachedRotaAtual();
       if (cached != null && cached['polyline'] != null) {
@@ -1206,10 +1457,11 @@ class _TelaMotoristaState extends State<TelaMotorista> {
                 Marker(
                   markerId: MarkerId('parada_$i'),
                   position: paradas[i],
-                  icon:
-                      BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+                  icon: BitmapDescriptor.defaultMarkerWithHue(
+                      BitmapDescriptor.hueGreen),
                   infoWindow: InfoWindow(
-                    title: AppLocalizations.of(context)!.stopLabel((i + 1).toString()),
+                    title: AppLocalizations.of(context)!
+                        .stopLabel((i + 1).toString()),
                   ),
                 ),
               );
@@ -1217,8 +1469,10 @@ class _TelaMotoristaState extends State<TelaMotorista> {
             _markers.add(Marker(
               markerId: const MarkerId('destino'),
               position: destino,
-              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-              infoWindow: InfoWindow(title: AppLocalizations.of(context)!.destinationCache),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueRed),
+              infoWindow: InfoWindow(
+                  title: AppLocalizations.of(context)!.destinationCache),
             ));
             _remainingStops
               ..clear()
@@ -1249,8 +1503,11 @@ class _TelaMotoristaState extends State<TelaMotorista> {
 
   Future<void> _finalizarViagem() async {
     if (_rotaAtual == null) return;
-    
-    await FirebaseFirestore.instance.collection('rotas').doc(_rotaAtual!.id).update({
+
+    await FirebaseFirestore.instance
+        .collection('rotas')
+        .doc(_rotaAtual!.id)
+        .update({
       'status': StatusRota.concluida.name,
       'polylineRota': FieldValue.delete(),
       'paradasOrdenadas': FieldValue.delete(),
@@ -1274,8 +1531,21 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       _lastNextEtaFetchAt = null;
       _lastNextEtaOrigin = null;
       _lastNextEtaDestination = null;
+      _routeTracker = null;
+      _distanceToNextStop = null;
+      _displayedDriverPosition = null;
+      _followDriver = true;
       _carregarAlunosNoMapa();
     });
+    WakelockPlus.disable();
+    _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: _lastLocationSyncPosition ?? const LatLng(-19.9245, -43.9352),
+          zoom: 15,
+        ),
+      ),
+    );
   }
 
   Future<void> _carregarAlunosNoMapa() async {
@@ -1286,7 +1556,10 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       if (mounted) {
         setState(() => _calculandoRota = false);
       }
-      final motoristaDoc = await FirebaseFirestore.instance.collection('motoristas').doc(user.uid).get();
+      final motoristaDoc = await FirebaseFirestore.instance
+          .collection('motoristas')
+          .doc(user.uid)
+          .get();
       final motoristaData = motoristaDoc.data();
       final alunosIds = List<String>.from(motoristaData?['alunosIds'] ?? []);
 
@@ -1348,7 +1621,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao sair: $e")));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Erro ao sair: $e")));
       }
     }
   }
@@ -1360,7 +1634,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
   void _onItemTapped(int index) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const TelaLogin()));
+      Navigator.push(
+          context, MaterialPageRoute(builder: (_) => const TelaLogin()));
       return;
     }
 
@@ -1439,7 +1714,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.lock_outline_rounded,
-                size: 90, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                size: 90,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
             const SizedBox(height: 24),
             Text(
               'Funcionalidade Exclusiva para Motoristas',
@@ -1459,7 +1735,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
                 foregroundColor: theme.colorScheme.onPrimary,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                textStyle:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               onPressed: () {
                 Navigator.push(
@@ -1484,6 +1761,89 @@ class _TelaMotoristaState extends State<TelaMotorista> {
     );
   }
 
+  ({IconData icon, String distance, String instruction})?
+      _maneuverBannerData() {
+    if (!_isNavigating) return null;
+    final nextStop = _remainingStops.isNotEmpty ? _remainingStops.first : null;
+    final nextIndex = _currentStepIndex + 1;
+    final hasManeuver = nextIndex < _routeSteps.length;
+    final stopDistance = _distanceToNextStop;
+
+    if (nextStop != null &&
+        !nextStop.isDestination &&
+        stopDistance != null &&
+        (!hasManeuver || stopDistance <= _distanceToManeuver)) {
+      return (
+        icon: Icons.person_pin_circle,
+        distance: _formatBannerDistance(stopDistance),
+        instruction: 'Parada: ${nextStop.label}',
+      );
+    }
+    if (!hasManeuver) {
+      return (
+        icon: Icons.flag,
+        distance: _formatBannerDistance(_distanceToManeuver),
+        instruction: nextStop?.label ?? 'Destino',
+      );
+    }
+    final step = _routeSteps[nextIndex];
+    return (
+      icon: _maneuverIcon(step.maneuver),
+      distance: _formatBannerDistance(_distanceToManeuver),
+      instruction: step.instruction,
+    );
+  }
+
+  String _formatBannerDistance(double meters) {
+    if (meters >= 1000) {
+      return '${(meters / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
+    }
+    if (meters < 20) return 'Agora';
+    return '${(meters / 10).round() * 10} m';
+  }
+
+  IconData _maneuverIcon(String? maneuver) {
+    switch (maneuver) {
+      case 'turn-left':
+        return Icons.turn_left;
+      case 'turn-right':
+        return Icons.turn_right;
+      case 'turn-slight-left':
+      case 'keep-left':
+        return Icons.turn_slight_left;
+      case 'turn-slight-right':
+      case 'keep-right':
+        return Icons.turn_slight_right;
+      case 'turn-sharp-left':
+        return Icons.turn_sharp_left;
+      case 'turn-sharp-right':
+        return Icons.turn_sharp_right;
+      case 'uturn-left':
+        return Icons.u_turn_left;
+      case 'uturn-right':
+        return Icons.u_turn_right;
+      case 'roundabout-left':
+        return Icons.roundabout_left;
+      case 'roundabout-right':
+        return Icons.roundabout_right;
+      case 'ramp-left':
+        return Icons.ramp_left;
+      case 'ramp-right':
+        return Icons.ramp_right;
+      case 'fork-left':
+        return Icons.fork_left;
+      case 'fork-right':
+        return Icons.fork_right;
+      case 'merge':
+        return Icons.merge;
+      case 'ferry':
+      case 'ferry-train':
+        return Icons.directions_boat;
+      default:
+        return Icons.straight;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final String userId = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -1492,68 +1852,154 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         _rotaEmAndamentoId != null && _directionsInfo != null;
     final String destinationLabel =
         _rotaAtual?.localDestinoNome ?? _rotaAtual?.nome ?? 'Destino';
-    final String distanceLabel =
-        _directionsInfo?.totalDistance ?? 'Rota em andamento';
+    final bool isNavigating = _isNavigating;
+    final banner = _maneuverBannerData();
+    final driverPosition = _displayedDriverPosition;
+    final bool useDarkMapStyle =
+        isNavigating && Theme.of(context).brightness == Brightness.dark;
 
-    Widget mapaWidget = Stack(
-      children: [
-        GoogleMap(
-          onMapCreated: _onMapCreated,
-          initialCameraPosition: const CameraPosition(
-              target: LatLng(-19.9245, -43.9352), zoom: 12.0),
-          markers: _markers,
-          polylines: _polylines,
-          myLocationEnabled: true,
-          myLocationButtonEnabled: true,
-          buildingsEnabled: false,
-          mapType: MapType.normal,
-        ),
-        if (_calculandoRota)
-          const Positioned(
-            top: 16,
-            right: 16,
-            child: _RouteStatusChip(),
-          ),
-        if (!showNavigationUI)
-          Positioned(
-            left: 16,
-            right: 16,
-            top: 16,
-            child: _RouteSummaryPanel(
-              directionsInfo: _directionsInfo,
-              stops: _rotaSequenciaParadas,
-              isExpanded: _mostrarResumoRota,
-              onToggle: () {
-                setState(() {
-                  _mostrarResumoRota = !_mostrarResumoRota;
-                });
-              },
-            ),
-          ),
-        if (showNavigationUI)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 16,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _SpeedBadge(speedKmh: _currentSpeedKmh),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _NavigationFooter(
-                    destination: destinationLabel,
-                    duration: _directionsInfo?.totalDuration,
-                    distance: _directionsInfo?.totalDistance,
-                    isTrafficAware: _directionsInfo?.isTrafficAware ?? false,
-                    nextStopEta: _nextStopEtaText,
-                    nextStopLabel: _nextStopLabel,
+    Widget mapaWidget = LayoutBuilder(
+      builder: (context, constraints) => Stack(
+        children: [
+          Listener(
+            onPointerDown: (_) {
+              if (isNavigating && _followDriver) {
+                setState(() => _followDriver = false);
+              }
+            },
+            child: GoogleMap(
+              onMapCreated: _onMapCreated,
+              initialCameraPosition: const CameraPosition(
+                  target: LatLng(-19.9245, -43.9352), zoom: 12.0),
+              markers: {
+                ..._markers,
+                if (isNavigating &&
+                    driverPosition != null &&
+                    _driverArrowIcon != null)
+                  Marker(
+                    markerId: const MarkerId('driver'),
+                    position: driverPosition,
+                    icon: _driverArrowIcon!,
+                    rotation: _displayedHeading,
+                    flat: true,
+                    anchor: const Offset(0.5, 0.5),
+                    zIndexInt: 10,
                   ),
-                ),
-              ],
+              },
+              polylines: _polylines,
+              style: useDarkMapStyle ? navigationDarkMapStyle : null,
+              // No modo navegação o centro da câmera fica no terço inferior,
+              // deixando mais rua visível à frente do motorista.
+              padding: isNavigating
+                  ? EdgeInsets.only(top: constraints.maxHeight * 0.42)
+                  : EdgeInsets.zero,
+              myLocationEnabled: !isNavigating,
+              myLocationButtonEnabled: !isNavigating,
+              compassEnabled: !isNavigating,
+              mapToolbarEnabled: false,
+              trafficEnabled: isNavigating,
+              buildingsEnabled: true,
+              mapType: MapType.normal,
             ),
           ),
-      ],
+          if (_calculandoRota)
+            const Positioned(
+              top: 16,
+              right: 16,
+              child: _RouteStatusChip(),
+            ),
+          if (!showNavigationUI)
+            Positioned(
+              left: 16,
+              right: 16,
+              top: 16,
+              child: _RouteSummaryPanel(
+                directionsInfo: _directionsInfo,
+                stops: _rotaSequenciaParadas,
+                isExpanded: _mostrarResumoRota,
+                onToggle: () {
+                  setState(() {
+                    _mostrarResumoRota = !_mostrarResumoRota;
+                  });
+                },
+              ),
+            ),
+          if (banner != null)
+            Positioned(
+              left: 12,
+              right: 12,
+              top: 12,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ManeuverBanner(
+                    icon: banner.icon,
+                    distanceText: banner.distance,
+                    instruction: banner.instruction,
+                  ),
+                  if (_isRerouting)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Chip(
+                        avatar: const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        label: const Text('Recalculando rota...'),
+                        backgroundColor: Colors.white.withValues(alpha: 0.92),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          if (isNavigating && !_followDriver)
+            Positioned(
+              right: 16,
+              bottom: 100,
+              child: FloatingActionButton.extended(
+                heroTag: 'recentralizar',
+                onPressed: _recenterOnDriver,
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                icon: const Icon(Icons.navigation),
+                label: const Text('Recentralizar'),
+              ),
+            ),
+          if (showNavigationUI)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 16,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _SpeedBadge(speedKmh: _currentSpeedKmh),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _NavigationFooter(
+                      destination: destinationLabel,
+                      duration: _directionsInfo?.totalDuration,
+                      distance: _directionsInfo?.totalDistance,
+                      isTrafficAware: _directionsInfo?.isTrafficAware ?? false,
+                      nextStopEta: _nextStopEtaText,
+                      nextStopLabel: _nextStopLabel,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FloatingActionButton(
+                    heroTag: 'finalizar_viagem_mapa',
+                    onPressed: _finalizarViagem,
+                    tooltip: 'Finalizar viagem',
+                    backgroundColor: const Color(0xFFB5FF2A),
+                    foregroundColor: Colors.black,
+                    child: const Icon(Icons.done_all),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
 
     return Scaffold(
@@ -1577,7 +2023,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
               onHistory: _openHistorico,
             )
           : null,
-      floatingActionButton: _rotaEmAndamentoId == null
+      floatingActionButton: _rotaEmAndamentoId == null ||
+              (showNavigationUI && _selectedIndex == 0)
           ? null
           : Padding(
               padding: const EdgeInsets.only(top: 72),
@@ -1590,7 +2037,8 @@ class _TelaMotoristaState extends State<TelaMotorista> {
                 child: const Icon(Icons.done_all),
               ),
             ),
-      floatingActionButtonLocation: _rotaEmAndamentoId == null
+      floatingActionButtonLocation: _rotaEmAndamentoId == null ||
+              (showNavigationUI && _selectedIndex == 0)
           ? null
           : FloatingActionButtonLocation.endTop,
       body: IndexedStack(
@@ -1621,13 +2069,16 @@ class _TelaMotoristaState extends State<TelaMotorista> {
         onTap: _onItemTapped,
         items: [
           const BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
-          const BottomNavigationBarItem(icon: Icon(Icons.edit_road_outlined), label: 'Viagem'),
-          const BottomNavigationBarItem(icon: Icon(Icons.people_alt_outlined), label: 'Alunos'),
+          const BottomNavigationBarItem(
+              icon: Icon(Icons.edit_road_outlined), label: 'Viagem'),
+          const BottomNavigationBarItem(
+              icon: Icon(Icons.people_alt_outlined), label: 'Alunos'),
           BottomNavigationBarItem(
             icon: MessagesBadge(userId: userId, icon: Icons.chat),
             label: 'Chat',
           ),
-          const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+          const BottomNavigationBarItem(
+              icon: Icon(Icons.person), label: 'Perfil'),
         ],
         selectedColor: Theme.of(context).colorScheme.primary,
         unselectedColor: Colors.white70,

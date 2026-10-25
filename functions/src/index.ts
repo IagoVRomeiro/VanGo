@@ -6,6 +6,55 @@ const db = admin.firestore();
 const functionsUs = functions.region("us-central1");
 type CallableCtx = functions.https.CallableContext;
 
+const TOKENS_INVALIDOS = new Set([
+    "messaging/registration-token-not-registered",
+    "messaging/invalid-registration-token",
+]);
+
+/**
+ * Envia uma notificação push para os usuários informados (API HTTP v1 do FCM)
+ * e remove dos documentos os tokens que não são mais válidos.
+ */
+async function enviarPush(
+    userIds: string[],
+    notification: { title: string; body: string },
+    data: Record<string, string>,
+): Promise<number> {
+    const usersDocs = await Promise.all(
+        userIds.map((id) => db.collection("users").doc(id).get())
+    );
+    const destinos = usersDocs
+        .map((doc) => ({ ref: doc.ref, token: doc.data()?.fcmToken as string | undefined }))
+        .filter((d): d is { ref: FirebaseFirestore.DocumentReference; token: string } => !!d.token);
+
+    if (destinos.length === 0) {
+        console.log("Nenhum token FCM encontrado para os destinatários.");
+        return 0;
+    }
+
+    const response = await admin.messaging().sendEachForMulticast({
+        tokens: destinos.map((d) => d.token),
+        notification,
+        data,
+        android: { priority: "high", notification: { sound: "default" } },
+        apns: { payload: { aps: { sound: "default" } } },
+    });
+
+    const limpezas: Promise<unknown>[] = [];
+    response.responses.forEach((result, index) => {
+        if (result.success) return;
+        console.error("Falha ao enviar notificação:", result.error?.code, result.error?.message);
+        if (result.error && TOKENS_INVALIDOS.has(result.error.code)) {
+            limpezas.push(destinos[index].ref.update({
+                fcmToken: admin.firestore.FieldValue.delete(),
+            }));
+        }
+    });
+    await Promise.all(limpezas);
+
+    return response.successCount;
+}
+
 /**
  * Cloud Function para um motorista convidar um aluno.
  */
@@ -445,56 +494,21 @@ export const notificarAlunosRotaIniciada = functionsUs.firestore
 
             console.log(`Iniciando envio de notificações para ${alunosIds.length} alunos da rota ${context.params.rotaId}.`);
 
-            // 2. Busca os tokens dos alunos
-            const tokensPromises = alunosIds.map((alunoId) => 
-                db.collection("users").doc(alunoId).get()
-            );
-
-            const usersDocs = await Promise.all(tokensPromises);
-
-            const tokens = usersDocs
-                .map((doc) => doc.data()?.fcmToken as string)
-                .filter((token): token is string => !!token);
-
-            if (tokens.length === 0) {
-                console.log("Nenhum token FCM encontrado para os alunos da rota.");
-                return null;
-            }
-
-            // 3. Monta a mensagem da notificação
-            const payload = {
-                notification: {
-                    title: "Sua van está a caminho!",
-                    body: `O motorista iniciou a rota "${nomeRota}". Acompanhe a viagem no mapa.`,
-                    sound: "default",
-                },
-                data: {
-                  screen: "tela_viagem", 
-                  rotaId: context.params.rotaId,
-                }
-            };
-
-            // 4. Envia as notificações
+            // 2. Envia as notificações
             try {
-                const response = await admin.messaging().sendToDevice(tokens, payload);
-                console.log("Notificações enviadas com sucesso:", response.successCount);
-                
-                response.results.forEach((result, index) => {
-                    const error = result.error;
-                    if (error) {
-                        console.error(
-                            "Falha ao enviar notificação para o token:",
-                            tokens[index],
-                            error
-                        );
-                    }
-                });
-                return null;
-
+                const enviadas = await enviarPush(
+                    alunosIds,
+                    {
+                        title: "Sua van está a caminho!",
+                        body: `O motorista iniciou a rota "${nomeRota}". Acompanhe a viagem no mapa.`,
+                    },
+                    { screen: "tela_viagem", rotaId: context.params.rotaId },
+                );
+                console.log("Notificações enviadas com sucesso:", enviadas);
             } catch (error) {
                 console.error("Erro ao enviar notificações:", error);
-                return null;
             }
+            return null;
         }
 
         return null;
@@ -533,36 +547,22 @@ export const notificarNovoChat = functionsUs.firestore
             return;
         }
         
-        // 2. Busca os dados do aluno e do motorista
-        const motoristaUserDoc = await db.collection("users").doc(motoristaId).get();
+        // 2. Busca o nome do aluno
         const alunoUserDoc = await db.collection("users").doc(alunoId).get();
-
-        const motoristaToken = motoristaUserDoc.data()?.fcmToken as string;
         const nomeAluno = alunoUserDoc.data()?.nome || "Um aluno";
 
-        if (!motoristaToken) {
-            console.log(`Motorista ${motoristaId} não possui um token FCM.`);
-            return;
-        }
-
-        // 3. Monta a mensagem da notificação
-        const payload = {
-            notification: {
-                title: "Nova solicitação de conversa",
-                body: `${nomeAluno} quer iniciar uma conversa com você.`,
-                sound: "default",
-            },
-            data: {
-                screen: "tela_lista_chats", // Para abrir a tela de chats no app
-                chatId: context.params.chatId,
-            }
-        };
-
-        // 4. Envia a notificação
+        // 3. Envia a notificação para o motorista
         try {
             console.log(`Enviando notificação para o motorista ${motoristaId}...`);
-            await admin.messaging().sendToDevice([motoristaToken], payload);
-            console.log("Notificação enviada com sucesso.");
+            const enviadas = await enviarPush(
+                [motoristaId],
+                {
+                    title: "Nova solicitação de conversa",
+                    body: `${nomeAluno} quer iniciar uma conversa com você.`,
+                },
+                { screen: "tela_lista_chats", chatId: context.params.chatId },
+            );
+            console.log("Notificações enviadas:", enviadas);
         } catch (error) {
             console.error("Erro ao enviar notificação para o motorista:", error);
         }
@@ -574,19 +574,49 @@ export const sendWelcomeEmail = functionsUs.https.onCall(async (data: any, conte
   return { success: true, message: "Welcome email sent (not really)!" };
 });
 
-export const notificarAlunosProximidadeInicioRota = functionsUs.pubsub.schedule("every 5 minutes").onRun(async (context: any) => {
+const FUSO_ROTAS = "America/Sao_Paulo";
+const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
+
+/** Dia da semana ("Seg"...) e horário "HH:mm" de [data] no fuso das rotas. */
+function diaEHorario(data: Date): { dia: string; horario: string } {
+    const partes = new Intl.DateTimeFormat("en-US", {
+        timeZone: FUSO_ROTAS,
+        weekday: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+    }).formatToParts(data);
+    const valor = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? "";
+    const indiceDia = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(valor("weekday"));
+    return { dia: DIAS_SEMANA[indiceDia], horario: `${valor("hour")}:${valor("minute")}` };
+}
+
+/**
+ * A cada 5 minutos, avisa os alunos das rotas que começam daqui a 10–14 minutos.
+ * Usa os dias da semana e o horário previsto da rota, então vale toda semana.
+ */
+export const notificarAlunosProximidadeInicioRota = functionsUs.pubsub
+    .schedule("every 5 minutes")
+    .timeZone(FUSO_ROTAS)
+    .onRun(async () => {
     console.log("Executando verificação de rotas prestes a iniciar...");
 
-    const now = admin.firestore.Timestamp.now();
-    const future15 = new admin.firestore.Timestamp(now.seconds + 15 * 60, now.nanoseconds); // 15 minutos no futuro
-    const future10 = new admin.firestore.Timestamp(now.seconds + 10 * 60, now.nanoseconds); // 10 minutos no futuro
+    const agora = Date.now();
+    const janelas = [10, 11, 12, 13, 14].map((min) => diaEHorario(new Date(agora + min * 60 * 1000)));
+    const horarios = janelas.map((j) => j.horario);
 
     try {
-        const querySnapshot = await db.collection("rotas")
-            .where("status", "==", "planejada")
-            .where("horaInicio", ">=", future10)
-            .where("horaInicio", "<", future15)
+        const snapshot = await db.collection("rotas")
+            .where("horarioInicioPrevisto", "in", horarios)
             .get();
+
+        const docs = snapshot.docs.filter((doc) => {
+            const rota = doc.data();
+            if (rota.status === "emAndamento" || rota.status === "cancelada") return false;
+            const janela = janelas.find((j) => j.horario === rota.horarioInicioPrevisto);
+            return !!janela && rota.diasSemana?.[janela.dia] === true;
+        });
+        const querySnapshot = { docs, size: docs.length, empty: docs.length === 0 };
 
         if (querySnapshot.empty) {
             console.log("Nenhuma rota encontrada no intervalo de 10 a 15 minutos.");
@@ -603,32 +633,15 @@ export const notificarAlunosProximidadeInicioRota = functionsUs.pubsub.schedule(
                 return;
             }
 
-            const tokensPromises = alunosIds.map((alunoId) => db.collection("users").doc(alunoId).get());
-            const usersDocs = await Promise.all(tokensPromises);
-
-            const tokens = usersDocs
-                .map((userDoc) => userDoc.data()?.fcmToken as string)
-                .filter((token): token is string => !!token);
-
-            if (tokens.length === 0) {
-                console.log(`Nenhum token FCM para a rota ${doc.id}`);
-                return;
-            }
-
-            const payload = {
-                notification: {
+            const enviadas = await enviarPush(
+                alunosIds,
+                {
                     title: "Sua van está quase saindo!",
                     body: `Faltam 10 minutos para o motorista começar a buscar os alunos da rota "${rota.nome}".`,
-                    sound: "default",
                 },
-                data: {
-                    screen: "tela_viagem",
-                    rotaId: doc.id,
-                },
-            };
-
-            await admin.messaging().sendToDevice(tokens, payload);
-            console.log(`Notificações enviadas para ${tokens.length} alunos da rota ${doc.id}`);
+                { screen: "tela_viagem", rotaId: doc.id },
+            );
+            console.log(`Notificações enviadas para ${enviadas} alunos da rota ${doc.id}`);
         });
 
         await Promise.all(promises);

@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:vango/l10n/app_localizations.dart';
@@ -48,15 +47,7 @@ class _TelaLoginState extends State<TelaLogin> {
 
       final user = cred.user;
       if (user != null && mounted) {
-        // Obter o token FCM
-        final fcmToken = await FirebaseMessaging.instance.getToken();
-
-        // Salvar o token no documento do usuário
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-          {'fcmToken': fcmToken},
-          SetOptions(merge: true),
-        );
-        
+        // O token FCM é salvo pelo PushNotificationService ao detectar o login.
         final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
 
         if (!mounted) return;

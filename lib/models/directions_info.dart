@@ -20,11 +20,13 @@ class RouteStepInfo {
   final LatLng endLocation;
   final String instruction;
   final int? distanceMeters;
+  final String? maneuver;
 
   RouteStepInfo({
     required this.endLocation,
     required this.instruction,
     this.distanceMeters,
+    this.maneuver,
   });
 }
 
